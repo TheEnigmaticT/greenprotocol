@@ -106,6 +106,12 @@ export default function ProtocolInput() {
           'Analyze Protocol'
         )}
       </button>
+
+      {loading && (
+        <p className="text-sm text-center" style={{ color: '#86efac' }}>
+          Analyzing your protocol against the 12 Principles of Green Chemistry... This typically takes 10-15 seconds.
+        </p>
+      )}
     </div>
   )
 }
