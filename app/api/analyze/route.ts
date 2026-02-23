@@ -40,7 +40,13 @@ export async function POST(request: Request) {
       ],
     })
 
-    const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
+    let responseText = message.content[0].type === 'text' ? message.content[0].text : ''
+
+    // Strip markdown code fences if Claude wraps the JSON
+    responseText = responseText.trim()
+    if (responseText.startsWith('```')) {
+      responseText = responseText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    }
 
     // Parse JSON response
     let analysisResult: AnalysisResult & { error?: string; message?: string }
