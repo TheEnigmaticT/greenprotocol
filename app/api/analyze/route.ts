@@ -1,12 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
-import { GREEN_CHEMISTRY_SYSTEM_PROMPT } from '@/lib/prompts'
 import { findChemical } from '@/lib/chemicals'
 import { calculateEquivalencies } from '@/lib/equivalencies'
 import { AnalysisResult, ImpactDelta } from '@/lib/types'
-
-const anthropic = new Anthropic()
+import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 
 export async function POST(request: Request) {
   // Auth check
@@ -30,44 +27,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Call Claude
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4096,
-      system: GREEN_CHEMISTRY_SYSTEM_PROMPT,
-      messages: [
-        { role: 'user', content: protocolText }
-      ],
-    })
-
-    let responseText = message.content[0].type === 'text' ? message.content[0].text : ''
-
-    // Extract JSON from Claude's response, handling markdown fences and surrounding text
-    responseText = extractJson(responseText)
-
-    // Parse JSON response
-    let analysisResult: AnalysisResult & { error?: string; message?: string }
-    try {
-      analysisResult = JSON.parse(responseText)
-    } catch {
-      console.error('Failed to parse Claude response:', responseText.slice(0, 500))
-      return NextResponse.json(
-        { error: `Failed to parse analysis response. Claude returned non-JSON: "${responseText.slice(0, 200)}..."` },
-        { status: 500 }
-      )
-    }
-
-    // Check if Claude said it's not chemistry
-    if (analysisResult.error === 'not_chemistry') {
-      return NextResponse.json({ error: 'not_chemistry', message: analysisResult.message }, { status: 400 })
-    }
+    // Run the 3-phase pipeline: parse → 12 parallel principle evaluations → assemble
+    const analysisResult = await analyzeProtocol(protocolText)
 
     // Enrich chemicals with hardcoded data
     for (const step of analysisResult.steps) {
       for (const chem of step.chemicals) {
         const data = findChemical(chem.name)
         if (data) {
-          // Estimate quantities in kg if we have mL and density
           if (chem.quantityMl && !chem.quantityKg) {
             chem.quantityKg = (chem.quantityMl / 1000) * data.densityKgPerL
           }
@@ -107,7 +74,10 @@ export async function POST(request: Request) {
   } catch (err: unknown) {
     console.error('Analysis error:', err)
 
-    // Surface specific error details
+    if (err instanceof NotChemistryError) {
+      return NextResponse.json({ error: 'not_chemistry', message: err.message }, { status: 400 })
+    }
+
     const error = err as { status?: number; message?: string; error?: { message?: string } }
 
     if (error.status === 401 || error.message?.includes('authentication') || error.message?.includes('API key')) {
@@ -152,8 +122,6 @@ function calculateImpactDelta(result: AnalysisResult): ImpactDelta {
 
     if (!originalData) continue
 
-    // Estimate quantity from steps — use fuzzy matching since Claude may
-    // name chemicals differently in recommendations vs steps
     let quantityKg = 0
     const recNameLower = rec.original.chemical.toLowerCase()
     for (const step of result.steps) {
@@ -178,29 +146,24 @@ function calculateImpactDelta(result: AnalysisResult): ImpactDelta {
       }
     }
 
-    if (quantityKg === 0) quantityKg = 0.1 // fallback
+    if (quantityKg === 0) quantityKg = 0.1
 
-    // CO2e savings
     const originalCo2e = quantityKg * originalData.co2ePerKg
     const altCo2e = altData ? quantityKg * altData.co2ePerKg : 0
     co2eSavedKg += originalCo2e - altCo2e
 
-    // Water savings
     const originalWater = quantityKg * originalData.waterPerKg
     const altWater = altData ? quantityKg * altData.waterPerKg : 0
     waterSavedL += originalWater - altWater
 
-    // Energy savings
     const originalEnergy = quantityKg * originalData.energyPerKg
     const altEnergy = altData ? quantityKg * altData.energyPerKg : 0
     energySavedKwh += originalEnergy - altEnergy
 
-    // Hazardous waste
     if (originalData.isHazardousWaste) {
       hazardousWasteEliminatedKg += quantityKg
     }
 
-    // Carcinogens
     if (originalData.isSuspectedCarcinogen && !carcinogensEliminated.includes(originalData.name)) {
       carcinogensEliminated.push(originalData.name)
     }
@@ -213,24 +176,4 @@ function calculateImpactDelta(result: AnalysisResult): ImpactDelta {
     waterSavedL: Math.max(0, waterSavedL),
     energySavedKwh: Math.max(0, energySavedKwh),
   }
-}
-
-function extractJson(text: string): string {
-  // Try 1: Already valid JSON
-  const trimmed = text.trim()
-  if (trimmed.startsWith('{')) return trimmed
-
-  // Try 2: Strip markdown code fences
-  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
-  if (fenceMatch) return fenceMatch[1].trim()
-
-  // Try 3: Find the first { and last } — extract the JSON object
-  const firstBrace = trimmed.indexOf('{')
-  const lastBrace = trimmed.lastIndexOf('}')
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    return trimmed.slice(firstBrace, lastBrace + 1)
-  }
-
-  // Give up, return as-is and let the JSON.parse error handler deal with it
-  return trimmed
 }
