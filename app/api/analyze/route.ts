@@ -47,7 +47,11 @@ export async function POST(request: Request) {
     try {
       analysisResult = JSON.parse(responseText)
     } catch {
-      return NextResponse.json({ error: 'Failed to parse analysis response' }, { status: 500 })
+      console.error('Failed to parse Claude response:', responseText.slice(0, 500))
+      return NextResponse.json(
+        { error: `Failed to parse analysis response. Claude returned non-JSON: "${responseText.slice(0, 200)}..."` },
+        { status: 500 }
+      )
     }
 
     // Check if Claude said it's not chemistry
@@ -87,10 +91,36 @@ export async function POST(request: Request) {
       impactDelta,
       equivalencies,
     })
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Analysis error:', err)
+
+    // Surface specific error details
+    const error = err as { status?: number; message?: string; error?: { message?: string } }
+
+    if (error.status === 401 || error.message?.includes('authentication') || error.message?.includes('API key')) {
+      return NextResponse.json(
+        { error: 'Anthropic API key is missing or invalid. Check ANTHROPIC_API_KEY environment variable.' },
+        { status: 500 }
+      )
+    }
+
+    if (error.status === 429) {
+      return NextResponse.json(
+        { error: 'Rate limited by Claude API. Please wait a moment and try again.' },
+        { status: 429 }
+      )
+    }
+
+    if (error.status === 400) {
+      return NextResponse.json(
+        { error: `Claude API rejected the request: ${error.message || 'unknown reason'}` },
+        { status: 500 }
+      )
+    }
+
+    const msg = error.message || error.error?.message || 'Unknown error'
     return NextResponse.json(
-      { error: 'Analysis failed. Please try again.' },
+      { error: `Analysis failed: ${msg}` },
       { status: 500 }
     )
   }
