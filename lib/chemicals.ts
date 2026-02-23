@@ -1273,10 +1273,24 @@ export const CHEMICALS: ChemicalData[] = [
  */
 export function findChemical(name: string): ChemicalData | undefined {
   const lower = name.toLowerCase().trim()
-  return CHEMICALS.find(
+
+  // Exact match on name, synonyms, or CAS
+  const exact = CHEMICALS.find(
     (c) =>
       c.name.toLowerCase() === lower ||
       c.synonyms.some((s) => s.toLowerCase() === lower) ||
       c.cas === lower,
+  )
+  if (exact) return exact
+
+  // Fuzzy: check if input contains a known chemical name, or vice versa
+  // Handles cases like "Chloroform (CHCl3)" or "conc. hydrochloric acid"
+  return CHEMICALS.find(
+    (c) =>
+      lower.includes(c.name.toLowerCase()) ||
+      c.name.toLowerCase().includes(lower) ||
+      c.synonyms.some(
+        (s) => lower.includes(s.toLowerCase()) || s.toLowerCase().includes(lower),
+      ),
   )
 }

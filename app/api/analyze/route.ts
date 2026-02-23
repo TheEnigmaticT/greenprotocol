@@ -89,6 +89,15 @@ export async function POST(request: Request) {
       impact_delta: impactDelta,
     })
 
+    // Log impact calculation for debugging
+    console.log('Impact delta:', JSON.stringify(impactDelta))
+    console.log('Recommendations matched:', analysisResult.recommendations.map(r => ({
+      original: r.original.chemical,
+      foundInDb: !!findChemical(r.original.chemical),
+      alt: r.alternative.chemical,
+      altFoundInDb: !!findChemical(r.alternative.chemical),
+    })))
+
     return NextResponse.json({
       analysis: analysisResult,
       impactDelta,
@@ -142,18 +151,25 @@ function calculateImpactDelta(result: AnalysisResult): ImpactDelta {
 
     if (!originalData) continue
 
-    // Estimate quantity from steps
+    // Estimate quantity from steps — use fuzzy matching since Claude may
+    // name chemicals differently in recommendations vs steps
     let quantityKg = 0
+    const recNameLower = rec.original.chemical.toLowerCase()
     for (const step of result.steps) {
       if (step.stepNumber === rec.stepNumber) {
         for (const chem of step.chemicals) {
-          if (chem.name.toLowerCase() === rec.original.chemical.toLowerCase()) {
+          const chemLower = chem.name.toLowerCase()
+          const isMatch =
+            chemLower === recNameLower ||
+            chemLower.includes(recNameLower) ||
+            recNameLower.includes(chemLower) ||
+            (originalData.synonyms.some(s => chemLower.includes(s.toLowerCase())))
+          if (isMatch) {
             if (chem.quantityKg) {
               quantityKg = chem.quantityKg
             } else if (chem.quantityMl) {
               quantityKg = (chem.quantityMl / 1000) * originalData.densityKgPerL
             } else {
-              // Default estimate: 0.1 kg for reagents, 0.5 kg for solvents
               quantityKg = chem.role === 'solvent' ? 0.5 : 0.1
             }
           }
