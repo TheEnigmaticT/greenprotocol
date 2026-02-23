@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   try {
     // Call Claude
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 4096,
       system: GREEN_CHEMISTRY_SYSTEM_PROMPT,
       messages: [
