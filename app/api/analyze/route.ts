@@ -42,11 +42,8 @@ export async function POST(request: Request) {
 
     let responseText = message.content[0].type === 'text' ? message.content[0].text : ''
 
-    // Strip markdown code fences if Claude wraps the JSON
-    responseText = responseText.trim()
-    if (responseText.startsWith('```')) {
-      responseText = responseText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-    }
+    // Extract JSON from Claude's response, handling markdown fences and surrounding text
+    responseText = extractJson(responseText)
 
     // Parse JSON response
     let analysisResult: AnalysisResult & { error?: string; message?: string }
@@ -199,4 +196,24 @@ function calculateImpactDelta(result: AnalysisResult): ImpactDelta {
     waterSavedL: Math.max(0, waterSavedL),
     energySavedKwh: Math.max(0, energySavedKwh),
   }
+}
+
+function extractJson(text: string): string {
+  // Try 1: Already valid JSON
+  const trimmed = text.trim()
+  if (trimmed.startsWith('{')) return trimmed
+
+  // Try 2: Strip markdown code fences
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+  if (fenceMatch) return fenceMatch[1].trim()
+
+  // Try 3: Find the first { and last } — extract the JSON object
+  const firstBrace = trimmed.indexOf('{')
+  const lastBrace = trimmed.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1)
+  }
+
+  // Give up, return as-is and let the JSON.parse error handler deal with it
+  return trimmed
 }
