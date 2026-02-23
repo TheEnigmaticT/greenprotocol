@@ -87,3 +87,32 @@ export interface Equivalency {
   value: string
   description: string
 }
+
+export interface GpcProfile {
+  id: string
+  user_id: string
+  username: string
+  display_name: string | null
+  created_at: string
+}
+
+export interface AnalysisSummary {
+  id: string
+  protocol_text: string
+  analysis_result: {
+    protocolTitle: string
+    chemistrySubdomain: string
+    recommendations: Recommendation[]
+  }
+  impact_delta: ImpactDelta
+  created_at: string
+}
+
+export interface CumulativeImpact {
+  totalAnalyses: number
+  co2eSavedKg: number
+  hazardousWasteEliminatedKg: number
+  carcinogensEliminated: string[]
+  waterSavedL: number
+  energySavedKwh: number
+}

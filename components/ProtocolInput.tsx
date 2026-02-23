@@ -49,10 +49,14 @@ export default function ProtocolInput() {
         return
       }
 
-      // Store result and navigate
-      sessionStorage.setItem('gpc_analysis', JSON.stringify(data))
-      sessionStorage.setItem('gpc_protocol', text)
-      router.push('/analyze')
+      // Navigate to permalink if we got an ID, fallback to sessionStorage
+      if (data.id) {
+        router.push(`/analyze/${data.id}`)
+      } else {
+        sessionStorage.setItem('gpc_analysis', JSON.stringify(data))
+        sessionStorage.setItem('gpc_protocol', text)
+        router.push('/analyze')
+      }
     } catch {
       setError('Network error. Please check your connection and try again.')
       setLoading(false)

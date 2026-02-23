@@ -82,12 +82,12 @@ export async function POST(request: Request) {
     const equivalencies = calculateEquivalencies(impactDelta)
 
     // Save to database
-    await supabase.from('gpc_analyses').insert({
+    const { data: insertedRow } = await supabase.from('gpc_analyses').insert({
       user_id: user.id,
       protocol_text: protocolText,
       analysis_result: analysisResult,
       impact_delta: impactDelta,
-    })
+    }).select('id').single()
 
     // Log impact calculation for debugging
     console.log('Impact delta:', JSON.stringify(impactDelta))
@@ -99,6 +99,7 @@ export async function POST(request: Request) {
     })))
 
     return NextResponse.json({
+      id: insertedRow?.id,
       analysis: analysisResult,
       impactDelta,
       equivalencies,

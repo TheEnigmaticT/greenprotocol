@@ -27,10 +27,10 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Only protect /analyze routes — landing and login are public
+  // Protect /analyze and /dashboard routes — landing, login, and /u/ are public
   if (
     !user &&
-    request.nextUrl.pathname.startsWith('/analyze')
+    (request.nextUrl.pathname.startsWith('/analyze') || request.nextUrl.pathname.startsWith('/dashboard'))
   ) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

@@ -34,6 +34,13 @@ export default function UserMenu() {
 
   return (
     <div className="flex items-center gap-3">
+      <a
+        href="/dashboard"
+        className="text-sm px-3 py-1.5 rounded-lg border border-forest-700 hover:border-amber-500 transition-colors"
+        style={{ color: '#86efac' }}
+      >
+        Dashboard
+      </a>
       <span className="text-sm truncate max-w-[200px]" style={{ color: '#86efac' }}>
         {user.email}
       </span>
