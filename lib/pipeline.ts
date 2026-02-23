@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { AnalysisResult, AnalysisStep, Recommendation } from '@/lib/types'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
-import { PRINCIPLES, buildPrinciplePrompt } from '@/lib/prompts/principles'
+import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
@@ -123,11 +123,21 @@ async function evaluatePrinciple(
 }
 
 async function evaluateAllPrinciples(steps: AnalysisStep[]): Promise<Recommendation[]> {
-  console.log('Phase 2: Evaluating 12 principles in parallel...')
+  console.log('Phase 2: Evaluating 12 principles in batches of 4...')
 
-  const results = await Promise.allSettled(
-    PRINCIPLES.map(p => evaluatePrinciple(p.number, steps))
-  )
+  // Batch into groups of 4 to avoid Anthropic rate limits
+  const batches: PrincipleDefinition[][] = []
+  for (let i = 0; i < PRINCIPLES.length; i += 4) {
+    batches.push(PRINCIPLES.slice(i, i + 4))
+  }
+
+  const results: PromiseSettledResult<PrincipleResult>[] = []
+  for (const batch of batches) {
+    const batchResults = await Promise.allSettled(
+      batch.map(p => evaluatePrinciple(p.number, steps))
+    )
+    results.push(...batchResults)
+  }
 
   const allRecommendations: Recommendation[] = []
   let succeeded = 0

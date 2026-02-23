@@ -5,6 +5,8 @@ import { calculateEquivalencies } from '@/lib/equivalencies'
 import { AnalysisResult, ImpactDelta } from '@/lib/types'
 import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 
+export const maxDuration = 60
+
 export async function POST(request: Request) {
   // Auth check
   const supabase = await createClient()
