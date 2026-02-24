@@ -133,7 +133,7 @@ export default function ProtocolInput() {
     setLoading(true)
     setError(null)
     setCompleted(0)
-    setTotal(0)
+    setTotal(14) // 1 parse + 12 principles + 1 assemble — show bar immediately
 
     try {
       const res = await fetch('/api/analyze', {
@@ -183,12 +183,10 @@ export default function ProtocolInput() {
           }
 
           if (event.type === 'phase') {
-            // Phase 1 (parse) = step 0, Phase 2 starts principle tracking, Phase 3 (assemble) = step 13
             if (event.phase === 2) {
-              setTotal(14) // 1 parse + 12 principles + 1 assemble
-              setCompleted(1) // parse done
+              setCompleted(1) // parse done, principles starting
             } else if (event.phase === 3) {
-              setCompleted(13) // all principles done
+              setCompleted(13) // all principles done, assembly starting
             }
           } else if (event.type === 'principle') {
             if (event.status === 'complete' || event.status === 'failed') {
