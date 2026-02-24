@@ -125,7 +125,10 @@ const ASSEMBLE_SCHEMA: InputSchema = {
   required: ['revisedProtocol', 'overallAssessment'],
 }
 
-async function callClaude<T>(system: string, userContent: string, schema: InputSchema, model: string = SONNET): Promise<T> {
+async function callClaude<T>(system: string, userContent: string, schema: InputSchema, label: string = 'unknown', model: string = SONNET): Promise<T> {
+  const start = Date.now()
+  console.log(`[callClaude] ${label}: starting (model=${model})`)
+
   const message = await anthropic.messages.create({
     model,
     max_tokens: 8192,
@@ -139,9 +142,12 @@ async function callClaude<T>(system: string, userContent: string, schema: InputS
     messages: [{ role: 'user', content: userContent }],
   })
 
+  const elapsed = ((Date.now() - start) / 1000).toFixed(1)
+  console.log(`[callClaude] ${label}: completed in ${elapsed}s (stop=${message.stop_reason}, in=${message.usage.input_tokens} out=${message.usage.output_tokens})`)
+
   const toolBlock = message.content.find(b => b.type === 'tool_use')
   if (!toolBlock || toolBlock.type !== 'tool_use') {
-    throw new Error('Claude did not return a tool_use block')
+    throw new Error(`Claude did not return a tool_use block for ${label} (stop_reason=${message.stop_reason})`)
   }
 
   return toolBlock.input as T
@@ -159,7 +165,7 @@ interface ParseResult {
 
 async function parseProtocol(protocolText: string): Promise<ParseResult> {
   console.log('Phase 1: Parsing protocol...')
-  const result = await callClaude<ParseResult>(PARSE_SYSTEM_PROMPT, protocolText, PARSE_SCHEMA)
+  const result = await callClaude<ParseResult>(PARSE_SYSTEM_PROMPT, protocolText, PARSE_SCHEMA, 'parse')
 
   if (result.error === 'not_chemistry') {
     throw new NotChemistryError(result.message || 'Not a chemistry protocol')
@@ -184,7 +190,7 @@ async function evaluatePrinciple(
   const systemPrompt = buildPrinciplePrompt(principle, steps)
   const stepsJson = JSON.stringify(steps, null, 2)
 
-  return callClaude<PrincipleResult>(systemPrompt, `Analyze these protocol steps against Principle ${principleNumber}:\n\n${stepsJson}`, PRINCIPLE_SCHEMA)
+  return callClaude<PrincipleResult>(systemPrompt, `Analyze these protocol steps against Principle ${principleNumber}:\n\n${stepsJson}`, PRINCIPLE_SCHEMA, `principle-${principleNumber}`)
 }
 
 async function evaluateAllPrinciples(
@@ -203,15 +209,21 @@ async function evaluateAllPrinciples(
   let succeeded = 0
   let failed = 0
 
-  for (const batch of batches) {
+  for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+    const batch = batches[batchIdx]
+    const batchNums = batch.map(p => p.number).join(',')
+    console.log(`Phase 2: starting batch ${batchIdx + 1}/${batches.length} (principles ${batchNums})`)
+
     // Signal each principle in the batch as evaluating
     for (const p of batch) {
       onProgress?.({ type: 'principle', number: p.number, name: p.name, status: 'evaluating' })
     }
 
+    const batchStart = Date.now()
     const batchResults = await Promise.allSettled(
       batch.map(p => evaluatePrinciple(p.number, steps))
     )
+    console.log(`Phase 2: batch ${batchIdx + 1} completed in ${((Date.now() - batchStart) / 1000).toFixed(1)}s`)
 
     for (let j = 0; j < batchResults.length; j++) {
       const result = batchResults[j]
@@ -282,7 +294,7 @@ async function assembleResult(
   const systemPrompt = buildAssemblePrompt(protocolText, steps, recommendations)
 
   try {
-    const result = await callClaude<AssembleResult>(systemPrompt, 'Generate the revised protocol and overall assessment based on the recommendations above.', ASSEMBLE_SCHEMA)
+    const result = await callClaude<AssembleResult>(systemPrompt, 'Generate the revised protocol and overall assessment based on the recommendations above.', ASSEMBLE_SCHEMA, 'assemble')
     console.log('Phase 3 complete')
     return result
   } catch (err) {

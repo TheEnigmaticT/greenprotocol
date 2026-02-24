@@ -38,18 +38,24 @@ export async function POST(request: Request) {
     start(c) { controller = c },
   })
 
+  const t0 = Date.now()
+  function elapsed() { return ((Date.now() - t0) / 1000).toFixed(1) }
+
   function send(event: ProgressEvent) {
     try {
+      console.log(`[SSE ${elapsed()}s] sending ${event.type}${event.type === 'principle' ? ` #${event.number} ${event.status}` : ''}`)
       controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
-    } catch {
-      // Stream already closed (client disconnected) — ignore
+    } catch (err) {
+      console.error(`[SSE ${elapsed()}s] enqueue failed:`, err)
     }
   }
 
   // Run pipeline in background, streaming progress
   const pipeline = (async () => {
     try {
+      console.log(`[pipeline ${elapsed()}s] starting analyzeProtocol`)
       const analysisResult = await analyzeProtocol(protocolText, send)
+      console.log(`[pipeline ${elapsed()}s] analyzeProtocol complete`)
 
       // Enrich chemicals with hardcoded data
       for (const step of analysisResult.steps) {
@@ -87,7 +93,7 @@ export async function POST(request: Request) {
         },
       })
     } catch (err: unknown) {
-      console.error('Analysis error:', err)
+      console.error(`[pipeline ${elapsed()}s] CAUGHT ERROR:`, err)
 
       if (err instanceof NotChemistryError) {
         send({ type: 'error', error: err.message, code: 'not_chemistry' })
@@ -109,6 +115,7 @@ export async function POST(request: Request) {
       const msg = error.message || error.error?.message || 'Unknown error'
       send({ type: 'error', error: `Analysis failed: ${msg}` })
     } finally {
+      console.log(`[pipeline ${elapsed()}s] closing stream`)
       try { controller.close() } catch { /* already closed */ }
     }
   })()
