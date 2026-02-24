@@ -108,6 +108,13 @@ export interface AnalysisSummary {
   created_at: string
 }
 
+// SSE progress events streamed during analysis
+export type ProgressEvent =
+  | { type: 'phase'; phase: 1 | 2 | 3; message: string }
+  | { type: 'principle'; number: number; name: string; status: 'evaluating' | 'complete' | 'failed'; recommendations?: number }
+  | { type: 'result'; data: { id?: string; analysis: AnalysisResult; impactDelta: ImpactDelta; equivalencies: Equivalency[] } }
+  | { type: 'error'; error: string; code?: string }
+
 export interface CumulativeImpact {
   totalAnalyses: number
   co2eSavedKg: number

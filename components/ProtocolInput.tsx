@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { EXAMPLE_PROTOCOLS } from '@/lib/prompts'
+import { ProgressEvent } from '@/lib/types'
 
 const EXAMPLES = [
   { label: 'Organic Extraction', key: 'organicExtraction' as const },
@@ -10,10 +11,117 @@ const EXAMPLES = [
   { label: 'Acid-Base Titration', key: 'acidBaseTitration' as const },
 ]
 
+// Playful science history quips that rotate during analysis
+const SCIENCE_QUIPS = [
+  // Science history gags
+  'Discovering germ theory...',
+  'Visiting the Galapagos Islands...',
+  'Dropping balls off the Tower of Pisa...',
+  'Observing the double helix...',
+  'Debating phlogiston theory...',
+  'Politely disagreeing with Aristotle...',
+  'Researching that weird glowing rock...',
+  'Describing to Boyle what an un-ideal gas is...',
+  'Debating color hues with Newton...',
+  'What if F=ma plus, like, 2?...',
+  'Waiting for a really cold day to mark the thermometer...',
+  'Grinding lenses with van Leeuwenhoek...',
+  'Asking Mendeleev if he left any gaps...',
+  'Helping Lavoisier weigh the air...',
+  'Tasting acids with Arrhenius (don\'t try this)...',
+  'Spilling something on Goodyear\'s stove...',
+  'Leaving a Petri dish out with Fleming...',
+  'Forgetting to close Schrodinger\'s box...',
+  'Watching Curie glow in the dark...',
+  'Convincing Semmelweis to wash his hands...',
+  'Arguing with Dalton about colorblindness...',
+  'Counting beans with Mendel\'s peas...',
+  'Accidentally discovering mauve with Perkin...',
+  'Trying to turn lead into gold (for science)...',
+  'Holding the kite string for Franklin...',
+  'Handing Kekulé a dream journal...',
+  // Chemistry wordplay & lab life
+  'Balancing redox equations by candlelight...',
+  'Distilling the essence of green...',
+  'Consulting the periodic table...',
+  'Recrystallizing our thoughts...',
+  'Titrating the solution space...',
+  'Pipetting with great precision...',
+  'Running a column on your protocol...',
+  'Checking the fume hood...',
+  'Calibrating the mass spec...',
+  'Peer-reviewing our recommendations...',
+  'Filtering through the literature...',
+  'Refluxing on best practices...',
+  'Evaporating unnecessary solvents...',
+  'Catalyzing a greener future...',
+]
+
+function ProgressBar({ completed, total }: { completed: number; total: number }) {
+  const [quipIndex, setQuipIndex] = useState(() => Math.floor(Math.random() * SCIENCE_QUIPS.length))
+  const [fade, setFade] = useState(true)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setFade(false)
+      setTimeout(() => {
+        setQuipIndex(prev => (prev + 1) % SCIENCE_QUIPS.length)
+        setFade(true)
+      }, 300)
+    }, 3000)
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [])
+
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+
+  return (
+    <div className="w-full space-y-2">
+      {/* Bar */}
+      <div
+        className="relative w-full h-10 rounded-lg overflow-hidden border border-forest-700"
+        style={{ background: '#0A0F0D' }}
+      >
+        {/* Fill */}
+        <div
+          className="absolute inset-y-0 left-0 rounded-lg transition-all duration-700 ease-out"
+          style={{
+            width: `${Math.max(pct, 3)}%`,
+            background: 'linear-gradient(90deg, #1B4332, #22C55E)',
+          }}
+        />
+        {/* Text overlay */}
+        <div className="absolute inset-0 flex items-center justify-center px-4">
+          <span
+            className="text-sm font-[family-name:var(--font-mono)] transition-opacity duration-300"
+            style={{
+              color: '#86efac',
+              opacity: fade ? 1 : 0,
+            }}
+          >
+            {SCIENCE_QUIPS[quipIndex]}
+          </span>
+        </div>
+        {/* Counter */}
+        <div className="absolute inset-y-0 right-3 flex items-center">
+          <span
+            className="text-xs font-[family-name:var(--font-mono)] tabular-nums"
+            style={{ color: '#86efac80' }}
+          >
+            {completed}/{total}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ProtocolInput() {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [completed, setCompleted] = useState(0)
+  const [total, setTotal] = useState(0)
   const router = useRouter()
 
   async function handleSubmit() {
@@ -24,6 +132,8 @@ export default function ProtocolInput() {
 
     setLoading(true)
     setError(null)
+    setCompleted(0)
+    setTotal(0)
 
     try {
       const res = await fetch('/api/analyze', {
@@ -32,14 +142,15 @@ export default function ProtocolInput() {
         body: JSON.stringify({ protocolText: text }),
       })
 
+      // Non-streaming error responses (auth, validation)
       if (res.status === 401) {
         router.push('/login')
         return
       }
 
-      const data = await res.json()
-
-      if (!res.ok) {
+      const contentType = res.headers.get('content-type') || ''
+      if (!contentType.includes('text/event-stream')) {
+        const data = await res.json()
         if (data.error === 'not_chemistry') {
           setError("This doesn't look like a chemistry protocol. Try one of our examples!")
         } else {
@@ -49,16 +160,69 @@ export default function ProtocolInput() {
         return
       }
 
-      // Navigate to permalink if we got an ID, fallback to sessionStorage
-      if (data.id) {
-        router.push(`/analyze/${data.id}`)
-      } else {
-        sessionStorage.setItem('gpc_analysis', JSON.stringify(data))
-        sessionStorage.setItem('gpc_protocol', text)
-        router.push('/analyze')
+      // Consume SSE stream
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          let event: ProgressEvent
+          try {
+            event = JSON.parse(line.slice(6))
+          } catch {
+            continue
+          }
+
+          if (event.type === 'phase') {
+            // Phase 1 (parse) = step 0, Phase 2 starts principle tracking, Phase 3 (assemble) = step 13
+            if (event.phase === 2) {
+              setTotal(14) // 1 parse + 12 principles + 1 assemble
+              setCompleted(1) // parse done
+            } else if (event.phase === 3) {
+              setCompleted(13) // all principles done
+            }
+          } else if (event.type === 'principle') {
+            if (event.status === 'complete' || event.status === 'failed') {
+              setCompleted(prev => prev + 1)
+            }
+          } else if (event.type === 'result') {
+            setCompleted(14) // all done
+            sessionStorage.setItem('gpc_analysis', JSON.stringify(event.data))
+            sessionStorage.setItem('gpc_protocol', text)
+            // Brief pause to show 100% before navigating
+            await new Promise(r => setTimeout(r, 400))
+            if (event.data.id) {
+              router.push(`/analyze/${event.data.id}`)
+            } else {
+              router.push('/analyze')
+            }
+            return
+          } else if (event.type === 'error') {
+            if (event.code === 'not_chemistry') {
+              setError("This doesn't look like a chemistry protocol. Try one of our examples!")
+            } else {
+              setError(event.error)
+            }
+            setLoading(false)
+            return
+          }
+        }
       }
-    } catch {
-      setError('Network error. Please check your connection and try again.')
+
+      setError('Analysis stream ended unexpectedly. Please try again.')
+      setLoading(false)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Request failed: ${msg}`)
       setLoading(false)
     }
   }
@@ -111,10 +275,8 @@ export default function ProtocolInput() {
         )}
       </button>
 
-      {loading && (
-        <p className="text-sm text-center" style={{ color: '#86efac' }}>
-          Analyzing your protocol against the 12 Principles of Green Chemistry... This typically takes 10-15 seconds.
-        </p>
+      {loading && total > 0 && (
+        <ProgressBar completed={completed} total={total} />
       )}
     </div>
   )

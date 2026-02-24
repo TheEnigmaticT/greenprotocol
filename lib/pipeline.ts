@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { AnalysisResult, AnalysisStep, Recommendation } from '@/lib/types'
+import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent } from '@/lib/types'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
@@ -187,7 +187,10 @@ async function evaluatePrinciple(
   return callClaude<PrincipleResult>(systemPrompt, `Analyze these protocol steps against Principle ${principleNumber}:\n\n${stepsJson}`, PRINCIPLE_SCHEMA)
 }
 
-async function evaluateAllPrinciples(steps: AnalysisStep[]): Promise<Recommendation[]> {
+async function evaluateAllPrinciples(
+  steps: AnalysisStep[],
+  onProgress?: (event: ProgressEvent) => void
+): Promise<Recommendation[]> {
   console.log('Phase 2: Evaluating 12 principles in batches of 4...')
 
   // Batch into groups of 4 to avoid Anthropic rate limits
@@ -196,38 +199,42 @@ async function evaluateAllPrinciples(steps: AnalysisStep[]): Promise<Recommendat
     batches.push(PRINCIPLES.slice(i, i + 4))
   }
 
-  const results: PromiseSettledResult<PrincipleResult>[] = []
-  for (const batch of batches) {
-    const batchResults = await Promise.allSettled(
-      batch.map(p => evaluatePrinciple(p.number, steps))
-    )
-    results.push(...batchResults)
-  }
-
   const allRecommendations: Recommendation[] = []
   let succeeded = 0
   let failed = 0
 
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i]
-    const principleNum = PRINCIPLES[i].number
+  for (const batch of batches) {
+    // Signal each principle in the batch as evaluating
+    for (const p of batch) {
+      onProgress?.({ type: 'principle', number: p.number, name: p.name, status: 'evaluating' })
+    }
 
-    if (result.status === 'fulfilled') {
-      succeeded++
-      const recs = result.value.recommendations || []
-      // Ensure principleNumbers/Names are set correctly on each recommendation
-      for (const rec of recs) {
-        if (!rec.principleNumbers || rec.principleNumbers.length === 0) {
-          rec.principleNumbers = [principleNum]
+    const batchResults = await Promise.allSettled(
+      batch.map(p => evaluatePrinciple(p.number, steps))
+    )
+
+    for (let j = 0; j < batchResults.length; j++) {
+      const result = batchResults[j]
+      const principle = batch[j]
+
+      if (result.status === 'fulfilled') {
+        succeeded++
+        const recs = result.value.recommendations || []
+        for (const rec of recs) {
+          if (!rec.principleNumbers || rec.principleNumbers.length === 0) {
+            rec.principleNumbers = [principle.number]
+          }
+          if (!rec.principleNames || rec.principleNames.length === 0) {
+            rec.principleNames = [principle.name]
+          }
         }
-        if (!rec.principleNames || rec.principleNames.length === 0) {
-          rec.principleNames = [PRINCIPLES[i].name]
-        }
+        allRecommendations.push(...recs)
+        onProgress?.({ type: 'principle', number: principle.number, name: principle.name, status: 'complete', recommendations: recs.length })
+      } else {
+        failed++
+        console.warn(`Principle ${principle.number} evaluation failed:`, result.reason)
+        onProgress?.({ type: 'principle', number: principle.number, name: principle.name, status: 'failed' })
       }
-      allRecommendations.push(...recs)
-    } else {
-      failed++
-      console.warn(`Principle ${principleNum} evaluation failed:`, result.reason)
     }
   }
 
@@ -298,15 +305,24 @@ async function assembleResult(
 
 // ─── Main Pipeline ──────────────────────────────────────────────
 
-export async function analyzeProtocol(protocolText: string): Promise<AnalysisResult> {
+export async function analyzeProtocol(
+  protocolText: string,
+  onProgress?: (event: ProgressEvent) => void
+): Promise<AnalysisResult> {
   // Phase 1: Parse
+  onProgress?.({ type: 'phase', phase: 1, message: 'Parsing protocol...' })
   const parsed = await parseProtocol(protocolText)
+  onProgress?.({ type: 'phase', phase: 1, message: `Parsed "${parsed.protocolTitle}" — ${parsed.steps.length} steps` })
 
   // Phase 2: Evaluate all 12 principles in parallel
-  const recommendations = await evaluateAllPrinciples(parsed.steps)
+  onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
+  const recommendations = await evaluateAllPrinciples(parsed.steps, onProgress)
+  onProgress?.({ type: 'phase', phase: 2, message: `Found ${recommendations.length} recommendations` })
 
   // Phase 3: Assemble revised protocol
+  onProgress?.({ type: 'phase', phase: 3, message: 'Assembling revised protocol...' })
   const assembled = await assembleResult(protocolText, parsed.steps, recommendations)
+  onProgress?.({ type: 'phase', phase: 3, message: 'Assembly complete' })
 
   return {
     protocolTitle: parsed.protocolTitle,

@@ -2,13 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { findChemical } from '@/lib/chemicals'
 import { calculateEquivalencies } from '@/lib/equivalencies'
-import { AnalysisResult, ImpactDelta } from '@/lib/types'
+import { AnalysisResult, ImpactDelta, ProgressEvent } from '@/lib/types'
 import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 export async function POST(request: Request) {
-  // Auth check
+  // Auth check (must happen before streaming — can't send status codes mid-stream)
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -28,87 +28,92 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  try {
-    // Run the 3-phase pipeline: parse → 12 parallel principle evaluations → assemble
-    const analysisResult = await analyzeProtocol(protocolText)
+  // Stream SSE events
+  const encoder = new TextEncoder()
+  const stream = new TransformStream()
+  const writer = stream.writable.getWriter()
 
-    // Enrich chemicals with hardcoded data
-    for (const step of analysisResult.steps) {
-      for (const chem of step.chemicals) {
-        const data = findChemical(chem.name)
-        if (data) {
-          if (chem.quantityMl && !chem.quantityKg) {
-            chem.quantityKg = (chem.quantityMl / 1000) * data.densityKgPerL
+  function send(event: ProgressEvent) {
+    writer.write(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+  }
+
+  // Run pipeline in background, streaming progress
+  const pipeline = (async () => {
+    try {
+      const analysisResult = await analyzeProtocol(protocolText, send)
+
+      // Enrich chemicals with hardcoded data
+      for (const step of analysisResult.steps) {
+        for (const chem of step.chemicals) {
+          const data = findChemical(chem.name)
+          if (data) {
+            if (chem.quantityMl && !chem.quantityKg) {
+              chem.quantityKg = (chem.quantityMl / 1000) * data.densityKgPerL
+            }
           }
         }
       }
+
+      // Calculate impact delta
+      const impactDelta = calculateImpactDelta(analysisResult)
+
+      // Generate equivalencies
+      const equivalencies = calculateEquivalencies(impactDelta)
+
+      // Save to database
+      const { data: insertedRow } = await supabase.from('gpc_analyses').insert({
+        user_id: user.id,
+        protocol_text: protocolText,
+        analysis_result: analysisResult,
+        impact_delta: impactDelta,
+      }).select('id').single()
+
+      send({
+        type: 'result',
+        data: {
+          id: insertedRow?.id,
+          analysis: analysisResult,
+          impactDelta,
+          equivalencies,
+        },
+      })
+    } catch (err: unknown) {
+      console.error('Analysis error:', err)
+
+      if (err instanceof NotChemistryError) {
+        send({ type: 'error', error: err.message, code: 'not_chemistry' })
+        return
+      }
+
+      const error = err as { status?: number; message?: string; error?: { message?: string } }
+
+      if (error.status === 401 || error.message?.includes('authentication') || error.message?.includes('API key')) {
+        send({ type: 'error', error: 'Anthropic API key is missing or invalid. Check ANTHROPIC_API_KEY environment variable.' })
+        return
+      }
+
+      if (error.status === 429) {
+        send({ type: 'error', error: 'Rate limited by Claude API. Please wait a moment and try again.' })
+        return
+      }
+
+      const msg = error.message || error.error?.message || 'Unknown error'
+      send({ type: 'error', error: `Analysis failed: ${msg}` })
+    } finally {
+      writer.close()
     }
+  })()
 
-    // Calculate impact delta
-    const impactDelta = calculateImpactDelta(analysisResult)
+  // Don't await — the response streams while the pipeline runs
+  void pipeline
 
-    // Generate equivalencies
-    const equivalencies = calculateEquivalencies(impactDelta)
-
-    // Save to database
-    const { data: insertedRow } = await supabase.from('gpc_analyses').insert({
-      user_id: user.id,
-      protocol_text: protocolText,
-      analysis_result: analysisResult,
-      impact_delta: impactDelta,
-    }).select('id').single()
-
-    // Log impact calculation for debugging
-    console.log('Impact delta:', JSON.stringify(impactDelta))
-    console.log('Recommendations matched:', analysisResult.recommendations.map(r => ({
-      original: r.original.chemical,
-      foundInDb: !!findChemical(r.original.chemical),
-      alt: r.alternative.chemical,
-      altFoundInDb: !!findChemical(r.alternative.chemical),
-    })))
-
-    return NextResponse.json({
-      id: insertedRow?.id,
-      analysis: analysisResult,
-      impactDelta,
-      equivalencies,
-    })
-  } catch (err: unknown) {
-    console.error('Analysis error:', err)
-
-    if (err instanceof NotChemistryError) {
-      return NextResponse.json({ error: 'not_chemistry', message: err.message }, { status: 400 })
-    }
-
-    const error = err as { status?: number; message?: string; error?: { message?: string } }
-
-    if (error.status === 401 || error.message?.includes('authentication') || error.message?.includes('API key')) {
-      return NextResponse.json(
-        { error: 'Anthropic API key is missing or invalid. Check ANTHROPIC_API_KEY environment variable.' },
-        { status: 500 }
-      )
-    }
-
-    if (error.status === 429) {
-      return NextResponse.json(
-        { error: 'Rate limited by Claude API. Please wait a moment and try again.' },
-        { status: 429 }
-      )
-    }
-
-    if (error.status === 400) {
-      return NextResponse.json(
-        { error: `Claude API rejected the request: ${error.message || 'unknown reason'}` },
-        { status: 500 }
-      )
-    }
-
-    const msg = error.message || error.error?.message || 'Unknown error'
-    return NextResponse.json(
-      { error: `Analysis failed: ${msg}` },
-      { status: 500 }
-    )
-  }
+  return new Response(stream.readable, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
 }
 
 function calculateImpactDelta(result: AnalysisResult): ImpactDelta {
