@@ -5,7 +5,7 @@ import { calculateEquivalencies } from '@/lib/equivalencies'
 import { AnalysisResult, ImpactDelta, ProgressEvent } from '@/lib/types'
 import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 
-export const maxDuration = 120
+export const maxDuration = 300
 
 export async function POST(request: Request) {
   // Auth check (must happen before streaming — can't send status codes mid-stream)
