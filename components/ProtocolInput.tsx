@@ -68,8 +68,8 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
       setTimeout(() => {
         setQuipIndex(prev => (prev + 1) % SCIENCE_QUIPS.length)
         setFade(true)
-      }, 300)
-    }, 3000)
+      }, 400)
+    }, 6000)
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [])
 

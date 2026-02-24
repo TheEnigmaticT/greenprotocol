@@ -28,13 +28,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  // Stream SSE events
+  // Stream SSE events via ReadableStream — controller.enqueue() is synchronous,
+  // avoiding the race condition where TransformStream writer.close() can beat
+  // un-awaited writer.write() calls.
   const encoder = new TextEncoder()
-  const stream = new TransformStream()
-  const writer = stream.writable.getWriter()
+  let controller!: ReadableStreamDefaultController
+
+  const stream = new ReadableStream({
+    start(c) { controller = c },
+  })
 
   function send(event: ProgressEvent) {
-    writer.write(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+    try {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+    } catch {
+      // Stream already closed (client disconnected) — ignore
+    }
   }
 
   // Run pipeline in background, streaming progress
@@ -100,14 +109,14 @@ export async function POST(request: Request) {
       const msg = error.message || error.error?.message || 'Unknown error'
       send({ type: 'error', error: `Analysis failed: ${msg}` })
     } finally {
-      writer.close()
+      try { controller.close() } catch { /* already closed */ }
     }
   })()
 
   // Don't await — the response streams while the pipeline runs
   void pipeline
 
-  return new Response(stream.readable, {
+  return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
