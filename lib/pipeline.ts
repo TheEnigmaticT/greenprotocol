@@ -199,9 +199,8 @@ async function evaluateAllPrinciples(
 ): Promise<Recommendation[]> {
   console.log('Phase 2: Evaluating 12 principles in batches of 4...')
 
-  // TEMPORARY: only run first 4 principles to test Vercel timeout theory
-  const activePrinciples = PRINCIPLES.slice(0, 4)
-  const batches: PrincipleDefinition[][] = [activePrinciples]
+  // Run all 12 principles in parallel — heartbeat keeps the stream alive
+  const batches: PrincipleDefinition[][] = [PRINCIPLES]
 
   const allRecommendations: Recommendation[] = []
   let succeeded = 0

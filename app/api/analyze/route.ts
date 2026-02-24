@@ -41,6 +41,15 @@ export async function POST(request: Request) {
   const t0 = Date.now()
   function elapsed() { return ((Date.now() - t0) / 1000).toFixed(1) }
 
+  // Send SSE heartbeat every 5s to prevent Vercel from killing idle streams
+  const heartbeat = setInterval(() => {
+    try {
+      controller.enqueue(encoder.encode(`: heartbeat ${elapsed()}s\n\n`))
+    } catch {
+      clearInterval(heartbeat)
+    }
+  }, 5000)
+
   function send(event: ProgressEvent) {
     try {
       console.log(`[SSE ${elapsed()}s] sending ${event.type}${event.type === 'principle' ? ` #${event.number} ${event.status}` : ''}`)
@@ -115,6 +124,7 @@ export async function POST(request: Request) {
       const msg = error.message || error.error?.message || 'Unknown error'
       send({ type: 'error', error: `Analysis failed: ${msg}` })
     } finally {
+      clearInterval(heartbeat)
       console.log(`[pipeline ${elapsed()}s] closing stream`)
       try { controller.close() } catch { /* already closed */ }
     }
