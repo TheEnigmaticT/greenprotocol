@@ -44,37 +44,29 @@ export default function ScaleUpProjection({ perRunDelta }: { perRunDelta: Impact
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <label style={{ color: '#F5F5F4' }}>Runs per year</label>
-            <span className="font-[family-name:var(--font-mono)]" style={{ color: '#F59E0B' }}>
-              {runsPerYear}
-            </span>
-          </div>
+        <div className="space-y-1">
+          <label className="block text-sm" style={{ color: '#F5F5F4' }}>Runs per year</label>
           <input
-            type="range"
+            type="number"
             min={1}
-            max={1000}
+            max={100000}
             value={runsPerYear}
-            onChange={(e) => setRunsPerYear(Number(e.target.value))}
-            className="w-full accent-amber-500"
+            onChange={(e) => setRunsPerYear(Math.max(1, Number(e.target.value) || 1))}
+            className="w-full px-3 py-2 rounded-lg border border-forest-700 font-[family-name:var(--font-mono)] text-sm focus:outline-none focus:border-amber-500"
+            style={{ background: '#14532d', color: '#F59E0B' }}
           />
         </div>
 
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <label style={{ color: '#F5F5F4' }}>Labs worldwide</label>
-            <span className="font-[family-name:var(--font-mono)]" style={{ color: '#F59E0B' }}>
-              {labsWorldwide.toLocaleString()}
-            </span>
-          </div>
+        <div className="space-y-1">
+          <label className="block text-sm" style={{ color: '#F5F5F4' }}>Labs worldwide</label>
           <input
-            type="range"
+            type="number"
             min={1}
-            max={10000}
+            max={1000000}
             value={labsWorldwide}
-            onChange={(e) => setLabsWorldwide(Number(e.target.value))}
-            className="w-full accent-amber-500"
+            onChange={(e) => setLabsWorldwide(Math.max(1, Number(e.target.value) || 1))}
+            className="w-full px-3 py-2 rounded-lg border border-forest-700 font-[family-name:var(--font-mono)] text-sm focus:outline-none focus:border-amber-500"
+            style={{ background: '#14532d', color: '#F59E0B' }}
           />
         </div>
       </div>
