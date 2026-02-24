@@ -65,7 +65,7 @@ export default function DashboardPage() {
           className="font-[family-name:var(--font-serif)] font-bold text-lg hover:opacity-80 transition-opacity"
           style={{ color: '#22C55E' }}
         >
-          GreenProtoCol
+          GreenChemistry.ai
         </a>
         <div className="flex items-center gap-4">
           <a

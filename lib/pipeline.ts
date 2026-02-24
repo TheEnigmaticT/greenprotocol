@@ -5,7 +5,6 @@ import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/li
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
-const HAIKU = 'claude-haiku-4-5-20251001'
 
 const anthropic = new Anthropic()
 
@@ -20,66 +19,132 @@ export class NotChemistryError extends Error {
 
 // ─── Shared Utilities ───────────────────────────────────────────
 
-export function extractJson(text: string): string {
-  const trimmed = text.trim()
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return trimmed
+// Tool use schemas for each pipeline phase — forces the API to return valid JSON
+type InputSchema = Anthropic.Messages.Tool['input_schema']
 
-  // Strip markdown code fences
-  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
-  if (fenceMatch) return fenceMatch[1].trim()
-
-  // Find the first { and last }
-  const firstBrace = trimmed.indexOf('{')
-  const lastBrace = trimmed.lastIndexOf('}')
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    return trimmed.slice(firstBrace, lastBrace + 1)
-  }
-
-  return trimmed
+const PARSE_SCHEMA: InputSchema = {
+  type: 'object',
+  properties: {
+    protocolTitle: { type: 'string' },
+    chemistrySubdomain: { type: 'string' },
+    steps: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          stepNumber: { type: 'number' },
+          description: { type: 'string' },
+          chemicals: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                role: { type: 'string' },
+                quantity: { type: 'string' },
+                quantityMl: { type: 'number' },
+                quantityKg: { type: 'number' },
+              },
+              required: ['name', 'role'],
+            },
+          },
+          conditions: {
+            type: 'object',
+            properties: {
+              temperature: { type: 'string' },
+              duration: { type: 'string' },
+              atmosphere: { type: 'string' },
+            },
+          },
+        },
+        required: ['stepNumber', 'description', 'chemicals', 'conditions'],
+      },
+    },
+    error: { type: 'string' },
+    message: { type: 'string' },
+  },
+  required: ['protocolTitle', 'chemistrySubdomain', 'steps'],
 }
 
-async function repairJson<T>(malformedText: string): Promise<T | null> {
-  try {
-    const message = await anthropic.messages.create({
-      model: HAIKU,
-      max_tokens: 4096,
-      system: 'You are a JSON repair tool. The user will provide malformed JSON. Return ONLY valid JSON — no markdown fences, no explanatory text. Fix syntax errors, remove trailing text, close unclosed brackets. Preserve all the original data.',
-      messages: [
-        { role: 'user', content: `Fix this malformed JSON:\n\n${malformedText}` },
-      ],
-    })
-
-    let repairText = message.content[0].type === 'text' ? message.content[0].text : ''
-    repairText = extractJson(repairText)
-    return JSON.parse(repairText) as T
-  } catch (err) {
-    console.error('JSON repair failed:', err)
-    return null
-  }
+const PRINCIPLE_SCHEMA: InputSchema = {
+  type: 'object',
+  properties: {
+    principleNumber: { type: 'number' },
+    recommendations: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          stepNumber: { type: 'number' },
+          principleNumbers: { type: 'array', items: { type: 'number' } },
+          principleNames: { type: 'array', items: { type: 'string' } },
+          severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+          original: {
+            type: 'object',
+            properties: {
+              chemical: { type: 'string' },
+              issue: { type: 'string' },
+            },
+            required: ['chemical', 'issue'],
+          },
+          alternative: {
+            type: 'object',
+            properties: {
+              chemical: { type: 'string' },
+              rationale: { type: 'string' },
+              yieldImpact: { type: 'string' },
+              caveats: { type: 'string' },
+              evidenceBasis: { type: 'string' },
+            },
+            required: ['chemical', 'rationale'],
+          },
+          confidenceLevel: { type: 'string', enum: ['high', 'medium', 'low'] },
+        },
+        required: ['stepNumber', 'original', 'alternative'],
+      },
+    },
+  },
+  required: ['principleNumber', 'recommendations'],
 }
 
-async function callClaude<T>(system: string, userContent: string, model: string = SONNET): Promise<T> {
+const ASSEMBLE_SCHEMA: InputSchema = {
+  type: 'object',
+  properties: {
+    revisedProtocol: { type: 'string' },
+    overallAssessment: {
+      type: 'object',
+      properties: {
+        greenPrinciplesViolated: { type: 'array', items: { type: 'number' } },
+        mostImpactfulChange: { type: 'string' },
+        experimentalValidationNeeded: { type: 'boolean' },
+        disclaimer: { type: 'string' },
+      },
+      required: ['greenPrinciplesViolated', 'mostImpactfulChange', 'experimentalValidationNeeded', 'disclaimer'],
+    },
+  },
+  required: ['revisedProtocol', 'overallAssessment'],
+}
+
+async function callClaude<T>(system: string, userContent: string, schema: InputSchema, model: string = SONNET): Promise<T> {
   const message = await anthropic.messages.create({
     model,
-    max_tokens: 4096,
+    max_tokens: 8192,
     system,
+    tools: [{
+      name: 'return_result',
+      description: 'Return the structured analysis result',
+      input_schema: schema,
+    }],
+    tool_choice: { type: 'tool', name: 'return_result' },
     messages: [{ role: 'user', content: userContent }],
   })
 
-  let text = message.content[0].type === 'text' ? message.content[0].text : ''
-  text = extractJson(text)
-
-  try {
-    return JSON.parse(text) as T
-  } catch {
-    console.warn(`JSON parse failed for ${model} call, attempting Haiku repair...`)
-    const repaired = await repairJson<T>(text)
-    if (!repaired) {
-      throw new Error(`Failed to parse JSON even after repair. Raw: ${text.slice(0, 300)}`)
-    }
-    console.log('Haiku repair succeeded')
-    return repaired
+  const toolBlock = message.content.find(b => b.type === 'tool_use')
+  if (!toolBlock || toolBlock.type !== 'tool_use') {
+    throw new Error('Claude did not return a tool_use block')
   }
+
+  return toolBlock.input as T
 }
 
 // ─── Phase 1: Parse Protocol ────────────────────────────────────
@@ -94,7 +159,7 @@ interface ParseResult {
 
 async function parseProtocol(protocolText: string): Promise<ParseResult> {
   console.log('Phase 1: Parsing protocol...')
-  const result = await callClaude<ParseResult>(PARSE_SYSTEM_PROMPT, protocolText)
+  const result = await callClaude<ParseResult>(PARSE_SYSTEM_PROMPT, protocolText, PARSE_SCHEMA)
 
   if (result.error === 'not_chemistry') {
     throw new NotChemistryError(result.message || 'Not a chemistry protocol')
@@ -119,7 +184,7 @@ async function evaluatePrinciple(
   const systemPrompt = buildPrinciplePrompt(principle, steps)
   const stepsJson = JSON.stringify(steps, null, 2)
 
-  return callClaude<PrincipleResult>(systemPrompt, `Analyze these protocol steps against Principle ${principleNumber}:\n\n${stepsJson}`)
+  return callClaude<PrincipleResult>(systemPrompt, `Analyze these protocol steps against Principle ${principleNumber}:\n\n${stepsJson}`, PRINCIPLE_SCHEMA)
 }
 
 async function evaluateAllPrinciples(steps: AnalysisStep[]): Promise<Recommendation[]> {
@@ -210,7 +275,7 @@ async function assembleResult(
   const systemPrompt = buildAssemblePrompt(protocolText, steps, recommendations)
 
   try {
-    const result = await callClaude<AssembleResult>(systemPrompt, 'Generate the revised protocol and overall assessment based on the recommendations above.')
+    const result = await callClaude<AssembleResult>(systemPrompt, 'Generate the revised protocol and overall assessment based on the recommendations above.', ASSEMBLE_SCHEMA)
     console.log('Phase 3 complete')
     return result
   } catch (err) {

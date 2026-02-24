@@ -1,4 +1,4 @@
-# GreenProtoCol
+# GreenChemistry.ai
 
 AI-powered green chemistry protocol optimizer for LabreNew.org.
 

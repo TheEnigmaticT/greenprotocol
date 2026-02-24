@@ -21,10 +21,10 @@ export async function generateMetadata({ params }: Props) {
 
   const name = profile.display_name || profile.username
   return {
-    title: `${name} — GreenProtoCol Impact`,
-    description: `See ${name}'s cumulative green chemistry impact on GreenProtoCol.`,
+    title: `${name} — GreenChemistry.ai Impact`,
+    description: `See ${name}'s cumulative green chemistry impact on GreenChemistry.ai.`,
     openGraph: {
-      title: `${name} — GreenProtoCol Impact`,
+      title: `${name} — GreenChemistry.ai Impact`,
       description: `See ${name}'s cumulative green chemistry impact.`,
       type: 'profile',
     },
@@ -103,7 +103,7 @@ export default async function PublicProfilePage({ params }: Props) {
           className="font-[family-name:var(--font-serif)] font-bold text-lg hover:opacity-80 transition-opacity"
           style={{ color: '#22C55E' }}
         >
-          GreenProtoCol
+          GreenChemistry.ai
         </a>
       </header>
 
@@ -170,7 +170,7 @@ export default async function PublicProfilePage({ params }: Props) {
             className="inline-block px-8 py-3 rounded-lg font-semibold text-base"
             style={{ background: '#F59E0B', color: '#0A0F0D' }}
           >
-            Join GreenProtoCol
+            Join GreenChemistry.ai
           </a>
         </div>
       </main>

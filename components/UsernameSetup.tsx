@@ -44,7 +44,7 @@ export default function UsernameSetup({ onComplete }: { onComplete: (profile: Gp
         <div>
           <label className="block text-sm mb-1" style={{ color: '#a3a3a3' }}>Username</label>
           <div className="flex items-center rounded-lg border border-forest-700 overflow-hidden" style={{ background: '#14532d' }}>
-            <span className="px-3 text-sm" style={{ color: '#a3a3a3' }}>greenprotocol.app/u/</span>
+            <span className="px-3 text-sm" style={{ color: '#a3a3a3' }}>greenchemistry.ai/u/</span>
             <input
               type="text"
               value={username}

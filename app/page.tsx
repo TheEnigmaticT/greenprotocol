@@ -22,7 +22,7 @@ export default function Home() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
         <div className="font-[family-name:var(--font-serif)] font-bold text-lg" style={{ color: '#22C55E' }}>
-          GreenProtoCol
+          GreenChemistry.ai
         </div>
         <UserMenu />
       </header>
@@ -33,7 +33,7 @@ export default function Home() {
           className="text-5xl md:text-6xl font-bold font-[family-name:var(--font-serif)] mb-4"
           style={{ color: '#F5F5F4' }}
         >
-          Green<span style={{ color: '#22C55E' }}>Proto</span><span style={{ color: '#F59E0B' }}>Col</span>
+          Green<span style={{ color: '#22C55E' }}>Chemistry</span><span style={{ color: '#F59E0B' }}>.ai</span>
         </h1>
         <p className="text-xl md:text-2xl mb-2" style={{ color: '#86efac' }}>
           AI-Powered Green Chemistry Protocol Optimizer
