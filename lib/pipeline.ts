@@ -312,6 +312,58 @@ async function assembleResult(
   }
 }
 
+// ─── Deduplication ───────────────────────────────────────────────
+
+function deduplicateRecommendations(recs: Recommendation[]): Recommendation[] {
+  const map = new Map<string, Recommendation>()
+
+  for (const rec of recs) {
+    // Key by step + original chemical (case-insensitive)
+    const key = `${rec.stepNumber}:${rec.original.chemical.toLowerCase()}`
+    const existing = map.get(key)
+
+    if (!existing) {
+      map.set(key, { ...rec })
+      continue
+    }
+
+    // Merge principle numbers and names
+    for (const pn of rec.principleNumbers) {
+      if (!existing.principleNumbers.includes(pn)) {
+        existing.principleNumbers.push(pn)
+      }
+    }
+    for (const name of rec.principleNames) {
+      if (!existing.principleNames.includes(name)) {
+        existing.principleNames.push(name)
+      }
+    }
+
+    // Keep the higher severity
+    const severityOrder = { high: 3, medium: 2, low: 1 }
+    if (severityOrder[rec.severity] > severityOrder[existing.severity]) {
+      existing.severity = rec.severity
+    }
+
+    // Keep the higher confidence
+    const confOrder = { high: 3, medium: 2, low: 1 }
+    if (confOrder[rec.confidenceLevel] > confOrder[existing.confidenceLevel]) {
+      existing.confidenceLevel = rec.confidenceLevel
+    }
+
+    // Merge issues (avoid duplicates)
+    if (rec.original.issue && !existing.original.issue.includes(rec.original.issue)) {
+      existing.original.issue += ` ${rec.original.issue}`
+    }
+  }
+
+  // Sort by step number, then severity (high first)
+  const severityOrder = { high: 3, medium: 2, low: 1 }
+  return [...map.values()].sort((a, b) =>
+    a.stepNumber - b.stepNumber || severityOrder[b.severity] - severityOrder[a.severity]
+  )
+}
+
 // ─── Main Pipeline ──────────────────────────────────────────────
 
 export async function analyzeProtocol(
@@ -325,7 +377,11 @@ export async function analyzeProtocol(
 
   // Phase 2: Evaluate all 12 principles in parallel
   onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
-  const recommendations = await evaluateAllPrinciples(parsed.steps, onProgress)
+  const rawRecommendations = await evaluateAllPrinciples(parsed.steps, onProgress)
+
+  // Deduplicate: merge recommendations for the same chemical in the same step
+  const recommendations = deduplicateRecommendations(rawRecommendations)
+  console.log(`Deduplication: ${rawRecommendations.length} raw → ${recommendations.length} merged`)
   onProgress?.({ type: 'phase', phase: 2, message: `Found ${recommendations.length} recommendations` })
 
   // Phase 3: Assemble revised protocol
