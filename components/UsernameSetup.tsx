@@ -32,26 +32,26 @@ export default function UsernameSetup({ onComplete }: { onComplete: (profile: Gp
   }
 
   return (
-    <div className="max-w-md mx-auto p-6 rounded-xl border border-forest-700" style={{ background: '#14532d20' }}>
-      <h2 className="font-[family-name:var(--font-serif)] text-xl font-bold mb-2" style={{ color: '#F5F5F4' }}>
+    <div className="max-w-md mx-auto p-6 rounded-xl border" style={{ background: '#F5F0E8', borderColor: '#D6D0C4' }}>
+      <h2 className="font-[family-name:var(--font-serif)] text-xl font-bold mb-2" style={{ color: '#1C1917' }}>
         Set up your profile
       </h2>
-      <p className="text-sm mb-6" style={{ color: '#86efac' }}>
+      <p className="text-sm mb-6" style={{ color: '#78716C' }}>
         Choose a username for your public impact profile.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm mb-1" style={{ color: '#a3a3a3' }}>Username</label>
-          <div className="flex items-center rounded-lg border border-forest-700 overflow-hidden" style={{ background: '#14532d' }}>
-            <span className="px-3 text-sm" style={{ color: '#a3a3a3' }}>greenchemistry.ai/u/</span>
+          <label className="block text-sm mb-1" style={{ color: '#57534E' }}>Username</label>
+          <div className="flex items-center rounded-lg border overflow-hidden" style={{ background: '#FAF8F3', borderColor: '#D6D0C4' }}>
+            <span className="px-3 text-sm" style={{ color: '#A8A29E' }}>greenchemistry.ai/u/</span>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
               placeholder="your-username"
               className="flex-1 px-2 py-2 bg-transparent text-sm font-[family-name:var(--font-mono)] focus:outline-none"
-              style={{ color: '#F5F5F4' }}
+              style={{ color: '#1C1917' }}
               maxLength={30}
               required
             />
@@ -59,14 +59,16 @@ export default function UsernameSetup({ onComplete }: { onComplete: (profile: Gp
         </div>
 
         <div>
-          <label className="block text-sm mb-1" style={{ color: '#a3a3a3' }}>Display name (optional)</label>
+          <label className="block text-sm mb-1" style={{ color: '#57534E' }}>Display name (optional)</label>
           <input
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Dr. Green"
-            className="w-full px-3 py-2 rounded-lg border border-forest-700 bg-transparent text-sm focus:outline-none focus:border-amber-500"
-            style={{ color: '#F5F5F4', background: '#14532d' }}
+            className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
+            style={{ color: '#1C1917', background: '#FAF8F3', borderColor: '#D6D0C4' }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
             maxLength={50}
           />
         </div>
@@ -79,7 +81,7 @@ export default function UsernameSetup({ onComplete }: { onComplete: (profile: Gp
           type="submit"
           disabled={loading || username.length < 3}
           className="w-full px-4 py-2 rounded-lg font-semibold text-sm transition-all disabled:opacity-50 cursor-pointer"
-          style={{ background: '#F59E0B', color: '#0A0F0D' }}
+          style={{ background: '#7C2D36', color: '#FAF8F3' }}
         >
           {loading ? 'Creating...' : 'Create Profile'}
         </button>

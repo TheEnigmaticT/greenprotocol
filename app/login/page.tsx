@@ -50,21 +50,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#0A0F0D' }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#FAF8F3' }}>
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold font-[family-name:var(--font-serif)]" style={{ color: '#F5F5F4' }}>
+          <h1 className="text-3xl font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1B4332' }}>
             GreenChemistry.ai
           </h1>
-          <p className="mt-2 text-sm" style={{ color: '#86efac' }}>
+          <p className="mt-2 text-sm" style={{ color: '#78716C' }}>
             Sign in to analyze your protocols
           </p>
         </div>
 
         <button
           onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg border border-gray-600 hover:border-gray-400 transition-colors cursor-pointer"
-          style={{ color: '#F5F5F4' }}
+          className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg border transition-colors cursor-pointer"
+          style={{ color: '#1C1917', borderColor: '#D6D0C4', background: '#FFFFFF' }}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
@@ -77,10 +77,10 @@ export default function LoginPage() {
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-700" />
+            <div className="w-full border-t" style={{ borderColor: '#D6D0C4' }} />
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2" style={{ background: '#0A0F0D', color: '#86efac' }}>or</span>
+            <span className="px-2" style={{ background: '#FAF8F3', color: '#78716C' }}>or</span>
           </div>
         </div>
 
@@ -91,8 +91,10 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full px-4 py-3 rounded-lg border border-gray-600 focus:border-amber-500 focus:outline-none transition-colors"
-            style={{ background: '#14532d', color: '#F5F5F4' }}
+            className="w-full px-4 py-3 rounded-lg border focus:outline-none transition-colors"
+            style={{ background: '#F5F0E8', color: '#1C1917', borderColor: '#D6D0C4' }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
           />
           <input
             type="password"
@@ -101,12 +103,14 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
-            className="w-full px-4 py-3 rounded-lg border border-gray-600 focus:border-amber-500 focus:outline-none transition-colors"
-            style={{ background: '#14532d', color: '#F5F5F4' }}
+            className="w-full px-4 py-3 rounded-lg border focus:outline-none transition-colors"
+            style={{ background: '#F5F0E8', color: '#1C1917', borderColor: '#D6D0C4' }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
           />
 
           {error && (
-            <p className="text-sm" style={{ color: error.includes('Check your email') ? '#22C55E' : '#EF4444' }}>
+            <p className="text-sm" style={{ color: error.includes('Check your email') ? '#16a34a' : '#EF4444' }}>
               {error}
             </p>
           )}
@@ -115,18 +119,18 @@ export default function LoginPage() {
             type="submit"
             disabled={loading}
             className="w-full px-4 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-            style={{ background: '#F59E0B', color: '#0A0F0D' }}
+            style={{ background: '#7C2D36', color: '#FAF8F3' }}
           >
             {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
           </button>
         </form>
 
-        <p className="text-center text-sm" style={{ color: '#86efac' }}>
+        <p className="text-center text-sm" style={{ color: '#78716C' }}>
           {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
           <button
             onClick={() => { setIsSignUp(!isSignUp); setError(null) }}
-            className="underline cursor-pointer"
-            style={{ color: '#F59E0B' }}
+            className="underline cursor-pointer font-semibold"
+            style={{ color: '#7C2D36' }}
           >
             {isSignUp ? 'Sign In' : 'Sign Up'}
           </button>

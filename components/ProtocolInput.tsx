@@ -11,9 +11,7 @@ const EXAMPLES = [
   { label: 'Acid-Base Titration', key: 'acidBaseTitration' as const },
 ]
 
-// Playful science history quips that rotate during analysis
 const SCIENCE_QUIPS = [
-  // Science history gags
   'Discovering germ theory...',
   'Visiting the Galapagos Islands...',
   'Dropping balls off the Tower of Pisa...',
@@ -40,7 +38,6 @@ const SCIENCE_QUIPS = [
   'Trying to turn lead into gold (for science)...',
   'Holding the kite string for Franklin...',
   'Handing Kekulé a dream journal...',
-  // Chemistry wordplay & lab life
   'Balancing redox equations by candlelight...',
   'Distilling the essence of green...',
   'Consulting the periodic table...',
@@ -77,36 +74,32 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
 
   return (
     <div className="w-full space-y-2">
-      {/* Bar */}
       <div
-        className="relative w-full h-10 rounded-lg overflow-hidden border border-forest-700"
-        style={{ background: '#0A0F0D' }}
+        className="relative w-full h-10 rounded-lg overflow-hidden border"
+        style={{ background: '#F5F0E8', borderColor: '#D6D0C4' }}
       >
-        {/* Fill */}
         <div
           className="absolute inset-y-0 left-0 rounded-lg transition-all duration-700 ease-out"
           style={{
             width: `${Math.max(pct, 3)}%`,
-            background: 'linear-gradient(90deg, #1B4332, #22C55E)',
+            background: 'linear-gradient(90deg, #1B4332, #2D6A4F)',
           }}
         />
-        {/* Text overlay */}
         <div className="absolute inset-0 flex items-center justify-center px-4">
           <span
             className="text-sm font-[family-name:var(--font-mono)] transition-opacity duration-300"
             style={{
-              color: '#86efac',
+              color: '#57534E',
               opacity: fade ? 1 : 0,
             }}
           >
             {SCIENCE_QUIPS[quipIndex]}
           </span>
         </div>
-        {/* Counter */}
         <div className="absolute inset-y-0 right-3 flex items-center">
           <span
             className="text-xs font-[family-name:var(--font-mono)] tabular-nums"
-            style={{ color: '#86efac80' }}
+            style={{ color: '#A8A29E' }}
           >
             {completed}/{total}
           </span>
@@ -133,7 +126,7 @@ export default function ProtocolInput() {
     setLoading(true)
     setError(null)
     setCompleted(0)
-    setTotal(14) // 1 parse + 12 principles + 1 assemble — show bar immediately
+    setTotal(14)
 
     try {
       const res = await fetch('/api/analyze', {
@@ -142,7 +135,6 @@ export default function ProtocolInput() {
         body: JSON.stringify({ protocolText: text }),
       })
 
-      // Non-streaming error responses (auth, validation)
       if (res.status === 401) {
         router.push('/login')
         return
@@ -160,7 +152,6 @@ export default function ProtocolInput() {
         return
       }
 
-      // Consume SSE stream
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -183,20 +174,16 @@ export default function ProtocolInput() {
           }
 
           if (event.type === 'phase') {
-            if (event.phase === 2) {
-              setCompleted(1) // parse done, principles starting
-            } else if (event.phase === 3) {
-              setCompleted(13) // all principles done, assembly starting
-            }
+            if (event.phase === 2) setCompleted(1)
+            else if (event.phase === 3) setCompleted(13)
           } else if (event.type === 'principle') {
             if (event.status === 'complete' || event.status === 'failed') {
               setCompleted(prev => prev + 1)
             }
           } else if (event.type === 'result') {
-            setCompleted(14) // all done
+            setCompleted(14)
             sessionStorage.setItem('gpc_analysis', JSON.stringify(event.data))
             sessionStorage.setItem('gpc_protocol', text)
-            // Brief pause to show 100% before navigating
             await new Promise(r => setTimeout(r, 400))
             if (event.data.id) {
               router.push(`/analyze/${event.data.id}`)
@@ -226,14 +213,16 @@ export default function ProtocolInput() {
   }
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-4">
+    <div className="w-full max-w-3xl space-y-4">
       <div className="flex flex-wrap gap-2">
         {EXAMPLES.map((ex) => (
           <button
             key={ex.key}
             onClick={() => { setText(EXAMPLE_PROTOCOLS[ex.key]); setError(null) }}
-            className="px-3 py-1.5 text-sm rounded-lg border border-forest-700 hover:border-amber-500 transition-colors cursor-pointer"
-            style={{ color: '#86efac' }}
+            className="px-3 py-1.5 text-sm rounded-lg border transition-colors cursor-pointer font-[family-name:var(--font-mono)]"
+            style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C2D36')}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
           >
             {ex.label}
           </button>
@@ -245,8 +234,10 @@ export default function ProtocolInput() {
         onChange={(e) => { setText(e.target.value); setError(null) }}
         placeholder="Paste your chemistry protocol here...&#10;&#10;Include details like chemicals used, quantities, temperatures, and procedures."
         rows={12}
-        className="w-full px-4 py-3 rounded-lg border border-forest-700 focus:border-amber-500 focus:outline-none transition-colors resize-y font-[family-name:var(--font-mono)] text-sm leading-relaxed"
-        style={{ background: '#14532d', color: '#F5F5F4' }}
+        className="w-full px-4 py-3 rounded-lg border focus:outline-none transition-colors resize-y font-[family-name:var(--font-mono)] text-sm leading-relaxed"
+        style={{ background: '#F5F0E8', color: '#1C1917', borderColor: '#D6D0C4' }}
+        onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+        onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
         disabled={loading}
       />
 
@@ -258,7 +249,7 @@ export default function ProtocolInput() {
         onClick={handleSubmit}
         disabled={loading || !text.trim()}
         className="w-full px-6 py-3 rounded-lg font-semibold text-lg transition-all disabled:opacity-50 cursor-pointer"
-        style={{ background: loading ? '#D97706' : '#F59E0B', color: '#0A0F0D' }}
+        style={{ background: loading ? '#5A2028' : '#7C2D36', color: '#FAF8F3' }}
       >
         {loading ? (
           <span className="flex items-center justify-center gap-2">

@@ -5,9 +5,9 @@ import PrincipleTag from './PrincipleTag'
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
-    high: { bg: '#EF444430', text: '#EF4444' },
-    medium: { bg: '#F59E0B30', text: '#F59E0B' },
-    low: { bg: '#22C55E30', text: '#22C55E' },
+    high: { bg: '#FEE2E2', text: '#DC2626' },
+    medium: { bg: '#FEF3C7', text: '#D97706' },
+    low: { bg: '#DCFCE7', text: '#16a34a' },
   }
   const c = colors[severity] || colors.low
   return (
@@ -22,7 +22,7 @@ function SeverityBadge({ severity }: { severity: string }) {
 
 function ConfidenceBadge({ level }: { level: string }) {
   return (
-    <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#52525b30', color: '#a3a3a3' }}>
+    <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F0EBE1', color: '#78716C' }}>
       {level} confidence
     </span>
   )
@@ -31,11 +31,11 @@ function ConfidenceBadge({ level }: { level: string }) {
 function RecommendationCard({ rec }: { rec: Recommendation }) {
   return (
     <div
-      className="p-4 rounded-lg border border-forest-800 space-y-3"
-      style={{ background: '#14532d10' }}
+      className="p-4 rounded-lg border space-y-3"
+      style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-semibold" style={{ color: '#F5F5F4' }}>
+        <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>
           Step {rec.stepNumber}
         </span>
         <SeverityBadge severity={rec.severity} />
@@ -50,30 +50,30 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Original */}
-        <div className="p-3 rounded" style={{ background: '#EF444410' }}>
-          <div className="text-xs font-semibold mb-1" style={{ color: '#EF4444' }}>ORIGINAL</div>
-          <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#F5F5F4' }}>
+        <div className="p-3 rounded" style={{ background: '#FEF2F2' }}>
+          <div className="text-xs font-semibold mb-1" style={{ color: '#DC2626' }}>ORIGINAL</div>
+          <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#1C1917' }}>
             {rec.original.chemical}
           </div>
-          <p className="text-xs" style={{ color: '#a3a3a3' }}>{rec.original.issue}</p>
+          <p className="text-xs" style={{ color: '#78716C' }}>{rec.original.issue}</p>
         </div>
 
         {/* Alternative */}
-        <div className="p-3 rounded" style={{ background: '#22C55E10' }}>
-          <div className="text-xs font-semibold mb-1" style={{ color: '#22C55E' }}>RECOMMENDED</div>
-          <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#F5F5F4' }}>
+        <div className="p-3 rounded" style={{ background: '#F0FDF4' }}>
+          <div className="text-xs font-semibold mb-1" style={{ color: '#16a34a' }}>RECOMMENDED</div>
+          <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#1C1917' }}>
             {rec.alternative.chemical}
           </div>
-          <p className="text-xs mb-1" style={{ color: '#86efac' }}>{rec.alternative.rationale}</p>
-          <p className="text-xs" style={{ color: '#a3a3a3' }}>
+          <p className="text-xs mb-1" style={{ color: '#2D6A4F' }}>{rec.alternative.rationale}</p>
+          <p className="text-xs" style={{ color: '#78716C' }}>
             <strong>Yield:</strong> {rec.alternative.yieldImpact}
           </p>
           {rec.alternative.caveats && (
-            <p className="text-xs mt-1" style={{ color: '#F59E0B' }}>
+            <p className="text-xs mt-1" style={{ color: '#9B3D48' }}>
               <strong>Note:</strong> {rec.alternative.caveats}
             </p>
           )}
-          <p className="text-xs mt-1" style={{ color: '#737373' }}>
+          <p className="text-xs mt-1" style={{ color: '#A8A29E' }}>
             Source: {rec.alternative.evidenceBasis}
           </p>
         </div>
@@ -95,29 +95,29 @@ export default function AnalysisResults({
       <div>
         <h2
           className="text-2xl font-bold font-[family-name:var(--font-serif)] mb-1"
-          style={{ color: '#F5F5F4' }}
+          style={{ color: '#1C1917' }}
         >
           {analysis.protocolTitle}
         </h2>
-        <p className="text-sm" style={{ color: '#86efac' }}>{analysis.chemistrySubdomain}</p>
+        <p className="text-sm" style={{ color: '#78716C' }}>{analysis.chemistrySubdomain}</p>
       </div>
 
       {/* Protocol comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div>
-          <h3 className="text-sm font-semibold mb-2" style={{ color: '#EF4444' }}>Original Protocol</h3>
+          <h3 className="text-sm font-semibold mb-2" style={{ color: '#DC2626' }}>Original Protocol</h3>
           <pre
             className="p-4 rounded-lg text-sm whitespace-pre-wrap font-[family-name:var(--font-mono)] leading-relaxed overflow-auto max-h-96"
-            style={{ background: '#EF444410', color: '#F5F5F4', border: '1px solid #EF444430' }}
+            style={{ background: '#FEF2F2', color: '#1C1917', border: '1px solid #FECACA' }}
           >
             {originalProtocol}
           </pre>
         </div>
         <div>
-          <h3 className="text-sm font-semibold mb-2" style={{ color: '#22C55E' }}>Revised Protocol</h3>
+          <h3 className="text-sm font-semibold mb-2" style={{ color: '#16a34a' }}>Revised Protocol</h3>
           <pre
             className="p-4 rounded-lg text-sm whitespace-pre-wrap font-[family-name:var(--font-mono)] leading-relaxed overflow-auto max-h-96"
-            style={{ background: '#22C55E10', color: '#F5F5F4', border: '1px solid #22C55E30' }}
+            style={{ background: '#F0FDF4', color: '#1C1917', border: '1px solid #BBF7D0' }}
           >
             {analysis.revisedProtocol}
           </pre>
@@ -127,7 +127,7 @@ export default function AnalysisResults({
       {/* Recommendations */}
       {analysis.recommendations.length > 0 ? (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold" style={{ color: '#F5F5F4' }}>
+          <h3 className="text-lg font-semibold" style={{ color: '#1C1917' }}>
             Recommendations ({analysis.recommendations.length})
           </h3>
           {analysis.recommendations.map((rec, i) => (
@@ -135,8 +135,8 @@ export default function AnalysisResults({
           ))}
         </div>
       ) : (
-        <div className="p-6 rounded-lg text-center" style={{ background: '#22C55E10', border: '1px solid #22C55E30' }}>
-          <p className="text-lg" style={{ color: '#22C55E' }}>
+        <div className="p-6 rounded-lg text-center" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+          <p className="text-lg" style={{ color: '#16a34a' }}>
             This protocol is already quite green! No major changes recommended.
           </p>
         </div>
@@ -144,11 +144,11 @@ export default function AnalysisResults({
 
       {/* Overall assessment */}
       <div
-        className="p-4 rounded-lg border border-forest-800"
-        style={{ background: '#14532d10' }}
+        className="p-4 rounded-lg border"
+        style={{ background: '#F5F0E8', borderColor: '#D6D0C4' }}
       >
-        <h3 className="text-sm font-semibold mb-2" style={{ color: '#F59E0B' }}>Overall Assessment</h3>
-        <p className="text-sm mb-2" style={{ color: '#F5F5F4' }}>
+        <h3 className="text-sm font-semibold mb-2" style={{ color: '#7C2D36' }}>Overall Assessment</h3>
+        <p className="text-sm mb-2" style={{ color: '#1C1917' }}>
           <strong>Most impactful change:</strong> {analysis.overallAssessment.mostImpactfulChange}
         </p>
         {analysis.overallAssessment.greenPrinciplesViolated.length > 0 && (
@@ -158,7 +158,7 @@ export default function AnalysisResults({
             ))}
           </div>
         )}
-        <p className="text-xs italic" style={{ color: '#a3a3a3' }}>
+        <p className="text-xs italic" style={{ color: '#78716C' }}>
           {analysis.overallAssessment.disclaimer}
         </p>
       </div>

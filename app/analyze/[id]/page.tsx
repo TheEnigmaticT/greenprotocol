@@ -43,10 +43,10 @@ export default function AnalysisByIdPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A0F0D' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
           <p className="text-lg" style={{ color: '#EF4444' }}>{error}</p>
-          <a href="/dashboard" className="text-sm underline" style={{ color: '#86efac' }}>
+          <a href="/dashboard" className="text-sm underline" style={{ color: '#7C2D36' }}>
             Back to Dashboard
           </a>
         </div>
@@ -56,10 +56,10 @@ export default function AnalysisByIdPage() {
 
   if (!data) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A0F0D' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
-          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#22C55E', borderTopColor: 'transparent' }} />
-          <p style={{ color: '#86efac' }}>Loading analysis...</p>
+          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#1B4332', borderTopColor: 'transparent' }} />
+          <p style={{ color: '#78716C' }}>Loading analysis...</p>
         </div>
       </div>
     )
@@ -68,27 +68,27 @@ export default function AnalysisByIdPage() {
   const originalTotals = calculateOriginalTotals(data.analysis)
 
   return (
-    <div className="min-h-screen" style={{ background: '#0A0F0D' }}>
+    <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
       <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
         <a
           href="/"
-          className="font-[family-name:var(--font-serif)] font-bold text-lg hover:opacity-80 transition-opacity"
-          style={{ color: '#22C55E' }}
+          className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
+          style={{ color: '#1B4332' }}
         >
-          GreenChemistry.ai
+          greenchemistry.ai
         </a>
         <div className="flex items-center gap-4">
           <a
             href="/dashboard"
-            className="text-sm px-3 py-1.5 rounded-lg border border-forest-700 hover:border-amber-500 transition-colors"
-            style={{ color: '#86efac' }}
+            className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
+            style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
           >
             Dashboard
           </a>
           <a
             href="/"
-            className="text-sm px-3 py-1.5 rounded-lg border border-forest-700 hover:border-amber-500 transition-colors"
-            style={{ color: '#86efac' }}
+            className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
+            style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
           >
             New Analysis
           </a>
@@ -101,7 +101,7 @@ export default function AnalysisByIdPage() {
           <AnalysisResults analysis={data.analysis} originalProtocol={data.protocolText} />
         </section>
 
-        <section className="border-t border-forest-800 pt-8">
+        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
           <ImpactScoreboard
             impactDelta={data.impactDelta}
             equivalencies={data.equivalencies}
@@ -109,15 +109,15 @@ export default function AnalysisByIdPage() {
           />
         </section>
 
-        <section className="border-t border-forest-800 pt-8">
+        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
           <ScaleUpProjection perRunDelta={data.impactDelta} />
         </section>
       </main>
 
-      <footer className="border-t border-forest-800 px-6 py-8 text-center">
-        <p className="text-sm" style={{ color: '#a3a3a3' }}>
+      <footer className="border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
+        <p className="text-sm" style={{ color: '#78716C' }}>
           Built for{' '}
-          <span style={{ color: '#22C55E' }}>LabreNew.org</span>
+          <span className="font-semibold" style={{ color: '#1B4332' }}>LabreNew.org</span>
           {' '}&mdash; Green chemistry recommendations require experimental validation before adoption.
         </p>
       </footer>

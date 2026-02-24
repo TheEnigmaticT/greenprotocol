@@ -95,105 +95,88 @@ export default async function PublicProfilePage({ params }: Props) {
   const { profile, cumulative, equivalencies } = result
   const name = profile.display_name || profile.username
 
+  const stats = [
+    { label: 'CO2e Saved', value: `${fmt(cumulative.co2eSavedKg)} kg`, icon: '🌍' },
+    { label: 'Haz. Waste Eliminated', value: `${fmt(cumulative.hazardousWasteEliminatedKg)} kg`, icon: '☣️' },
+    { label: 'Carcinogens Eliminated', value: `${cumulative.carcinogensEliminated.length}`, icon: '🛡️' },
+    { label: 'Water Saved', value: `${fmt(cumulative.waterSavedL)} L`, icon: '💧' },
+    { label: 'Energy Saved', value: `${fmt(cumulative.energySavedKwh)} kWh`, icon: '⚡' },
+  ]
+
   return (
-    <div className="min-h-screen" style={{ background: '#0A0F0D' }}>
+    <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
       <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
         <a
           href="/"
-          className="font-[family-name:var(--font-serif)] font-bold text-lg hover:opacity-80 transition-opacity"
-          style={{ color: '#22C55E' }}
+          className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
+          style={{ color: '#1B4332' }}
         >
-          GreenChemistry.ai
+          greenchemistry.ai
         </a>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-12 space-y-10">
+      <main className="max-w-4xl mx-auto px-6 py-12 space-y-12">
         {/* Profile header */}
-        <div className="text-center space-y-2">
-          <h1 className="font-[family-name:var(--font-serif)] text-3xl font-bold" style={{ color: '#F5F5F4' }}>
+        <div className="space-y-2">
+          <h1 className="font-[family-name:var(--font-serif)] text-4xl md:text-5xl font-bold" style={{ color: '#1C1917' }}>
             {name}
           </h1>
-          <p className="text-sm font-[family-name:var(--font-mono)]" style={{ color: '#a3a3a3' }}>
+          <p className="text-sm font-[family-name:var(--font-mono)]" style={{ color: '#78716C' }}>
             @{profile.username}
           </p>
-          <p className="text-sm" style={{ color: '#86efac' }}>
+          <p className="text-sm" style={{ color: '#57534E' }}>
             {cumulative.totalAnalyses} protocol{cumulative.totalAnalyses !== 1 ? 's' : ''} analyzed
           </p>
         </div>
 
-        {/* Cumulative stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <StatCard
-            label="CO2e Saved"
-            value={`${fmt(cumulative.co2eSavedKg)} kg`}
-            icon="🌍"
-          />
-          <StatCard
-            label="Haz. Waste Eliminated"
-            value={`${fmt(cumulative.hazardousWasteEliminatedKg)} kg`}
-            icon="☣️"
-          />
-          <StatCard
-            label="Carcinogens Eliminated"
-            value={`${cumulative.carcinogensEliminated.length}`}
-            icon="🛡️"
-          />
-          <StatCard
-            label="Water Saved"
-            value={`${fmt(cumulative.waterSavedL)} L`}
-            icon="💧"
-          />
-          <StatCard
-            label="Energy Saved"
-            value={`${fmt(cumulative.energySavedKwh)} kWh`}
-            icon="⚡"
-          />
+        {/* Cumulative stats — oversized numbers */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {stats.map((s) => (
+            <div key={s.label}>
+              <span className="text-2xl">{s.icon}</span>
+              <p
+                className="font-[family-name:var(--font-mono)] font-semibold mt-1"
+                style={{ fontSize: '2.5rem', lineHeight: 1, color: '#1B4332' }}
+              >
+                {s.value}
+              </p>
+              <p className="text-sm mt-2" style={{ color: '#78716C' }}>{s.label}</p>
+            </div>
+          ))}
         </div>
 
         {/* Equivalencies */}
         {equivalencies.length > 0 && (
           <section className="space-y-4">
-            <h2 className="font-[family-name:var(--font-serif)] text-xl font-bold" style={{ color: '#F5F5F4' }}>
+            <h2 className="font-[family-name:var(--font-serif)] text-xl font-bold" style={{ color: '#1C1917' }}>
               What does that look like?
             </h2>
-            <EquivalencyStory equivalencies={equivalencies} />
+            <EquivalencyStory equivalencies={equivalencies} variant="light" />
           </section>
         )}
 
         {/* CTA */}
-        <div className="text-center pt-8 border-t border-forest-800">
-          <p className="text-sm mb-4" style={{ color: '#a3a3a3' }}>
+        <div className="text-center pt-8 border-t" style={{ borderColor: '#D6D0C4' }}>
+          <p className="text-sm mb-4" style={{ color: '#78716C' }}>
             Make your chemistry greener.
           </p>
           <a
             href="/"
             className="inline-block px-8 py-3 rounded-lg font-semibold text-base"
-            style={{ background: '#F59E0B', color: '#0A0F0D' }}
+            style={{ background: '#7C2D36', color: '#FAF8F3' }}
           >
             Join GreenChemistry.ai
           </a>
         </div>
       </main>
 
-      <footer className="border-t border-forest-800 px-6 py-8 text-center">
-        <p className="text-sm" style={{ color: '#a3a3a3' }}>
+      <footer className="border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
+        <p className="text-sm" style={{ color: '#78716C' }}>
           Built for{' '}
-          <span style={{ color: '#22C55E' }}>LabreNew.org</span>
+          <span className="font-semibold" style={{ color: '#1B4332' }}>LabreNew.org</span>
           {' '}&mdash; Green chemistry recommendations require experimental validation before adoption.
         </p>
       </footer>
-    </div>
-  )
-}
-
-function StatCard({ label, value, icon }: { label: string; value: string; icon: string }) {
-  return (
-    <div className="p-4 rounded-xl border border-forest-700 text-center" style={{ background: '#14532d20' }}>
-      <span className="text-2xl">{icon}</span>
-      <p className="text-xl font-bold font-[family-name:var(--font-mono)] mt-1" style={{ color: '#F59E0B' }}>
-        {value}
-      </p>
-      <p className="text-xs mt-1" style={{ color: '#86efac' }}>{label}</p>
     </div>
   )
 }

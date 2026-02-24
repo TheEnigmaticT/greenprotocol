@@ -1,8 +1,31 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0A0F0D;
+  /* Light theme (default for public pages) */
+  --background: #FAF8F3;
+  --foreground: #1C1917;
+  --text-muted: #57534E;
+  --text-subtle: #78716C;
+  --accent-primary: #1B4332;
+  --accent-secondary: #7C2D36;
+  --accent-green: #22C55E;
+  --input-bg: #F5F0E8;
+  --card-bg: #F0EBE1;
+  --card-border: #D6D0C4;
+  --hover-border: #7C2D36;
+}
+
+.dark-page {
+  --background: #0F1F17;
   --foreground: #F5F5F4;
+  --text-muted: #a3a3a3;
+  --text-subtle: #737373;
+  --accent-primary: #22C55E;
+  --accent-secondary: #D4A574;
+  --input-bg: #14532d;
+  --card-bg: #14532d20;
+  --card-border: #1B4332;
+  --hover-border: #22C55E;
 }
 
 @theme inline {
@@ -22,6 +45,11 @@
   --color-amber-400: #FBBF24;
   --color-amber-500: #F59E0B;
   --color-amber-600: #D97706;
+  --color-burgundy: #7C2D36;
+  --color-burgundy-light: #9B3D48;
+  --color-cream: #FAF8F3;
+  --color-cream-dark: #F0EBE1;
+  --color-warm-gray: #D6D0C4;
   --color-danger: #EF4444;
   --color-success: #22C55E;
   --font-sans: system-ui, -apple-system, sans-serif;
@@ -33,4 +61,42 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+/* Horizontal scroll strip for principles */
+.principles-scroll {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.principles-scroll::-webkit-scrollbar {
+  display: none;
+}
+.principles-scroll > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* Staggered fade-in */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out both;
+}
+
+/* Scroll-linked background transition */
+@keyframes bgShift {
+  0% { background-color: #FAF8F3; }
+  50% { background-color: #E8F0E4; }
+  100% { background-color: #FAF8F3; }
 }

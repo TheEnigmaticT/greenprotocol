@@ -12,9 +12,9 @@ function fmt(n: number): string {
 function severityColor(severity: string) {
   switch (severity) {
     case 'high': return '#EF4444'
-    case 'medium': return '#F59E0B'
-    case 'low': return '#22C55E'
-    default: return '#a3a3a3'
+    case 'medium': return '#D97706'
+    case 'low': return '#16a34a'
+    default: return '#A8A29E'
   }
 }
 
@@ -26,20 +26,21 @@ export default function AnalysisCard({ analysis }: { analysis: AnalysisSummary }
     month: 'short', day: 'numeric', year: 'numeric'
   })
 
-  // Find max severity across recommendations
   const severities = analysis_result.recommendations?.map(r => r.severity) || []
   const maxSeverity = severities.includes('high') ? 'high' : severities.includes('medium') ? 'medium' : 'low'
 
   return (
     <a
       href={`/analyze/${analysis.id}`}
-      className="block p-5 rounded-xl border border-forest-700 hover:border-amber-500 transition-all group"
-      style={{ background: '#14532d20' }}
+      className="block p-5 rounded-xl border transition-all group"
+      style={{ background: '#F5F0E8', borderColor: '#D6D0C4' }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C2D36')}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
         <h3
           className="font-[family-name:var(--font-serif)] font-semibold text-base group-hover:opacity-80 transition-opacity line-clamp-2"
-          style={{ color: '#F5F5F4' }}
+          style={{ color: '#1C1917' }}
         >
           {title}
         </h3>
@@ -51,12 +52,12 @@ export default function AnalysisCard({ analysis }: { analysis: AnalysisSummary }
       </div>
 
       {subdomain && (
-        <p className="text-xs mb-3 font-[family-name:var(--font-mono)]" style={{ color: '#a3a3a3' }}>
+        <p className="text-xs mb-3 font-[family-name:var(--font-mono)]" style={{ color: '#78716C' }}>
           {subdomain}
         </p>
       )}
 
-      <div className="flex items-center gap-4 text-xs" style={{ color: '#86efac' }}>
+      <div className="flex items-center gap-4 text-xs" style={{ color: '#2D6A4F' }}>
         {impact_delta.co2eSavedKg > 0 && (
           <span title="CO2e saved">-{fmt(impact_delta.co2eSavedKg)} kg CO2e</span>
         )}
@@ -65,7 +66,7 @@ export default function AnalysisCard({ analysis }: { analysis: AnalysisSummary }
         )}
       </div>
 
-      <p className="text-xs mt-3" style={{ color: '#737373' }}>{date}</p>
+      <p className="text-xs mt-3" style={{ color: '#A8A29E' }}>{date}</p>
     </a>
   )
 }

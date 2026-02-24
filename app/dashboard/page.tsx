@@ -40,10 +40,10 @@ export default function DashboardPage() {
 
   if (loading || profile === undefined) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A0F0D' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
-          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#22C55E', borderTopColor: 'transparent' }} />
-          <p style={{ color: '#86efac' }}>Loading dashboard...</p>
+          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#1B4332', borderTopColor: 'transparent' }} />
+          <p style={{ color: '#78716C' }}>Loading dashboard...</p>
         </div>
       </div>
     )
@@ -58,20 +58,20 @@ export default function DashboardPage() {
   })
 
   return (
-    <div className="min-h-screen" style={{ background: '#0A0F0D' }}>
+    <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
       <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
         <a
           href="/"
-          className="font-[family-name:var(--font-serif)] font-bold text-lg hover:opacity-80 transition-opacity"
-          style={{ color: '#22C55E' }}
+          className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
+          style={{ color: '#1B4332' }}
         >
-          GreenChemistry.ai
+          greenchemistry.ai
         </a>
         <div className="flex items-center gap-4">
           <a
             href="/"
-            className="text-sm px-3 py-1.5 rounded-lg border border-forest-700 hover:border-amber-500 transition-colors"
-            style={{ color: '#86efac' }}
+            className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
+            style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
           >
             New Analysis
           </a>
@@ -81,26 +81,24 @@ export default function DashboardPage() {
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
         <div className="flex items-center justify-between">
-          <h1 className="font-[family-name:var(--font-serif)] text-2xl font-bold" style={{ color: '#F5F5F4' }}>
+          <h1 className="font-[family-name:var(--font-serif)] text-2xl font-bold" style={{ color: '#1C1917' }}>
             Dashboard
           </h1>
           {profile && (
             <a
               href={`/u/${profile.username}`}
-              className="text-sm px-3 py-1.5 rounded-lg border border-forest-700 hover:border-amber-500 transition-colors"
-              style={{ color: '#86efac' }}
+              className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
+              style={{ color: '#7C2D36', borderColor: '#D6D0C4' }}
             >
               Public Profile &rarr;
             </a>
           )}
         </div>
 
-        {/* Username setup if no profile */}
         {profile === null && (
           <UsernameSetup onComplete={(p) => setProfile(p)} />
         )}
 
-        {/* Search */}
         {analyses.length > 0 && (
           <div>
             <input
@@ -108,13 +106,14 @@ export default function DashboardPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search protocols..."
-              className="w-full max-w-md px-4 py-2 rounded-lg border border-forest-700 bg-transparent text-sm focus:outline-none focus:border-amber-500"
-              style={{ color: '#F5F5F4', background: '#14532d' }}
+              className="w-full max-w-md px-4 py-2 rounded-lg border text-sm focus:outline-none"
+              style={{ color: '#1C1917', background: '#F5F0E8', borderColor: '#D6D0C4' }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+              onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
             />
           </div>
         )}
 
-        {/* Analysis cards */}
         {filtered.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map(a => (
@@ -122,14 +121,14 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : analyses.length > 0 ? (
-          <p className="text-sm" style={{ color: '#a3a3a3' }}>No protocols match your search.</p>
+          <p className="text-sm" style={{ color: '#78716C' }}>No protocols match your search.</p>
         ) : (
           <div className="text-center py-16 space-y-4">
-            <p className="text-lg" style={{ color: '#a3a3a3' }}>No analyses yet.</p>
+            <p className="text-lg" style={{ color: '#78716C' }}>No analyses yet.</p>
             <a
               href="/"
               className="inline-block px-6 py-3 rounded-lg font-semibold text-sm"
-              style={{ background: '#F59E0B', color: '#0A0F0D' }}
+              style={{ background: '#7C2D36', color: '#FAF8F3' }}
             >
               Analyze Your First Protocol
             </a>
@@ -137,10 +136,10 @@ export default function DashboardPage() {
         )}
       </main>
 
-      <footer className="border-t border-forest-800 px-6 py-8 text-center">
-        <p className="text-sm" style={{ color: '#a3a3a3' }}>
+      <footer className="border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
+        <p className="text-sm" style={{ color: '#78716C' }}>
           Built for{' '}
-          <span style={{ color: '#22C55E' }}>LabreNew.org</span>
+          <span className="font-semibold" style={{ color: '#1B4332' }}>LabreNew.org</span>
           {' '}&mdash; Green chemistry recommendations require experimental validation before adoption.
         </p>
       </footer>
