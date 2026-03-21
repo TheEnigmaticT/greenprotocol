@@ -47,8 +47,8 @@ function RecommendationCard({
         boxShadow: isAccepted ? '0 0 15px rgba(22, 163, 74, 0.1)' : 'none'
       }}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>
             Step {rec.stepNumber}
           </span>
@@ -58,7 +58,7 @@ function RecommendationCard({
         
         <button
           onClick={onToggleAccept}
-          className={`text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider transition-colors border ${
+          className={`text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border shrink-0 self-start sm:self-auto ${
             isAccepted 
               ? 'bg-[#16a34a] text-white border-[#16a34a]' 
               : 'bg-white text-[#78716C] border-[#D6D0C4] hover:border-[#16a34a] hover:text-[#16a34a]'
@@ -135,10 +135,10 @@ export default function AnalysisResults({
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex justify-between items-end">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
+        <div className="min-w-0">
           <h2
-            className="text-2xl font-bold font-[family-name:var(--font-serif)] mb-1"
+            className="text-xl sm:text-2xl font-bold font-[family-name:var(--font-serif)] mb-1 break-words"
             style={{ color: '#1C1917' }}
           >
             {analysis.protocolTitle}
@@ -148,7 +148,7 @@ export default function AnalysisResults({
         
         <button 
           onClick={() => window.print()}
-          className="text-xs px-4 py-2 rounded border border-[#D6D0C4] bg-white hover:bg-[#F5F0E8] transition-colors flex items-center gap-2 print:hidden"
+          className="text-xs px-4 py-2 rounded border border-[#D6D0C4] bg-white hover:bg-[#F5F0E8] transition-colors flex items-center gap-2 print:hidden shrink-0 self-start sm:self-auto"
           style={{ color: '#1B4332' }}
         >
           <span>Print Lab Manual</span>

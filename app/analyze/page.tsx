@@ -91,10 +91,10 @@ export default function AnalyzePage() {
         >
           greenchemistry.ai
         </a>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <a
             href="/"
-            className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
+            className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
             style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
           >
             New Analysis

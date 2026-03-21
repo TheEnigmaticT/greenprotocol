@@ -18,16 +18,16 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <section className="px-6 pt-20 pb-8 max-w-4xl mx-auto">
+      <section className="px-4 sm:px-6 pt-12 sm:pt-20 pb-8 max-w-4xl mx-auto">
         <h1 className="font-[family-name:var(--font-serif)] font-bold mb-6">
           <span
-            className="block text-6xl md:text-8xl leading-[0.95]"
+            className="block text-5xl sm:text-6xl md:text-8xl leading-[0.95]"
             style={{ color: '#1B4332' }}
           >
             Green
           </span>
           <span
-            className="block text-6xl md:text-8xl leading-[0.95]"
+            className="block text-5xl sm:text-6xl md:text-8xl leading-[0.95]"
             style={{ color: '#1B4332' }}
           >
             Chemistry
@@ -50,7 +50,7 @@ export default function Home() {
       </section>
 
       {/* Protocol Input */}
-      <section className="px-6 pb-16 max-w-4xl mx-auto">
+      <section className="px-4 sm:px-6 pb-16 max-w-4xl mx-auto">
         <ProtocolInput />
       </section>
 

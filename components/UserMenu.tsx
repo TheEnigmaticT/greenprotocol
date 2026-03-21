@@ -51,15 +51,15 @@ export default function UserMenu() {
   }
 
   return (
-    <div ref={ref} className="flex items-center gap-3">
+    <div ref={ref} className="flex items-center gap-2 sm:gap-3">
       <a
         href="/dashboard"
-        className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
+        className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
         style={{ color: textColor, borderColor }}
       >
         Dashboard
       </a>
-      <span className="text-sm truncate max-w-[200px]" style={{ color: mutedColor }}>
+      <span className="hidden md:inline text-sm truncate max-w-[200px]" style={{ color: mutedColor }}>
         {user.email}
       </span>
       <button
