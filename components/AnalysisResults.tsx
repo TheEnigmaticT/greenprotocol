@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { AnalysisResult, Recommendation } from '@/lib/types'
 import PrincipleTag from './PrincipleTag'
 
@@ -28,18 +29,43 @@ function ConfidenceBadge({ level }: { level: string }) {
   )
 }
 
-function RecommendationCard({ rec }: { rec: Recommendation }) {
+function RecommendationCard({ 
+  rec, 
+  onToggleAccept 
+}: { 
+  rec: Recommendation; 
+  onToggleAccept: () => void 
+}) {
+  const isAccepted = !!rec.isAccepted
+
   return (
     <div
-      className="p-4 rounded-lg border space-y-3"
-      style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}
+      className={`p-4 rounded-lg border space-y-3 transition-all ${isAccepted ? 'ring-2' : ''}`}
+      style={{ 
+        background: isAccepted ? '#F0FDF4' : '#FAFAF8', 
+        borderColor: isAccepted ? '#16a34a' : '#D6D0C4',
+        boxShadow: isAccepted ? '0 0 15px rgba(22, 163, 74, 0.1)' : 'none'
+      }}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>
-          Step {rec.stepNumber}
-        </span>
-        <SeverityBadge severity={rec.severity} />
-        <ConfidenceBadge level={rec.confidenceLevel} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>
+            Step {rec.stepNumber}
+          </span>
+          <SeverityBadge severity={rec.severity} />
+          <ConfidenceBadge level={rec.confidenceLevel} />
+        </div>
+        
+        <button
+          onClick={onToggleAccept}
+          className={`text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider transition-colors border ${
+            isAccepted 
+              ? 'bg-[#16a34a] text-white border-[#16a34a]' 
+              : 'bg-white text-[#78716C] border-[#D6D0C4] hover:border-[#16a34a] hover:text-[#16a34a]'
+          }`}
+        >
+          {isAccepted ? '✓ Accepted' : 'Accept Solution'}
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-1">
@@ -59,7 +85,7 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
         </div>
 
         {/* Alternative */}
-        <div className="p-3 rounded" style={{ background: '#F0FDF4' }}>
+        <div className="p-3 rounded" style={{ background: isAccepted ? '#DCFCE7' : '#F0FDF4' }}>
           <div className="text-xs font-semibold mb-1" style={{ color: '#16a34a' }}>RECOMMENDED</div>
           <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#1C1917' }}>
             {rec.alternative.chemical}
@@ -85,21 +111,48 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
 export default function AnalysisResults({
   analysis,
   originalProtocol,
+  onUpdateAnalysis,
 }: {
   analysis: AnalysisResult
   originalProtocol: string
+  onUpdateAnalysis?: (updated: AnalysisResult) => void
 }) {
+  const toggleRecommendation = (index: number) => {
+    if (!onUpdateAnalysis) return
+    
+    const newRecommendations = [...analysis.recommendations]
+    newRecommendations[index] = {
+      ...newRecommendations[index],
+      isAccepted: !newRecommendations[index].isAccepted
+    }
+    
+    onUpdateAnalysis({
+      ...analysis,
+      recommendations: newRecommendations
+    })
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h2
-          className="text-2xl font-bold font-[family-name:var(--font-serif)] mb-1"
-          style={{ color: '#1C1917' }}
+      <div className="flex justify-between items-end">
+        <div>
+          <h2
+            className="text-2xl font-bold font-[family-name:var(--font-serif)] mb-1"
+            style={{ color: '#1C1917' }}
+          >
+            {analysis.protocolTitle}
+          </h2>
+          <p className="text-sm" style={{ color: '#78716C' }}>{analysis.chemistrySubdomain}</p>
+        </div>
+        
+        <button 
+          onClick={() => window.print()}
+          className="text-xs px-4 py-2 rounded border border-[#D6D0C4] bg-white hover:bg-[#F5F0E8] transition-colors flex items-center gap-2 print:hidden"
+          style={{ color: '#1B4332' }}
         >
-          {analysis.protocolTitle}
-        </h2>
-        <p className="text-sm" style={{ color: '#78716C' }}>{analysis.chemistrySubdomain}</p>
+          <span>Print Lab Manual</span>
+        </button>
       </div>
 
       {/* Protocol comparison */}
@@ -131,7 +184,11 @@ export default function AnalysisResults({
             Recommendations ({analysis.recommendations.length})
           </h3>
           {analysis.recommendations.map((rec, i) => (
-            <RecommendationCard key={i} rec={rec} />
+            <RecommendationCard 
+              key={i} 
+              rec={rec} 
+              onToggleAccept={() => toggleRecommendation(i)} 
+            />
           ))}
         </div>
       ) : (

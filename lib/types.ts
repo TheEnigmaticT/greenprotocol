@@ -58,6 +58,7 @@ export interface Recommendation {
     evidenceBasis: string
   }
   confidenceLevel: 'high' | 'medium' | 'low'
+  isAccepted?: boolean
 }
 
 export interface AnalysisResult {

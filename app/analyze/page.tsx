@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
 import { calculateOriginalTotals } from '@/lib/calculations'
@@ -10,6 +10,7 @@ import ScaleUpProjection from '@/components/ScaleUpProjection'
 import UserMenu from '@/components/UserMenu'
 
 interface StoredData {
+  id?: string
   analysis: AnalysisResult
   impactDelta: ImpactDelta
   equivalencies: Equivalency[]
@@ -37,6 +38,36 @@ export default function AnalyzePage() {
     }
   }, [router])
 
+  // Debounced persist to Supabase when recommendations are accepted/rejected
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const persistToApi = useCallback((analysisId: string, analysisResult: AnalysisResult) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await fetch(`/api/analyses/${analysisId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analysis_result: analysisResult }),
+        })
+      } catch (err) {
+        console.error('Failed to persist accepted recommendations:', err)
+      }
+    }, 400)
+  }, [])
+
+  const handleUpdateAnalysis = (updatedAnalysis: AnalysisResult) => {
+    if (!data) return
+    const newData = { ...data, analysis: updatedAnalysis }
+    setData(newData)
+    sessionStorage.setItem('gpc_analysis', JSON.stringify(newData))
+
+    // Persist to Supabase if we have an analysis ID
+    if (data.id) {
+      persistToApi(data.id, updatedAnalysis)
+    }
+  }
+
   if (!data) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
@@ -52,7 +83,7 @@ export default function AnalyzePage() {
 
   return (
     <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
-      <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
+      <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto print:hidden">
         <a
           href="/"
           className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
@@ -74,10 +105,14 @@ export default function AnalyzePage() {
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
         <section>
-          <AnalysisResults analysis={data.analysis} originalProtocol={protocol} />
+          <AnalysisResults 
+            analysis={data.analysis} 
+            originalProtocol={protocol} 
+            onUpdateAnalysis={handleUpdateAnalysis}
+          />
         </section>
 
-        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
+        <section className="border-t pt-8 print:break-before-page" style={{ borderColor: '#D6D0C4' }}>
           <ImpactScoreboard
             impactDelta={data.impactDelta}
             equivalencies={data.equivalencies}
@@ -85,12 +120,12 @@ export default function AnalyzePage() {
           />
         </section>
 
-        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
+        <section className="border-t pt-8 print:hidden" style={{ borderColor: '#D6D0C4' }}>
           <ScaleUpProjection perRunDelta={data.impactDelta} />
         </section>
       </main>
 
-      <footer className="border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
+      <footer className="border-t px-6 py-8 text-center print:hidden" style={{ borderColor: '#D6D0C4' }}>
         <p className="text-sm" style={{ color: '#78716C' }}>
           Built for{' '}
           <span className="font-semibold" style={{ color: '#1B4332' }}>LabreNew.org</span>

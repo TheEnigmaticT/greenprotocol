@@ -35,3 +35,37 @@ export async function GET(
     equivalencies,
   })
 }
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Parse the request body
+  const body = await request.json()
+  const { analysis_result } = body
+
+  if (!analysis_result) {
+    return NextResponse.json({ error: 'Missing analysis_result' }, { status: 400 })
+  }
+
+  // Update analysis — user_id check ensures ownership
+  const { error } = await supabase
+    .from('gpc_analyses')
+    .update({ analysis_result })
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) {
+    return NextResponse.json({ error: 'Failed to update analysis' }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
+}

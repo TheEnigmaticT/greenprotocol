@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
 import { calculateOriginalTotals } from '@/lib/calculations'
@@ -65,6 +65,30 @@ export default function AnalysisByIdPage() {
     )
   }
 
+  // Debounced persist to Supabase when recommendations are accepted/rejected
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const persistToApi = useCallback((analysisId: string, analysisResult: AnalysisResult) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await fetch(`/api/analyses/${analysisId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analysis_result: analysisResult }),
+        })
+      } catch (err) {
+        console.error('Failed to persist accepted recommendations:', err)
+      }
+    }, 400)
+  }, [])
+
+  const handleUpdateAnalysis = (updatedAnalysis: AnalysisResult) => {
+    if (!data) return
+    setData({ ...data, analysis: updatedAnalysis })
+    persistToApi(id, updatedAnalysis)
+  }
+
   const originalTotals = calculateOriginalTotals(data.analysis)
 
   return (
@@ -98,7 +122,7 @@ export default function AnalysisByIdPage() {
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
         <section>
-          <AnalysisResults analysis={data.analysis} originalProtocol={data.protocolText} />
+          <AnalysisResults analysis={data.analysis} originalProtocol={data.protocolText} onUpdateAnalysis={handleUpdateAnalysis} />
         </section>
 
         <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
