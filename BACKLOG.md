@@ -7,7 +7,7 @@ kanban-plugin: board
 ## Backlog
 
 - [ ] **Infra: Migrate to dedicated Supabase project** — Audit all `gpc_` tables, auth config, RLS policies; plan migration from shared CrowdTamers workspace (xwcviwzwedljuuyfduso) to standalone project; execute with zero-downtime cutover; update all env vars in Vercel [added::2026-03-21]
-- [ ] **Auth: Per-account run quota system** — Track analysis run count per user in Supabase; enforce configurable limit in /analyze endpoint; return clear error when limit reached; admin override for demo accounts [added::2026-03-21]
+- [x] ~~**Auth: Per-account run quota system**~~ — Count-based limit in /api/analyze (default 10, env var override). Hard lock with 429 + client error message. Per-user overrides deferred to Supabase migration [added::2026-03-21] [done::2026-03-21]
 - [ ] **Auth: E2E test new account signup** — Test email confirmation flow, Google OAuth flow, redirect to dashboard; verify middleware blocks unauthenticated access to /analyze [added::2026-03-21]
 - [ ] **Infra: Staging + Production environments** — Separate Vercel deployments for staging vs prod; staging auto-deploys from main, prod deploys from release tags or manual promote; separate Supabase projects per environment [added::2026-03-21]
 - [ ] **Infra: CI/CD pipeline** — GitHub Actions for: lint + typecheck on PR, build verification, automated tests (when we have them), deploy to staging on merge to main, manual promote to prod [added::2026-03-21]
