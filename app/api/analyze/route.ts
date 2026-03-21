@@ -7,6 +7,8 @@ import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 
 export const maxDuration = 300
 
+const DEFAULT_RUN_LIMIT = parseInt(process.env.ANALYSIS_RUN_LIMIT || '10', 10)
+
 export async function POST(request: Request) {
   // Auth check (must happen before streaming — can't send status codes mid-stream)
   const supabase = await createClient()
@@ -14,6 +16,25 @@ export async function POST(request: Request) {
 
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Usage limit check — count existing analyses for this user
+  const { count, error: countError } = await supabase
+    .from('gpc_analyses')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+
+  if (countError) {
+    return NextResponse.json({ error: 'Failed to check usage limits' }, { status: 500 })
+  }
+
+  if (count !== null && count >= DEFAULT_RUN_LIMIT) {
+    return NextResponse.json({
+      error: 'run_limit_reached',
+      message: `You've reached your analysis limit of ${DEFAULT_RUN_LIMIT} runs. Contact us to get more.`,
+      current: count,
+      limit: DEFAULT_RUN_LIMIT,
+    }, { status: 429 })
   }
 
   // Parse request

@@ -145,6 +145,8 @@ export default function ProtocolInput() {
         const data = await res.json()
         if (data.error === 'not_chemistry') {
           setError("This doesn't look like a chemistry protocol. Try one of our examples!")
+        } else if (data.error === 'run_limit_reached') {
+          setError(`You've used all ${data.limit} of your available analyses. Contact us at hello@greenchemistry.ai to unlock more.`)
         } else {
           setError(data.error || 'Analysis failed. Please try again.')
         }
