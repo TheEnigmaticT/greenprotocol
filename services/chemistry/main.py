@@ -51,9 +51,12 @@ async def convert_batch(req: BatchRequest):
 # --- Scoring endpoints ---
 
 from scoring.models import ScoringRequest, ScoringResponse, ChemicalInput, PrincipleScore
-from scoring.p5_safer_solvents import score_p5
 from scoring.p3_less_hazardous import score_p3
+from scoring.p4_product_toxicity import score_p4
+from scoring.p5_safer_solvents import score_p5
 from scoring.p6_energy_efficiency import score_p6
+from scoring.p7_renewable_feedstocks import score_p7
+from scoring.p9_catalysis import score_p9
 from scoring.p10_degradation import score_p10
 from scoring.p12_accident_prevention import score_p12
 from ghs import lookup_hcodes
@@ -90,23 +93,27 @@ async def score_protocol(req: ScoreAllRequest):
     # Run all scorers
     scores = [
         score_p3(req.chemicals, hcodes_map),
+        score_p4(req.chemicals, hcodes_map),
         score_p5(req.chemicals),
         score_p6(req.steps),
+        score_p7(req.chemicals),
+        score_p9(req.chemicals),
         score_p10(req.chemicals, hcodes_map),
         score_p12(req.chemicals, hcodes_map),
     ]
 
     total = sum(s.score for s in scores)
-    max_possible = 50.0
+    max_possible = 80.0
 
-    # Grade: A (0-10), B (10-20), C (20-30), D (30-40), F (40-50)
-    if total <= 10:
+    # Grade on percentage: A (<20%), B (20-40%), C (40-60%), D (60-80%), F (>80%)
+    pct = (total / max_possible) * 100 if max_possible > 0 else 0
+    if pct <= 20:
         grade = "A"
-    elif total <= 20:
+    elif pct <= 40:
         grade = "B"
-    elif total <= 30:
+    elif pct <= 60:
         grade = "C"
-    elif total <= 40:
+    elif pct <= 80:
         grade = "D"
     else:
         grade = "F"
