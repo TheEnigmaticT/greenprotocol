@@ -77,9 +77,9 @@ def score_p2(
         return PrincipleScore(
             principle_number=2,
             principle_name="Atom Economy",
-            score=5.0, normalized=0.5,
-            details={"error": "RDKit not available"},
-            confidence="estimated",
+            score=-1.0, normalized=-1.0,
+            details={"error": "RDKit not available — cannot calculate atom economy"},
+            confidence="unavailable",
             data_sources=[],
         )
 
@@ -87,10 +87,11 @@ def score_p2(
         return PrincipleScore(
             principle_number=2,
             principle_name="Atom Economy",
-            score=5.0, normalized=0.5,
-            details={"error": "No reaction SMILES provided. "
-                     "LLM must supply reaction_smiles for P2 scoring."},
-            confidence="estimated",
+            score=-1.0, normalized=-1.0,
+            details={"error": "No reaction SMILES provided — "
+                     "atom economy requires a balanced reaction equation. "
+                     "Retry LLM Phase 1 with reaction SMILES extraction."},
+            confidence="unavailable",
             data_sources=[],
         )
 
@@ -114,9 +115,10 @@ def score_p2(
         if mol is None:
             return PrincipleScore(
                 principle_number=2, principle_name="Atom Economy",
-                score=5.0, normalized=0.5,
-                details={"error": f"Invalid reactant SMILES: {s}"},
-                confidence="estimated", data_sources=["rdkit"],
+                score=-1.0, normalized=-1.0,
+                details={"error": f"Invalid reactant SMILES: {s} — "
+                         "retry LLM with corrected reaction SMILES"},
+                confidence="unavailable", data_sources=["rdkit"],
             )
         reactant_mols.append(mol)
 
@@ -126,9 +128,10 @@ def score_p2(
         if mol is None:
             return PrincipleScore(
                 principle_number=2, principle_name="Atom Economy",
-                score=5.0, normalized=0.5,
-                details={"error": f"Invalid product SMILES: {s}"},
-                confidence="estimated", data_sources=["rdkit"],
+                score=-1.0, normalized=-1.0,
+                details={"error": f"Invalid product SMILES: {s} — "
+                         "retry LLM with corrected reaction SMILES"},
+                confidence="unavailable", data_sources=["rdkit"],
             )
         product_mols.append(mol)
 

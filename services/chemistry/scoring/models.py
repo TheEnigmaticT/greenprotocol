@@ -19,9 +19,9 @@ class PrincipleScore(BaseModel):
     """Score for a single green chemistry principle."""
     principle_number: int
     principle_name: str
-    score: float = Field(..., ge=0, le=10, description="0=best, 10=worst")
+    score: float = Field(..., ge=-1, le=10, description="0=best, 10=worst, -1=unavailable")
     max_score: float = 10.0
-    normalized: float = Field(0.0, ge=0, le=1, description="0=best, 1=worst")
+    normalized: float = Field(0.0, ge=-1, le=1, description="0=best, 1=worst, -1=unavailable")
     details: dict = Field(default_factory=dict)
     chemicals_flagged: list[str] = Field(default_factory=list)
     data_sources: list[str] = Field(default_factory=list)

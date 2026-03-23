@@ -106,8 +106,11 @@ async def score_protocol(req: ScoreAllRequest):
         score_p12(req.chemicals, hcodes_map),
     ]
 
-    total = sum(s.score for s in scores)
-    max_possible = 90.0
+    # Only count scores that were actually calculated (not -1/unavailable)
+    available_scores = [s for s in scores if s.score >= 0]
+    unavailable_scores = [s for s in scores if s.score < 0]
+    total = sum(s.score for s in available_scores)
+    max_possible = len(available_scores) * 10.0
 
     # Grade on percentage: A (<20%), B (20-40%), C (40-60%), D (60-80%), F (>80%)
     pct = (total / max_possible) * 100 if max_possible > 0 else 0
