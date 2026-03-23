@@ -51,6 +51,7 @@ async def convert_batch(req: BatchRequest):
 # --- Scoring endpoints ---
 
 from scoring.models import ScoringRequest, ScoringResponse, ChemicalInput, PrincipleScore
+from scoring.p2_atom_economy import score_p2
 from scoring.p3_less_hazardous import score_p3
 from scoring.p4_product_toxicity import score_p4
 from scoring.p5_safer_solvents import score_p5
@@ -67,6 +68,8 @@ from pydantic import BaseModel, Field
 class ScoreAllRequest(BaseModel):
     chemicals: list[ChemicalInput]
     steps: list[dict] = Field(default_factory=list)
+    reaction_smiles: str | None = Field(None, description="Balanced reaction SMILES (reactants>>products)")
+    desired_product_index: int = Field(0, description="Index of the desired product in the reaction SMILES")
 
 
 class ScoreAllResponse(BaseModel):
@@ -92,6 +95,7 @@ async def score_protocol(req: ScoreAllRequest):
 
     # Run all scorers
     scores = [
+        score_p2(req.reaction_smiles, req.desired_product_index),
         score_p3(req.chemicals, hcodes_map),
         score_p4(req.chemicals, hcodes_map),
         score_p5(req.chemicals),
@@ -103,7 +107,7 @@ async def score_protocol(req: ScoreAllRequest):
     ]
 
     total = sum(s.score for s in scores)
-    max_possible = 80.0
+    max_possible = 90.0
 
     # Grade on percentage: A (<20%), B (20-40%), C (40-60%), D (60-80%), F (>80%)
     pct = (total / max_possible) * 100 if max_possible > 0 else 0
