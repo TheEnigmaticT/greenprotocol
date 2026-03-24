@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent } from '@/lib/types'
+import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical } from '@/lib/types'
+import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
@@ -375,7 +376,93 @@ export async function analyzeProtocol(
   const parsed = await parseProtocol(protocolText)
   onProgress?.({ type: 'phase', phase: 1, message: `Parsed "${parsed.protocolTitle}" — ${parsed.steps.length} steps` })
 
-  // Phase 2: Evaluate all 12 principles in parallel
+  // Phase 1.5: Rationalize quantities + deterministic scoring (if service available)
+  let deterministicScores: DeterministicScores | undefined
+  let enrichedChemicals: EnrichedChemical[] | undefined
+
+  const serviceUp = await isServiceAvailable()
+  if (serviceUp) {
+    // Rationalize: convert all chemicals to g/kg/mol
+    onProgress?.({ type: 'phase', phase: 2, message: 'Converting quantities...' })
+    const allChemicals = parsed.steps.flatMap(step =>
+      step.chemicals.map(c => ({ name: c.name, quantity: c.quantity || '' }))
+    )
+    const batchResult = await batchConvert(allChemicals)
+
+    if (batchResult) {
+      // Enrich the parsed chemicals with conversion results
+      enrichedChemicals = []
+      let batchIdx = 0
+      for (const step of parsed.steps) {
+        for (const chem of step.chemicals) {
+          if (batchIdx < batchResult.results.length) {
+            const conv = batchResult.results[batchIdx]
+            chem.quantityKg = conv.quantity_kg ?? chem.quantityKg
+            enrichedChemicals.push({
+              ...chem,
+              molecular_weight: conv.molecular_weight ?? undefined,
+              density_g_per_ml: conv.density_g_per_ml ?? undefined,
+              smiles: conv.smiles ?? undefined,
+              molecular_formula: conv.molecular_formula ?? undefined,
+              data_source: conv.data_source,
+            })
+          }
+          batchIdx++
+        }
+      }
+      console.log(`Rationalization complete: ${batchResult.results.length} chemicals enriched`)
+    }
+
+    // Score: deterministic scoring against all 12 principles
+    onProgress?.({ type: 'phase', phase: 2, message: 'Scoring against 12 principles...' })
+    const scoreChemicals = parsed.steps.flatMap(step =>
+      step.chemicals.map(c => {
+        // Find the enriched version
+        const enriched = enrichedChemicals?.find(e => e.name === c.name)
+        return {
+          name: c.name,
+          role: c.role,
+          quantity_g: c.quantityKg ? c.quantityKg * 1000 : null,
+          quantity_kg: c.quantityKg,
+          quantity_mol: enriched?.molecular_weight && c.quantityKg
+            ? (c.quantityKg * 1000) / enriched.molecular_weight : null,
+          molecular_weight: enriched?.molecular_weight ?? null,
+          step_number: step.stepNumber,
+        }
+      })
+    )
+
+    const scoreResult = await scoreProtocol({
+      chemicals: scoreChemicals,
+      steps: parsed.steps.map(s => ({
+        stepNumber: s.stepNumber,
+        description: s.description,
+        chemicals: s.chemicals.map(c => ({ name: c.name, role: c.role })),
+        conditions: s.conditions,
+      })),
+      protocol_text: protocolText,
+    })
+
+    if (scoreResult) {
+      deterministicScores = scoreResult
+      console.log(`Deterministic scoring complete: grade ${scoreResult.grade} (${scoreResult.total_score}/${scoreResult.max_possible})`)
+
+      // Stream individual scores to the UI
+      for (const s of scoreResult.scores) {
+        onProgress?.({
+          type: 'score',
+          principle: s.principle_number,
+          name: s.principle_name,
+          score: s.score,
+          confidence: s.confidence,
+        })
+      }
+    }
+  } else {
+    console.warn('[pipeline] Chemistry service unavailable — skipping deterministic scoring')
+  }
+
+  // Phase 2: Evaluate all 12 principles in parallel (LLM qualitative recommendations)
   onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
   const rawRecommendations = await evaluateAllPrinciples(parsed.steps, onProgress)
 
@@ -396,5 +483,7 @@ export async function analyzeProtocol(
     recommendations,
     revisedProtocol: assembled.revisedProtocol,
     overallAssessment: assembled.overallAssessment,
+    deterministicScores,
+    enrichedChemicals,
   }
 }

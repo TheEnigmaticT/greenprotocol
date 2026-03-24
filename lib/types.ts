@@ -73,6 +73,9 @@ export interface AnalysisResult {
     experimentalValidationNeeded: boolean
     disclaimer: string
   }
+  // v2: deterministic scoring (optional for backward compat)
+  deterministicScores?: DeterministicScores
+  enrichedChemicals?: EnrichedChemical[]
 }
 
 export interface ImpactDelta {
@@ -111,10 +114,42 @@ export interface AnalysisSummary {
 
 // SSE progress events streamed during analysis
 export type ProgressEvent =
-  | { type: 'phase'; phase: 1 | 2 | 3; message: string }
+  | { type: 'phase'; phase: 1 | 2 | 3 | 4 | 5; message: string }
   | { type: 'principle'; number: number; name: string; status: 'evaluating' | 'complete' | 'failed'; recommendations?: number }
+  | { type: 'score'; principle: number; name: string; score: number; confidence: string }
   | { type: 'result'; data: { id?: string; analysis: AnalysisResult; impactDelta: ImpactDelta; equivalencies: Equivalency[] } }
   | { type: 'error'; error: string; code?: string }
+
+// ─── Deterministic Scoring Types ─────────────────────────────────
+
+export interface PrincipleScore {
+  principle_number: number
+  principle_name: string
+  score: number          // 0-10, or -1 if unavailable
+  max_score: number
+  normalized: number     // 0-1, or -1
+  details: Record<string, unknown>
+  chemicals_flagged: string[]
+  data_sources: string[]
+  confidence: 'calculated' | 'benchmark' | 'estimated' | 'partial' | 'unavailable'
+}
+
+export interface DeterministicScores {
+  scores: PrincipleScore[]
+  total_score: number
+  max_possible: number
+  grade: string
+  smiles_extraction: Record<string, unknown>
+  yield_extraction: Record<string, unknown>
+}
+
+export interface EnrichedChemical extends ParsedChemical {
+  molecular_weight?: number
+  density_g_per_ml?: number
+  smiles?: string
+  molecular_formula?: string
+  data_source?: string
+}
 
 export interface CumulativeImpact {
   totalAnalyses: number
