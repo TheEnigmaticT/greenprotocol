@@ -7,6 +7,7 @@ import { calculateOriginalTotals } from '@/lib/calculations'
 import AnalysisResults from '@/components/AnalysisResults'
 import ImpactScoreboard from '@/components/ImpactScoreboard'
 import ScaleUpProjection from '@/components/ScaleUpProjection'
+import ScoreCard from '@/components/ScoreCard'
 import UserMenu from '@/components/UserMenu'
 
 interface AnalysisData {
@@ -122,6 +123,11 @@ export default function AnalysisByIdPage() {
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
         <section>
+          {data.analysis.deterministicScores && (
+            <div className="mb-8 p-6 rounded-xl" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
+              <ScoreCard scores={data.analysis.deterministicScores} />
+            </div>
+          )}
           <AnalysisResults analysis={data.analysis} originalProtocol={data.protocolText} onUpdateAnalysis={handleUpdateAnalysis} />
         </section>
 

@@ -1,0 +1,197 @@
+'use client'
+
+import { useState } from 'react'
+import { PrincipleScore, DeterministicScores } from '@/lib/types'
+
+const PRINCIPLE_SHORT_NAMES: Record<number, string> = {
+  1: 'Waste Prevention',
+  2: 'Atom Economy',
+  3: 'Less Hazardous',
+  4: 'Safer Products',
+  5: 'Safer Solvents',
+  6: 'Energy Efficiency',
+  7: 'Renewable Feedstocks',
+  8: 'Reduce Derivatives',
+  9: 'Catalysis',
+  10: 'Degradation',
+  11: 'Real-Time Analysis',
+  12: 'Accident Prevention',
+}
+
+const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
+  A: { bg: '#DCFCE7', text: '#166534' },
+  B: { bg: '#D1FAE5', text: '#065F46' },
+  C: { bg: '#FEF3C7', text: '#92400E' },
+  D: { bg: '#FED7AA', text: '#9A3412' },
+  F: { bg: '#FEE2E2', text: '#991B1B' },
+}
+
+function ScoreBar({ score }: { score: PrincipleScore }) {
+  const [showDetails, setShowDetails] = useState(false)
+  const isUnavailable = score.score < 0
+  const pct = isUnavailable ? 0 : (score.score / 10) * 100
+
+  // Color: green (low score = good) to red (high score = bad)
+  const barColor = isUnavailable ? '#D6D0C4'
+    : pct <= 30 ? '#16a34a'
+    : pct <= 60 ? '#D97706'
+    : '#DC2626'
+
+  const confidenceLabel = score.confidence === 'calculated' ? ''
+    : score.confidence === 'benchmark' ? '~'
+    : score.confidence === 'estimated' ? '≈'
+    : score.confidence === 'partial' ? '~'
+    : '?'
+
+  const shortName = PRINCIPLE_SHORT_NAMES[score.principle_number] || score.principle_name
+
+  // Build tooltip content from details
+  const reasoning = score.details?.reasoning as string | undefined
+  const methodologyNote = score.details?.methodology_note as string | undefined
+  const warnings = score.details?.warnings as string[] | undefined
+
+  return (
+    <div className="space-y-1">
+      <button
+        onClick={() => !isUnavailable && setShowDetails(!showDetails)}
+        className="w-full text-left group"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold shrink-0" style={{ color: '#1C1917' }}>
+            P{score.principle_number}
+          </span>
+          <span className="text-xs truncate flex-1" style={{ color: '#57534E' }}>
+            {shortName}
+          </span>
+          <span className="text-xs font-mono shrink-0 tabular-nums" style={{
+            color: isUnavailable ? '#A8A29E' : barColor
+          }}>
+            {isUnavailable ? 'N/A' : `${confidenceLabel}${score.score.toFixed(1)}`}
+          </span>
+        </div>
+        <div className="relative h-2 rounded-full overflow-hidden mt-0.5"
+             style={{ background: '#F0EBE1' }}>
+          <div
+            className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
+            style={{
+              width: `${Math.max(isUnavailable ? 0 : pct, 2)}%`,
+              background: barColor,
+              opacity: isUnavailable ? 0.3 : 1,
+            }}
+          />
+        </div>
+      </button>
+
+      {/* Expandable detail panel */}
+      {showDetails && !isUnavailable && (
+        <div className="mt-1 p-3 rounded-lg text-xs space-y-2"
+             style={{ background: '#F5F0E8', border: '1px solid #D6D0C4' }}>
+          {/* Confidence indicator */}
+          {score.confidence !== 'calculated' && (
+            <div className="flex items-start gap-1.5">
+              <span style={{ color: '#D97706' }}>ℹ</span>
+              <span style={{ color: '#78716C' }}>
+                {score.confidence === 'estimated' && 'AI-assessed score — review reasoning below'}
+                {score.confidence === 'benchmark' && 'Score estimated from industry benchmarks'}
+                {score.confidence === 'partial' && 'Partial data available — some inputs missing'}
+              </span>
+            </div>
+          )}
+
+          {/* Reasoning (P11, P8) */}
+          {reasoning && (
+            <p style={{ color: '#1C1917' }}>{reasoning}</p>
+          )}
+
+          {/* Flagged chemicals */}
+          {score.chemicals_flagged.length > 0 && (
+            <div>
+              <span className="font-semibold" style={{ color: '#DC2626' }}>Flagged: </span>
+              <span style={{ color: '#57534E' }}>{score.chemicals_flagged.join(', ')}</span>
+            </div>
+          )}
+
+          {/* Data sources */}
+          <div style={{ color: '#A8A29E' }}>
+            Sources: {score.data_sources.join(', ')}
+          </div>
+
+          {/* Warnings */}
+          {warnings && warnings.length > 0 && (
+            <div style={{ color: '#D97706' }}>
+              {warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}
+            </div>
+          )}
+
+          {/* Methodology note */}
+          {methodologyNote && (
+            <p className="italic" style={{ color: '#A8A29E', fontSize: '0.65rem' }}>
+              {methodologyNote}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Unavailable explanation */}
+      {isUnavailable && (
+        <p className="text-xs italic mt-0.5" style={{ color: '#A8A29E' }}>
+          {(score.details?.error as string) || 'Data unavailable'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+
+export default function ScoreCard({ scores }: { scores: DeterministicScores }) {
+  const gradeColor = GRADE_COLORS[scores.grade] || GRADE_COLORS.C
+  const availableScores = scores.scores.filter(s => s.score >= 0)
+  const unavailableScores = scores.scores.filter(s => s.score < 0)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold font-[family-name:var(--font-serif)]"
+            style={{ color: '#1C1917' }}>
+          Green Chemistry Scorecard
+        </h3>
+        <div className="flex items-center gap-3">
+          <span className="text-sm" style={{ color: '#78716C' }}>
+            {scores.total_score.toFixed(1)}/{scores.max_possible.toFixed(0)}
+          </span>
+          <span
+            className="text-2xl font-bold px-3 py-1 rounded-lg"
+            style={{ background: gradeColor.bg, color: gradeColor.text }}
+          >
+            {scores.grade}
+          </span>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 text-xs" style={{ color: '#A8A29E' }}>
+        <span>Lower = greener</span>
+        <span>· No symbol = calculated</span>
+        <span>· ~ = benchmarked</span>
+        <span>· ≈ = AI-estimated</span>
+        <span>· Click for details</span>
+      </div>
+
+      {/* Score bars */}
+      <div className="space-y-2">
+        {scores.scores
+          .sort((a, b) => a.principle_number - b.principle_number)
+          .map(s => <ScoreBar key={s.principle_number} score={s} />)
+        }
+      </div>
+
+      {/* Summary footer */}
+      <div className="text-xs pt-2 border-t" style={{ borderColor: '#D6D0C4', color: '#78716C' }}>
+        {availableScores.length} of 12 principles scored deterministically
+        {unavailableScores.length > 0 && (
+          <span> · {unavailableScores.length} need additional data</span>
+        )}
+      </div>
+    </div>
+  )
+}
