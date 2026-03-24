@@ -8,6 +8,7 @@ import AnalysisResults from '@/components/AnalysisResults'
 import ImpactScoreboard from '@/components/ImpactScoreboard'
 import ScaleUpProjection from '@/components/ScaleUpProjection'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
+import ScoreCard from '@/components/ScoreCard'
 import UserMenu from '@/components/UserMenu'
 
 interface StoredData {
@@ -105,6 +106,12 @@ export default function AnalyzePage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
+        {data.analysis.deterministicScores && (
+          <section className="p-6 rounded-xl print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
+            <ScoreCard scores={data.analysis.deterministicScores} />
+          </section>
+        )}
+
         <section className="print:hidden">
           <AnalysisResults
             analysis={data.analysis}
