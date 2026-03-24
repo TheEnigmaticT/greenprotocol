@@ -58,6 +58,7 @@ from scoring.p4_product_toxicity import score_p4
 from scoring.p5_safer_solvents import score_p5
 from scoring.p6_energy_efficiency import score_p6
 from scoring.p7_renewable_feedstocks import score_p7
+from scoring.p8_reduce_derivatives import score_p8
 from scoring.p9_catalysis import score_p9
 from scoring.p10_degradation import score_p10
 from scoring.p12_accident_prevention import score_p12
@@ -143,6 +144,7 @@ async def score_protocol(req: ScoreAllRequest):
         score_p5(req.chemicals),
         score_p6(req.steps),
         score_p7(req.chemicals),
+        await score_p8(req.steps, req.protocol_text),
         score_p9(req.chemicals),
         score_p10(req.chemicals, hcodes_map),
         score_p12(req.chemicals, hcodes_map),

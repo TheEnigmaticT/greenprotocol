@@ -9,7 +9,7 @@ Every `PrincipleScore` returned by `POST /score` includes a `confidence` field. 
 - **Meaning:** All data comes from the protocol text, PubChem, CHEM21, or RDKit. Fully deterministic.
 - **Examples:** P5 solvent scoring from CHEM21, P6 temperature deviation, P3/P10/P12 GHS hazard codes
 
-### Tier 2: Estimated Score (confidence = "benchmark" or "partial")
+### Tier 2: Estimated Score (confidence = "benchmark", "partial", or "estimated")
 - **Display:** Score bar with info icon. Hover/tap reveals explanation.
 - **Meaning:** Some data was derived from ACS GCI benchmarks or incomplete inputs rather than stated protocol data.
 - **Info bubble content:** Pull from `details` dict. Key fields:
@@ -94,6 +94,23 @@ Each `PrincipleScore`:
 ### P7 Renewable Feedstocks
 - `chemicals`: per-chemical renewable/petroleum classification
 - `renewable_fraction`: mass fraction that is bio-based
+
+### P8 Reduce Derivatives (Baran Ideality)
+- `ideality_pct`: Baran % Ideality (higher = better)
+- `total_steps` / `ideal_steps`: step counts
+- `construction_steps` / `strategic_redox_steps`: ideal step breakdown
+- `concession_protection_steps`: protection/deprotection count
+- `step_classifications`: per-step classification with reasons
+- `methodology`: "baran_ideality"
+- `methodology_note`: explains the approach, its limitations, and DOZN comparison
+- **UI NOTE:** P8 confidence is ALWAYS "estimated" because step classification
+  comes from an LLM call. The ideality math is deterministic but the input
+  classification is not. The tooltip should explain this clearly:
+  "Step classifications assessed by AI using Baran's ideality framework.
+  The score measures how much of the synthesis is productive (bond-forming)
+  vs overhead (protecting groups, workup). It does NOT assess whether
+  protecting groups were avoidable — this is an unsolved research question
+  that even DOZN does not yet address."
 
 ### P9 Catalysis
 - `catalytic_mass_g` / `stoichiometric_mass_g`: mass breakdown
