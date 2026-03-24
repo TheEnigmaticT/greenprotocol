@@ -62,6 +62,7 @@ from scoring.p10_degradation import score_p10
 from scoring.p12_accident_prevention import score_p12
 from ghs import lookup_hcodes
 from pubchem import lookup_properties
+from smiles_extractor import extract_reaction_smiles
 from pydantic import BaseModel, Field
 
 
@@ -70,6 +71,7 @@ class ScoreAllRequest(BaseModel):
     steps: list[dict] = Field(default_factory=list)
     reaction_smiles: str | None = Field(None, description="Balanced reaction SMILES (reactants>>products)")
     desired_product_index: int = Field(0, description="Index of the desired product in the reaction SMILES")
+    protocol_text: str = Field("", description="Original protocol text (used for SMILES extraction if reaction_smiles not provided)")
 
 
 class ScoreAllResponse(BaseModel):
@@ -77,6 +79,7 @@ class ScoreAllResponse(BaseModel):
     total_score: float = 0.0
     max_possible: float = 50.0
     grade: str = ""
+    smiles_extraction: dict = Field(default_factory=dict, description="Metadata from auto SMILES extraction (if triggered)")
 
 
 @app.post("/score", response_model=ScoreAllResponse)
@@ -85,6 +88,16 @@ async def score_protocol(req: ScoreAllRequest):
     
     Requires chemicals with resolved quantities (call /batch first).
     """
+    # Auto-extract reaction SMILES if not provided and protocol text is available
+    reaction_smiles = req.reaction_smiles
+    smiles_metadata: dict = {}
+    if not reaction_smiles and req.protocol_text:
+        chem_dicts = [{"name": c.name, "role": c.role, "quantity": c.quantity if hasattr(c, 'quantity') else ""}
+                      for c in req.chemicals]
+        reaction_smiles, smiles_metadata = await extract_reaction_smiles(
+            req.protocol_text, chem_dicts
+        )
+
     # Build H-code map for all chemicals via PubChem
     hcodes_map: dict[str, list[str]] = {}
     for chem in req.chemicals:
@@ -95,7 +108,7 @@ async def score_protocol(req: ScoreAllRequest):
 
     # Run all scorers
     scores = [
-        score_p2(req.reaction_smiles, req.desired_product_index),
+        score_p2(reaction_smiles, req.desired_product_index),
         score_p3(req.chemicals, hcodes_map),
         score_p4(req.chemicals, hcodes_map),
         score_p5(req.chemicals),
@@ -130,4 +143,5 @@ async def score_protocol(req: ScoreAllRequest):
         total_score=round(total, 2),
         max_possible=max_possible,
         grade=grade,
+        smiles_extraction=smiles_metadata,
     )
