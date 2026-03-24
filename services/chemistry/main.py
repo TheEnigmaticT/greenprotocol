@@ -51,6 +51,7 @@ async def convert_batch(req: BatchRequest):
 # --- Scoring endpoints ---
 
 from scoring.models import ScoringRequest, ScoringResponse, ChemicalInput, PrincipleScore
+from scoring.p1_waste_prevention import score_p1
 from scoring.p2_atom_economy import score_p2
 from scoring.p3_less_hazardous import score_p3
 from scoring.p4_product_toxicity import score_p4
@@ -63,6 +64,7 @@ from scoring.p12_accident_prevention import score_p12
 from ghs import lookup_hcodes
 from pubchem import lookup_properties
 from smiles_extractor import extract_reaction_smiles
+from yield_extractor import extract_yield_and_type
 from pydantic import BaseModel, Field
 
 
@@ -80,6 +82,7 @@ class ScoreAllResponse(BaseModel):
     max_possible: float = 50.0
     grade: str = ""
     smiles_extraction: dict = Field(default_factory=dict, description="Metadata from auto SMILES extraction (if triggered)")
+    yield_extraction: dict = Field(default_factory=dict, description="Metadata from yield/reaction type extraction (if triggered)")
 
 
 @app.post("/score", response_model=ScoreAllResponse)
@@ -106,9 +109,35 @@ async def score_protocol(req: ScoreAllRequest):
             codes = await lookup_hcodes(props["cid"])
             hcodes_map[chem.name] = codes
 
+    # Extract yield + reaction type (surgical LLM call if protocol_text provided)
+    yield_data: dict = {}
+    if req.protocol_text:
+        chem_dicts = [{"name": c.name, "role": c.role} for c in req.chemicals]
+        yield_data = await extract_yield_and_type(req.protocol_text, chem_dicts)
+
+    # Get P2 result first — we need atom economy for P1
+    p2_result = score_p2(reaction_smiles, req.desired_product_index)
+    atom_economy_pct = (
+        p2_result.details.get("atom_economy_pct")
+        if p2_result.score >= 0 else None
+    )
+
+    # Build P1 inputs from yield extraction + P2 atom economy
+    benchmark = yield_data.get("benchmark", {})
+    p1_result = score_p1(
+        chemicals=req.chemicals,
+        yield_pct=yield_data.get("yield_pct"),
+        yield_source=yield_data.get("confidence", "unknown"),
+        reaction_type=yield_data.get("reaction_type"),
+        benchmark_efficiency=benchmark.get("typical_efficiency"),
+        benchmark_pmi=benchmark.get("typical_pmi"),
+        atom_economy_pct=atom_economy_pct,
+    )
+
     # Run all scorers
     scores = [
-        score_p2(reaction_smiles, req.desired_product_index),
+        p1_result,
+        p2_result,
         score_p3(req.chemicals, hcodes_map),
         score_p4(req.chemicals, hcodes_map),
         score_p5(req.chemicals),
@@ -144,4 +173,5 @@ async def score_protocol(req: ScoreAllRequest):
         max_possible=max_possible,
         grade=grade,
         smiles_extraction=smiles_metadata,
+        yield_extraction=yield_data,
     )
