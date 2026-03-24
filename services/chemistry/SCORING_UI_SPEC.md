@@ -112,6 +112,19 @@ Each `PrincipleScore`:
   protecting groups were avoidable — this is an unsolved research question
   that even DOZN does not yet address."
 
+### P11 Real-Time Analysis
+- `reasoning`: LLM's 2-3 sentence explanation of the score — **MUST be shown in tooltip**
+- `monitoring_present`: array of monitoring methods found, each with method, step, and evidence quote
+- `monitoring_absent`: array of missed monitoring opportunities, each with rationale for why it would help
+- `monitoring_count` / `opportunity_count`: summary counts
+- `methodology_note`: disclaimer about AI assessment limitations
+- **UI NOTE:** P11 confidence is ALWAYS "estimated". This is a pure AI assessment.
+  The tooltip MUST show the full `reasoning` field plus list the specific
+  `monitoring_present` (what was found) and `monitoring_absent` (what's missing).
+  This gives the scientist enough to say "yes, that's right" or "no, we actually
+  have inline HPLC but it wasn't in the protocol text." The `methodology_note`
+  should be shown as a footer/disclaimer.
+
 ### P9 Catalysis
 - `catalytic_mass_g` / `stoichiometric_mass_g`: mass breakdown
 - `stoichiometric_fraction`: ratio
