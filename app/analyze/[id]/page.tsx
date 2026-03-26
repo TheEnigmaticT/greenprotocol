@@ -104,13 +104,6 @@ export default function AnalysisByIdPage() {
         </a>
         <div className="flex items-center gap-2 sm:gap-4">
           <a
-            href="/dashboard"
-            className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
-            style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
-          >
-            Dashboard
-          </a>
-          <a
             href="/"
             className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
             style={{ color: '#1B4332', borderColor: '#D6D0C4' }}

@@ -38,18 +38,16 @@ export default function FinalizedProtocol({ analysis }: { analysis: AnalysisResu
             </p>
           )}
         </div>
-        {hasReviewed && (
-          <button
-            onClick={() => {
+        <button
+          onClick={() => {
             sessionStorage.setItem('gpc_print_pending', '1')
             window.location.reload()
           }}
-            className="print:hidden text-xs px-4 py-2 rounded border flex items-center gap-2 transition-colors"
-            style={{ color: '#1B4332', borderColor: '#D6D0C4', background: 'white' }}
-          >
-            Print Lab Manual
-          </button>
-        )}
+          className="print:hidden text-xs px-4 py-2 rounded border flex items-center gap-2 transition-colors"
+          style={{ color: '#1B4332', borderColor: '#D6D0C4', background: 'white' }}
+        >
+          Print Lab Manual
+        </button>
       </div>
 
       {!hasReviewed ? (
