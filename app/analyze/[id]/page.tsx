@@ -7,6 +7,7 @@ import { calculateOriginalTotals } from '@/lib/calculations'
 import AnalysisResults from '@/components/AnalysisResults'
 import ImpactScoreboard from '@/components/ImpactScoreboard'
 import ScaleUpProjection from '@/components/ScaleUpProjection'
+import FinalizedProtocol from '@/components/FinalizedProtocol'
 import UserMenu from '@/components/UserMenu'
 
 interface AnalysisData {
@@ -93,7 +94,7 @@ export default function AnalysisByIdPage() {
 
   return (
     <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
-      <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
+      <header className="print:hidden flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
         <a
           href="/"
           className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
@@ -121,11 +122,11 @@ export default function AnalysisByIdPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
-        <section>
+        <section className="print:hidden">
           <AnalysisResults analysis={data.analysis} originalProtocol={data.protocolText} onUpdateAnalysis={handleUpdateAnalysis} />
         </section>
 
-        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
+        <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
           <ImpactScoreboard
             impactDelta={data.impactDelta}
             equivalencies={data.equivalencies}
@@ -133,12 +134,16 @@ export default function AnalysisByIdPage() {
           />
         </section>
 
-        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
+        <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
           <ScaleUpProjection perRunDelta={data.impactDelta} />
+        </section>
+
+        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
+          <FinalizedProtocol analysis={data.analysis} />
         </section>
       </main>
 
-      <footer className="border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
+      <footer className="print:hidden border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
         <p className="text-sm" style={{ color: '#78716C' }}>
           Built for{' '}
           <span className="font-semibold" style={{ color: '#1B4332' }}>LabreNew.org</span>
