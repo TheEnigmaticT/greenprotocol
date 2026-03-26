@@ -1,8 +1,15 @@
 'use client'
 
+import { useEffect } from 'react'
 import { AnalysisResult } from '@/lib/types'
 
 export default function FinalizedProtocol({ analysis }: { analysis: AnalysisResult }) {
+  useEffect(() => {
+    if (sessionStorage.getItem('gpc_print_pending') === '1') {
+      sessionStorage.removeItem('gpc_print_pending')
+      setTimeout(() => window.print(), 150)
+    }
+  }, [])
   const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
   const declined = analysis.recommendations.filter(r => r.isAccepted === false)
   const pending = analysis.recommendations.filter(r => r.isAccepted === undefined || r.isAccepted === null)
@@ -33,7 +40,10 @@ export default function FinalizedProtocol({ analysis }: { analysis: AnalysisResu
         </div>
         {hasReviewed && (
           <button
-            onClick={() => window.print()}
+            onClick={() => {
+            sessionStorage.setItem('gpc_print_pending', '1')
+            window.location.reload()
+          }}
             className="print:hidden text-xs px-4 py-2 rounded border flex items-center gap-2 transition-colors"
             style={{ color: '#1B4332', borderColor: '#D6D0C4', background: 'white' }}
           >
