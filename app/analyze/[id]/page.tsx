@@ -24,6 +24,24 @@ export default function AnalysisByIdPage() {
   const params = useParams()
   const id = params.id as string
 
+  // Debounced persist to Supabase when recommendations are accepted/rejected
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const persistToApi = useCallback((analysisId: string, analysisResult: AnalysisResult) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await fetch(`/api/analyses/${analysisId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analysis_result: analysisResult }),
+        })
+      } catch (err) {
+        console.error('Failed to persist accepted recommendations:', err)
+      }
+    }, 400)
+  }, [])
+
   useEffect(() => {
     async function load() {
       const res = await fetch(`/api/analyses/${id}`)
@@ -64,24 +82,6 @@ export default function AnalysisByIdPage() {
       </div>
     )
   }
-
-  // Debounced persist to Supabase when recommendations are accepted/rejected
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const persistToApi = useCallback((analysisId: string, analysisResult: AnalysisResult) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(async () => {
-      try {
-        await fetch(`/api/analyses/${analysisId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ analysis_result: analysisResult }),
-        })
-      } catch (err) {
-        console.error('Failed to persist accepted recommendations:', err)
-      }
-    }, 400)
-  }, [])
 
   const handleUpdateAnalysis = (updatedAnalysis: AnalysisResult) => {
     if (!data) return
