@@ -1,17 +1,34 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+
+  useEffect(() => {
+    const msg = searchParams.get('message')
+    if (msg === 'confirmed') {
+      setMessage('Email confirmed! You can now sign in.')
+    } else if (msg === 'reset') {
+      setMessage('Password reset successful. Sign in with your new password.')
+    }
+    const err = searchParams.get('error')
+    if (err === 'verification') {
+      setError('Verification link expired or invalid. Please try signing up again.')
+    } else if (err === 'auth') {
+      setError('Authentication failed. Please try again.')
+    }
+  }, [searchParams])
 
   async function handleGoogleLogin() {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -85,6 +102,12 @@ export default function LoginPage() {
             onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
             onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
           />
+
+          {message && (
+            <div className="p-3 rounded-lg text-sm" style={{ background: '#DCFCE7', color: '#166534' }}>
+              ✓ {message}
+            </div>
+          )}
 
           {error && (
             <p className="text-sm" style={{ color: error.includes('Check your email') ? '#16a34a' : '#EF4444' }}>
