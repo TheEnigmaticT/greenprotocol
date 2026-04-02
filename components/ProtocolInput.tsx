@@ -89,7 +89,8 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
           <span
             className="text-sm font-[family-name:var(--font-mono)] transition-opacity duration-300"
             style={{
-              color: '#57534E',
+              color: '#FAF8F3',
+              textShadow: '0 1px 3px rgba(0,0,0,0.4)',
               opacity: fade ? 1 : 0,
             }}
           >
@@ -99,7 +100,7 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
         <div className="absolute inset-y-0 right-3 flex items-center">
           <span
             className="text-xs font-[family-name:var(--font-mono)] tabular-nums"
-            style={{ color: '#A8A29E' }}
+            style={{ color: '#FAF8F3', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
           >
             {completed}/{total}
           </span>

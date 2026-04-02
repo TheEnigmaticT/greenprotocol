@@ -137,6 +137,13 @@ export default function AnalyzePage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-serif)] break-words" style={{ color: '#1C1917' }}>
+            {data.analysis.protocolTitle}
+          </h1>
+          <p className="text-sm mt-1" style={{ color: '#78716C' }}>{data.analysis.chemistrySubdomain}</p>
+        </div>
+
         {data.analysis.deterministicScores && (
           <section className="p-6 rounded-xl print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
             <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} />
