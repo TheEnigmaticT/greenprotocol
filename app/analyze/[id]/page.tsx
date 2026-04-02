@@ -4,9 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
 import { calculateOriginalTotals } from '@/lib/calculations'
-import AnalysisResults from '@/components/AnalysisResults'
 import ImpactScoreboard from '@/components/ImpactScoreboard'
-import ScaleUpProjection from '@/components/ScaleUpProjection'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import ScoreCard from '@/components/ScoreCard'
 import UserMenu from '@/components/UserMenu'
@@ -122,23 +120,17 @@ export default function AnalysisByIdPage() {
               <ScoreCard scores={data.analysis.deterministicScores} />
             </div>
           )}
-          <AnalysisResults analysis={data.analysis} originalProtocol={data.protocolText} onUpdateAnalysis={handleUpdateAnalysis} />
         </section>
 
         <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
           <ImpactScoreboard
-            impactDelta={data.impactDelta}
-            equivalencies={data.equivalencies}
+            analysis={data.analysis}
             originalTotals={originalTotals}
           />
         </section>
 
-        <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
-          <ScaleUpProjection perRunDelta={data.impactDelta} />
-        </section>
-
         <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
-          <FinalizedProtocol analysis={data.analysis} />
+          <FinalizedProtocol analysis={data.analysis} onUpdateAnalysis={handleUpdateAnalysis} />
         </section>
       </main>
 

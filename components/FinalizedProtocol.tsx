@@ -1,20 +1,115 @@
 'use client'
 
-import { useEffect } from 'react'
-import { AnalysisResult } from '@/lib/types'
+import { AnalysisResult, Recommendation } from '@/lib/types'
+import PrincipleTag from './PrincipleTag'
 
-export default function FinalizedProtocol({ analysis }: { analysis: AnalysisResult }) {
-  useEffect(() => {
-    if (sessionStorage.getItem('gpc_print_pending') === '1') {
-      sessionStorage.removeItem('gpc_print_pending')
-      setTimeout(() => window.print(), 150)
-    }
-  }, [])
+function SeverityBadge({ severity }: { severity: string }) {
+  const colors: Record<string, { bg: string; text: string }> = {
+    high: { bg: '#FEE2E2', text: '#DC2626' },
+    medium: { bg: '#FEF3C7', text: '#D97706' },
+    low: { bg: '#DCFCE7', text: '#16a34a' },
+  }
+  const c = colors[severity] || colors.low
+  return (
+    <span
+      className="px-2 py-0.5 rounded text-xs font-semibold uppercase"
+      style={{ background: c.bg, color: c.text }}
+    >
+      {severity}
+    </span>
+  )
+}
+
+function PendingCard({ rec, onAccept, onDecline }: {
+  rec: Recommendation
+  onAccept: () => void
+  onDecline: () => void
+}) {
+  return (
+    <div className="p-4 rounded-lg border space-y-3" style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>Step {rec.stepNumber}</span>
+          <SeverityBadge severity={rec.severity} />
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={onAccept}
+            className="text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border bg-white hover:border-[#16a34a] hover:text-[#16a34a]"
+            style={{ color: '#78716C', borderColor: '#D6D0C4' }}
+          >
+            Accept
+          </button>
+          <button
+            onClick={onDecline}
+            className="text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border bg-white hover:border-[#DC2626] hover:text-[#DC2626]"
+            style={{ color: '#78716C', borderColor: '#D6D0C4' }}
+          >
+            Decline
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {rec.principleNumbers.map((n) => (
+          <PrincipleTag key={n} number={n} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="p-3 rounded" style={{ background: '#FEF2F2' }}>
+          <div className="text-xs font-semibold mb-1" style={{ color: '#DC2626' }}>ORIGINAL</div>
+          <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#1C1917' }}>
+            {rec.original.chemical}
+          </div>
+          <p className="text-xs" style={{ color: '#78716C' }}>{rec.original.issue}</p>
+        </div>
+        <div className="p-3 rounded" style={{ background: '#F0FDF4' }}>
+          <div className="text-xs font-semibold mb-1" style={{ color: '#16a34a' }}>RECOMMENDED</div>
+          <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#1C1917' }}>
+            {rec.alternative.chemical}
+          </div>
+          <p className="text-xs" style={{ color: '#2D6A4F' }}>{rec.alternative.rationale}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function FinalizedProtocol({
+  analysis,
+  onUpdateAnalysis,
+}: {
+  analysis: AnalysisResult
+  onUpdateAnalysis?: (updated: AnalysisResult) => void
+}) {
   const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
   const declined = analysis.recommendations.filter(r => r.isAccepted === false)
   const pending = analysis.recommendations.filter(r => r.isAccepted === undefined || r.isAccepted === null)
   const total = analysis.recommendations.length
-  const hasReviewed = accepted.length > 0 || declined.length > 0
+
+  const setRecAccepted = (index: number, value: boolean) => {
+    if (!onUpdateAnalysis) return
+    const newRecs = [...analysis.recommendations]
+    newRecs[index] = { ...newRecs[index], isAccepted: value }
+    onUpdateAnalysis({ ...analysis, recommendations: newRecs })
+  }
+
+  const toggleAccepted = (index: number) => {
+    if (!onUpdateAnalysis) return
+    const newRecs = [...analysis.recommendations]
+    newRecs[index] = { ...newRecs[index], isAccepted: !newRecs[index].isAccepted }
+    onUpdateAnalysis({ ...analysis, recommendations: newRecs })
+  }
+
+  const toggleDeclined = (index: number) => {
+    if (!onUpdateAnalysis) return
+    const newRecs = [...analysis.recommendations]
+    const current = newRecs[index].isAccepted
+    // If already declined (false), set to undefined (pending). If not declined, set to false.
+    newRecs[index] = { ...newRecs[index], isAccepted: current === false ? undefined : false }
+    onUpdateAnalysis({ ...analysis, recommendations: newRecs })
+  }
 
   return (
     <div>
@@ -29,55 +124,69 @@ export default function FinalizedProtocol({ analysis }: { analysis: AnalysisResu
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C1917' }}>
-            Finalized Protocol
+            Recommendations ({total})
           </h2>
-          {hasReviewed && (
+          {(accepted.length > 0 || declined.length > 0) && (
             <p className="text-sm mt-1" style={{ color: '#78716C' }}>
-              {accepted.length} of {total} changes accepted
-              {pending.length > 0 && ` · ${pending.length} not yet reviewed`}
+              {accepted.length} accepted · {declined.length} declined
+              {pending.length > 0 && ` · ${pending.length} pending`}
             </p>
           )}
         </div>
-        <button
-          onClick={() => {
-            sessionStorage.setItem('gpc_print_pending', '1')
-            window.location.reload()
-          }}
-          className="print:hidden text-xs px-4 py-2 rounded border flex items-center gap-2 transition-colors"
-          style={{ color: '#1B4332', borderColor: '#D6D0C4', background: 'white' }}
-        >
-          Print Lab Manual
-        </button>
+        {accepted.length > 0 && (
+          <button
+            onClick={() => window.print()}
+            className="print:hidden text-xs px-4 py-2 rounded border flex items-center gap-2 transition-colors"
+            style={{ color: '#1B4332', borderColor: '#D6D0C4', background: 'white' }}
+          >
+            Print Lab Manual
+          </button>
+        )}
       </div>
 
-      {!hasReviewed ? (
-        <div className="p-8 rounded-lg text-center" style={{ background: '#F5F0E8', border: '1px solid #D6D0C4' }}>
-          <p className="text-sm" style={{ color: '#78716C' }}>
-            Accept or decline the recommendations above to build your finalized protocol.
-          </p>
-          <p className="text-xs mt-2" style={{ color: '#A8A29E' }}>
-            Your choices are saved automatically.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Accepted changes */}
-          {accepted.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold mb-3" style={{ color: '#16a34a' }}>
-                Accepted Changes ({accepted.length})
-              </h3>
-              <div className="space-y-2">
-                {accepted.map((rec, i) => (
+      <div className="space-y-6">
+        {/* Pending recommendations — need review */}
+        {pending.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold mb-3" style={{ color: '#D97706' }}>
+              Pending Review ({pending.length})
+            </h3>
+            <div className="space-y-3">
+              {pending.map((rec) => {
+                const globalIndex = analysis.recommendations.indexOf(rec)
+                return (
+                  <PendingCard
+                    key={globalIndex}
+                    rec={rec}
+                    onAccept={() => setRecAccepted(globalIndex, true)}
+                    onDecline={() => setRecAccepted(globalIndex, false)}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Accepted changes */}
+        {accepted.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold mb-3" style={{ color: '#16a34a' }}>
+              Accepted Changes ({accepted.length})
+            </h3>
+            <div className="space-y-2">
+              {accepted.map((rec) => {
+                const globalIndex = analysis.recommendations.indexOf(rec)
+                return (
                   <div
-                    key={i}
-                    className="flex gap-3 items-start p-3 rounded-lg text-sm"
+                    key={globalIndex}
+                    className="flex gap-3 items-start p-3 rounded-lg text-sm cursor-pointer hover:opacity-80 transition-opacity"
                     style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}
+                    onClick={() => toggleAccepted(globalIndex)}
                   >
                     <span className="font-semibold shrink-0 mt-0.5" style={{ color: '#78716C' }}>
                       Step {rec.stepNumber}
                     </span>
-                    <div>
+                    <div className="flex-1">
                       <span className="font-[family-name:var(--font-mono)]" style={{ color: '#DC2626' }}>
                         {rec.original.chemical}
                       </span>
@@ -85,53 +194,47 @@ export default function FinalizedProtocol({ analysis }: { analysis: AnalysisResu
                       <span className="font-[family-name:var(--font-mono)]" style={{ color: '#16a34a' }}>
                         {rec.alternative.chemical}
                       </span>
-                      {rec.alternative.yieldImpact && (
-                        <p className="text-xs mt-0.5" style={{ color: '#78716C' }}>
-                          {rec.alternative.yieldImpact}
-                        </p>
-                      )}
                     </div>
+                    <span className="text-xs shrink-0" style={{ color: '#16a34a' }}>✓</span>
                   </div>
-                ))}
-              </div>
+                )
+              })}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Declined changes */}
-          {declined.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold mb-3" style={{ color: '#78716C' }}>
-                Original Steps Retained ({declined.length})
-              </h3>
-              <div className="space-y-2">
-                {declined.map((rec, i) => (
+        {/* Declined changes */}
+        {declined.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold mb-3" style={{ color: '#78716C' }}>
+              Declined ({declined.length})
+            </h3>
+            <div className="space-y-2">
+              {declined.map((rec) => {
+                const globalIndex = analysis.recommendations.indexOf(rec)
+                return (
                   <div
-                    key={i}
-                    className="flex gap-3 items-center p-3 rounded-lg text-sm"
+                    key={globalIndex}
+                    className="flex gap-3 items-center p-3 rounded-lg text-sm cursor-pointer hover:opacity-80 transition-opacity"
                     style={{ background: '#F5F5F4', border: '1px solid #D6D0C4' }}
+                    onClick={() => toggleDeclined(globalIndex)}
                   >
                     <span className="font-semibold shrink-0" style={{ color: '#78716C' }}>
                       Step {rec.stepNumber}
                     </span>
-                    <span className="font-[family-name:var(--font-mono)]" style={{ color: '#A8A29E' }}>
+                    <span className="font-[family-name:var(--font-mono)] flex-1" style={{ color: '#A8A29E' }}>
                       {rec.original.chemical}
                     </span>
-                    <span className="text-xs" style={{ color: '#A8A29E' }}>
-                      (original retained)
-                    </span>
+                    <span className="text-xs shrink-0" style={{ color: '#A8A29E' }}>✗</span>
                   </div>
-                ))}
-              </div>
+                )
+              })}
             </div>
-          )}
+          </div>
+        )}
 
-          {pending.length > 0 && (
-            <p className="text-xs" style={{ color: '#A8A29E' }}>
-              {pending.length} recommendation{pending.length !== 1 ? 's' : ''} not yet reviewed.
-            </p>
-          )}
-
-          {/* Revised protocol text */}
+        {/* Revised protocol text — only show when some recs are accepted */}
+        {accepted.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold mb-2" style={{ color: '#1B4332' }}>Revised Protocol Text</h3>
             {declined.length > 0 && (
@@ -151,8 +254,8 @@ export default function FinalizedProtocol({ analysis }: { analysis: AnalysisResu
               {analysis.revisedProtocol}
             </pre>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
