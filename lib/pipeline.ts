@@ -229,12 +229,14 @@ async function evaluateAllPrinciples(
 
       if (result.status === 'fulfilled') {
         succeeded++
-        const recs = result.value.recommendations || []
+        const rawRecs = result.value.recommendations || []
+        // Guard against malformed recs (strings instead of objects)
+        const recs = rawRecs.filter((r: unknown): r is Record<string, unknown> => typeof r === 'object' && r !== null)
         for (const rec of recs) {
-          if (!rec.principleNumbers || rec.principleNumbers.length === 0) {
+          if (!Array.isArray(rec.principleNumbers) || rec.principleNumbers.length === 0) {
             rec.principleNumbers = [principle.number]
           }
-          if (!rec.principleNames || rec.principleNames.length === 0) {
+          if (!Array.isArray(rec.principleNames) || rec.principleNames.length === 0) {
             rec.principleNames = [principle.name]
           }
         }

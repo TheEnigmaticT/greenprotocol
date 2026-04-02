@@ -51,7 +51,7 @@ function PendingCard({ rec, onAccept, onDecline }: {
       </div>
 
       <div className="flex flex-wrap gap-1">
-        {rec.principleNumbers.map((n) => (
+        {(Array.isArray(rec.principleNumbers) ? rec.principleNumbers : []).map((n) => (
           <PrincipleTag key={n} number={n} />
         ))}
       </div>
