@@ -4,7 +4,7 @@
  */
 
 const CHEMISTRY_SERVICE_URL = process.env.CHEMISTRY_SERVICE_URL || 'http://localhost:8000'
-const TIMEOUT_MS = 30_000
+const TIMEOUT_MS = 90_000
 
 interface ConvertResult {
   chemical_name: string

@@ -1285,12 +1285,26 @@ export function findChemical(name: string): ChemicalData | undefined {
 
   // Fuzzy: check if input contains a known chemical name, or vice versa
   // Handles cases like "Chloroform (CHCl3)" or "conc. hydrochloric acid"
-  return CHEMICALS.find(
-    (c) =>
-      lower.includes(c.name.toLowerCase()) ||
-      c.name.toLowerCase().includes(lower) ||
-      c.synonyms.some(
-        (s) => lower.includes(s.toLowerCase()) || s.toLowerCase().includes(lower),
-      ),
-  )
+  // Guard: the match must occur at a word boundary (space, paren, comma, hyphen
+  // for prefixes like "2-methyl", or start/end of string) to prevent
+  // "ethanol" matching "ethanolamine" or "pyridine" matching "4-dimethylaminopyridine"
+  const fuzzyContains = (haystack: string, needle: string): boolean => {
+    const idx = haystack.indexOf(needle)
+    if (idx === -1) return false
+    // Check left boundary: start of string, or non-alphanumeric char before match
+    const leftOk = idx === 0 || /[^a-z0-9]/.test(haystack[idx - 1])
+    // Check right boundary: end of string, or non-alphanumeric char after match
+    const endIdx = idx + needle.length
+    const rightOk = endIdx === haystack.length || /[^a-z0-9]/.test(haystack[endIdx])
+    return leftOk && rightOk
+  }
+
+  return CHEMICALS.find((c) => {
+    const cName = c.name.toLowerCase()
+    if (fuzzyContains(lower, cName) || fuzzyContains(cName, lower)) return true
+    return c.synonyms.some((s) => {
+      const sLower = s.toLowerCase()
+      return fuzzyContains(lower, sLower) || fuzzyContains(sLower, lower)
+    })
+  })
 }

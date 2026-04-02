@@ -315,8 +315,20 @@ async function assembleResult(
 
 // ─── Deduplication ───────────────────────────────────────────────
 
+const SEVERITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 }
+const CONFIDENCE_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 }
+
+interface MergeSlot {
+  /** The winning recommendation (highest severity, then highest confidence) */
+  best: Recommendation
+  /** All issue texts collected, keyed by principle to avoid duplicates */
+  issuesByPrinciple: Map<number, string>
+  /** All alternatives seen, keyed by chemical name to avoid duplicates */
+  alternativesByChemical: Map<string, Recommendation['alternative']>
+}
+
 function deduplicateRecommendations(recs: Recommendation[]): Recommendation[] {
-  const map = new Map<string, Recommendation>()
+  const map = new Map<string, MergeSlot>()
 
   for (const rec of recs) {
     // Key by step + original chemical (case-insensitive)
@@ -324,44 +336,94 @@ function deduplicateRecommendations(recs: Recommendation[]): Recommendation[] {
     const existing = map.get(key)
 
     if (!existing) {
-      map.set(key, { ...rec })
+      const issuesByPrinciple = new Map<number, string>()
+      for (const pn of rec.principleNumbers) {
+        issuesByPrinciple.set(pn, rec.original.issue)
+      }
+      const alternativesByChemical = new Map<string, Recommendation['alternative']>()
+      alternativesByChemical.set(rec.alternative.chemical.toLowerCase(), rec.alternative)
+      map.set(key, { best: { ...rec }, issuesByPrinciple, alternativesByChemical })
       continue
     }
 
     // Merge principle numbers and names
     for (const pn of rec.principleNumbers) {
-      if (!existing.principleNumbers.includes(pn)) {
-        existing.principleNumbers.push(pn)
+      if (!existing.best.principleNumbers.includes(pn)) {
+        existing.best.principleNumbers.push(pn)
+      }
+      // Track issue text per principle (first one wins — avoids concatenation bloat)
+      if (!existing.issuesByPrinciple.has(pn)) {
+        existing.issuesByPrinciple.set(pn, rec.original.issue)
       }
     }
     for (const name of rec.principleNames) {
-      if (!existing.principleNames.includes(name)) {
-        existing.principleNames.push(name)
+      if (!existing.best.principleNames.includes(name)) {
+        existing.best.principleNames.push(name)
       }
     }
 
-    // Keep the higher severity
-    const severityOrder = { high: 3, medium: 2, low: 1 }
-    if (severityOrder[rec.severity] > severityOrder[existing.severity]) {
-      existing.severity = rec.severity
+    // Collect alternative if it's a genuinely different suggestion
+    // Use substring containment to avoid near-duplicates like "DMSO" vs "DMSO or Cyrene"
+    const altName = rec.alternative.chemical.toLowerCase()
+    const isDuplicate = Array.from(existing.alternativesByChemical.keys()).some(
+      existingKey => existingKey.includes(altName) || altName.includes(existingKey)
+    )
+    if (!isDuplicate) {
+      existing.alternativesByChemical.set(altName, rec.alternative)
     }
 
-    // Keep the higher confidence
-    const confOrder = { high: 3, medium: 2, low: 1 }
-    if (confOrder[rec.confidenceLevel] > confOrder[existing.confidenceLevel]) {
-      existing.confidenceLevel = rec.confidenceLevel
+    // Promote severity and confidence to the highest seen
+    if (SEVERITY_ORDER[rec.severity] > SEVERITY_ORDER[existing.best.severity]) {
+      existing.best.severity = rec.severity
+    }
+    if (CONFIDENCE_ORDER[rec.confidenceLevel] > CONFIDENCE_ORDER[existing.best.confidenceLevel]) {
+      existing.best.confidenceLevel = rec.confidenceLevel
     }
 
-    // Merge issues (avoid duplicates)
-    if (rec.original.issue && !existing.original.issue.includes(rec.original.issue)) {
-      existing.original.issue += ` ${rec.original.issue}`
+    // Replace the winner's issue/alternative if the incoming rec has higher severity
+    // (so the top-level fields reflect the most important concern, not the first one seen)
+    if (SEVERITY_ORDER[rec.severity] > SEVERITY_ORDER[existing.best.severity] ||
+        (rec.severity === existing.best.severity &&
+         CONFIDENCE_ORDER[rec.confidenceLevel] > CONFIDENCE_ORDER[existing.best.confidenceLevel])) {
+      existing.best.original.issue = rec.original.issue
+      existing.best.alternative = rec.alternative
     }
   }
 
+  // Finalize: pick the best issue text (from the highest-severity principle)
+  // and merge alternative suggestions into the rationale
+  const results: Recommendation[] = []
+  for (const slot of Array.from(map.values())) {
+    const rec = slot.best
+
+    // Use the issue from the highest-numbered principle that contributed
+    // (higher severity principles already won via the promote logic above)
+    // Just make sure it's not the concatenated mess
+    const issueTexts = [...slot.issuesByPrinciple.values()]
+    if (issueTexts.length > 0) {
+      // Keep the existing best issue (set by severity promotion above)
+      // — don't concatenate
+    }
+
+    // If multiple distinct alternatives were suggested, append them to the rationale
+    const allAlts = [...slot.alternativesByChemical.values()]
+    if (allAlts.length > 1) {
+      // Primary alternative is already set on rec.alternative
+      // Add others as a note in the rationale
+      const primaryKey = rec.alternative.chemical.toLowerCase()
+      const otherAlts = allAlts.filter(a => a.chemical.toLowerCase() !== primaryKey)
+      if (otherAlts.length > 0) {
+        const otherNames = otherAlts.map(a => a.chemical).join(', ')
+        rec.alternative.rationale += ` Also consider: ${otherNames}.`
+      }
+    }
+
+    results.push(rec)
+  }
+
   // Sort by step number, then severity (high first)
-  const severityOrder = { high: 3, medium: 2, low: 1 }
-  return [...map.values()].sort((a, b) =>
-    a.stepNumber - b.stepNumber || severityOrder[b.severity] - severityOrder[a.severity]
+  return results.sort((a, b) =>
+    a.stepNumber - b.stepNumber || SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity]
   )
 }
 

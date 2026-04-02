@@ -47,6 +47,7 @@ kanban-plugin: board
 - [ ] **Scoring: Before/After Prediction** — Re-run scoring formulas with alternative chemicals substituted, AI prediction for estimated principles [added::2026-03-15]
 - [ ] **Scoring: UI** — Per-principle score bars, summary scorecard/radar chart, confidence indicators (calculated vs. AI-estimated), before/after visualization [added::2026-03-15]
 - [ ] **Scoring: Validation** — Run against known protocols, compare with DOZN scores for sanity checking [added::2026-03-15]
+- [ ] **Audit: Pipeline process trace** — Store per-LLM-call traces (model, tokens in/out, latency, raw request/response) in `gpc_analysis_traces` table. Store pre-dedup recommendations + merge map in `gpc_dedup_log`. Enables: cost accounting, "why did it recommend X" forensics, dedup transparency, model version tracking. ~15 JSONB rows per analysis, negligible storage. Wire into `callClaude` helper and dedup step in pipeline.ts [added::2026-04-02]
 
 
 ## Next
