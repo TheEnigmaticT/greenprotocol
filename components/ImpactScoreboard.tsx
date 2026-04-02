@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo } from 'react'
-import { AnalysisResult } from '@/lib/types'
+import { AnalysisResult, ImpactDelta } from '@/lib/types'
 import { findChemical } from '@/lib/chemicals'
+import { calculateEquivalencies } from '@/lib/equivalencies'
 
 function Bar({
   label,
@@ -51,9 +52,10 @@ function Bar({
   )
 }
 
-function calculateAcceptedImpact(analysis: AnalysisResult) {
+function calculateAcceptedImpact(analysis: AnalysisResult): ImpactDelta {
   let co2eSaved = 0
   let hazWasteSaved = 0
+  const carcinogensEliminated: string[] = []
   let waterSaved = 0
   let energySaved = 0
 
@@ -101,14 +103,17 @@ function calculateAcceptedImpact(analysis: AnalysisResult) {
     const altEnergy = altData ? quantityKg * altData.energyPerKg : 0
     energySaved += origEnergy - altEnergy
 
-    if (originalData.isHazardousWaste) {
-      hazWasteSaved += quantityKg
+    if (originalData.isHazardousWaste) hazWasteSaved += quantityKg
+
+    if (originalData.isSuspectedCarcinogen && !carcinogensEliminated.includes(originalData.name)) {
+      carcinogensEliminated.push(originalData.name)
     }
   }
 
   return {
     co2eSavedKg: Math.max(0, co2eSaved),
     hazardousWasteEliminatedKg: Math.max(0, hazWasteSaved),
+    carcinogensEliminated,
     waterSavedL: Math.max(0, waterSaved),
     energySavedKwh: Math.max(0, energySaved),
   }
@@ -127,11 +132,12 @@ export default function ImpactScoreboard({
   }
 }) {
   const impact = useMemo(() => calculateAcceptedImpact(analysis), [analysis])
+  const equivalencies = useMemo(() => calculateEquivalencies(impact), [impact])
   const acceptedCount = analysis.recommendations.filter(r => r.isAccepted === true).length
   const totalCount = analysis.recommendations.length
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h2
           className="text-2xl font-bold font-[family-name:var(--font-serif)]"
@@ -141,7 +147,7 @@ export default function ImpactScoreboard({
         </h2>
         <p className="text-sm mt-1" style={{ color: '#78716C' }}>
           {acceptedCount === 0
-            ? 'Accept recommendations above to see projected impact.'
+            ? 'Accept recommendations to see projected environmental impact.'
             : `Based on ${acceptedCount} of ${totalCount} accepted recommendations.`}
         </p>
       </div>
@@ -176,6 +182,23 @@ export default function ImpactScoreboard({
           color="#D97706"
         />
       </div>
+
+      {/* Equivalency text — appears once there's something to show */}
+      {equivalencies.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm" style={{ color: '#57534E' }}>
+          {equivalencies.map((eq, i) => (
+            <span key={i}>
+              {eq.icon} <strong className="font-[family-name:var(--font-mono)]" style={{ color: '#1B4332' }}>{eq.value}</strong> {eq.description}
+              {i < equivalencies.length - 1 && <span style={{ color: '#D6D0C4' }}> · </span>}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
+
+/**
+ * Export the impact calculation for ScaleUpProjection to use.
+ */
+export { calculateAcceptedImpact }

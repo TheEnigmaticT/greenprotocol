@@ -6,6 +6,7 @@ import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
 import { calculateOriginalTotals } from '@/lib/calculations'
 import { projectScores } from '@/lib/projected-scores'
 import ImpactScoreboard from '@/components/ImpactScoreboard'
+import ScaleUpProjection from '@/components/ScaleUpProjection'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import ScoreCard from '@/components/ScoreCard'
 import UserMenu from '@/components/UserMenu'
@@ -79,6 +80,29 @@ export default function AnalyzePage() {
     [data]
   )
 
+  const [isRegrading, setIsRegrading] = useState(false)
+
+  const handleRegrade = useCallback(async () => {
+    if (!data) return
+    setIsRegrading(true)
+    try {
+      const res = await fetch('/api/rescore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ analysis: data.analysis }),
+      })
+      if (res.ok) {
+        const newScores = await res.json()
+        const updatedAnalysis = { ...data.analysis, deterministicScores: newScores }
+        handleUpdateAnalysis(updatedAnalysis)
+      }
+    } catch (err) {
+      console.error('Re-grade failed:', err)
+    } finally {
+      setIsRegrading(false)
+    }
+  }, [data])
+
   if (!data || !originalTotals) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
@@ -115,7 +139,7 @@ export default function AnalyzePage() {
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
         {data.analysis.deterministicScores && (
           <section className="p-6 rounded-xl print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
-            <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} />
+            <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} />
           </section>
         )}
 
@@ -128,6 +152,10 @@ export default function AnalyzePage() {
             analysis={data.analysis}
             originalTotals={originalTotals}
           />
+        </section>
+
+        <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
+          <ScaleUpProjection analysis={data.analysis} />
         </section>
       </main>
 

@@ -143,9 +143,11 @@ function ScoreBar({ score }: { score: PrincipleScore }) {
 }
 
 
-export default function ScoreCard({ scores, projectedScores }: {
+export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrading }: {
   scores: DeterministicScores
   projectedScores?: DeterministicScores | null
+  onRegrade?: () => void
+  isRegrading?: boolean
 }) {
   const gradeColor = GRADE_COLORS[scores.grade] || GRADE_COLORS.C
   const projGradeColor = projectedScores ? (GRADE_COLORS[projectedScores.grade] || GRADE_COLORS.C) : null
@@ -235,13 +237,25 @@ export default function ScoreCard({ scores, projectedScores }: {
       </div>
 
       {/* Summary footer */}
-      <div className="text-xs pt-2 border-t" style={{ borderColor: '#D6D0C4', color: '#78716C' }}>
-        {availableScores.length} of 12 principles scored deterministically
-        {unavailableScores.length > 0 && (
-          <span> · {unavailableScores.length} need additional data</span>
-        )}
-        {projectedScores && (
-          <span> · Projected scores based on accepted recommendations</span>
+      <div className="flex items-center justify-between text-xs pt-2 border-t" style={{ borderColor: '#D6D0C4', color: '#78716C' }}>
+        <div>
+          {availableScores.length} of 12 principles scored deterministically
+          {unavailableScores.length > 0 && (
+            <span> · {unavailableScores.length} need additional data</span>
+          )}
+          {projectedScores && (
+            <span> · Projected from accepted recommendations</span>
+          )}
+        </div>
+        {onRegrade && projectedScores && (
+          <button
+            onClick={onRegrade}
+            disabled={isRegrading}
+            className="text-xs px-3 py-1.5 rounded border font-semibold transition-colors disabled:opacity-50"
+            style={{ color: '#1B4332', borderColor: '#1B4332', background: 'white' }}
+          >
+            {isRegrading ? 'Re-grading...' : 'Re-grade with accepted changes'}
+          </button>
         )}
       </div>
     </div>
