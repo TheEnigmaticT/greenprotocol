@@ -22,6 +22,7 @@ interface AnalysisData {
 export default function AnalysisByIdPage() {
   const [data, setData] = useState<AnalysisData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isRegrading, setIsRegrading] = useState(false)
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
@@ -93,8 +94,6 @@ export default function AnalysisByIdPage() {
 
   const originalTotals = calculateOriginalTotals(data.analysis)
   const projectedScores = projectScores(data.analysis)
-
-  const [isRegrading, setIsRegrading] = useState(false)
 
   const handleRegrade = async () => {
     if (!data) return
