@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
 import { calculateOriginalTotals } from '@/lib/calculations'
+import { projectScores } from '@/lib/projected-scores'
 import ImpactScoreboard from '@/components/ImpactScoreboard'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import ScoreCard from '@/components/ScoreCard'
@@ -68,7 +69,17 @@ export default function AnalyzePage() {
     }
   }
 
-  if (!data) {
+  const originalTotals = useMemo(
+    () => data ? calculateOriginalTotals(data.analysis) : null,
+    [data]
+  )
+
+  const projectedScores = useMemo(
+    () => data ? projectScores(data.analysis) : null,
+    [data]
+  )
+
+  if (!data || !originalTotals) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
@@ -78,8 +89,6 @@ export default function AnalyzePage() {
       </div>
     )
   }
-
-  const originalTotals = calculateOriginalTotals(data.analysis)
 
   return (
     <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
@@ -106,19 +115,19 @@ export default function AnalyzePage() {
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
         {data.analysis.deterministicScores && (
           <section className="p-6 rounded-xl print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
-            <ScoreCard scores={data.analysis.deterministicScores} />
+            <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} />
           </section>
         )}
+
+        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
+          <FinalizedProtocol analysis={data.analysis} onUpdateAnalysis={handleUpdateAnalysis} />
+        </section>
 
         <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
           <ImpactScoreboard
             analysis={data.analysis}
             originalTotals={originalTotals}
           />
-        </section>
-
-        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
-          <FinalizedProtocol analysis={data.analysis} onUpdateAnalysis={handleUpdateAnalysis} />
         </section>
       </main>
 

@@ -143,10 +143,22 @@ function ScoreBar({ score }: { score: PrincipleScore }) {
 }
 
 
-export default function ScoreCard({ scores }: { scores: DeterministicScores }) {
+export default function ScoreCard({ scores, projectedScores }: {
+  scores: DeterministicScores
+  projectedScores?: DeterministicScores | null
+}) {
   const gradeColor = GRADE_COLORS[scores.grade] || GRADE_COLORS.C
+  const projGradeColor = projectedScores ? (GRADE_COLORS[projectedScores.grade] || GRADE_COLORS.C) : null
   const availableScores = scores.scores.filter(s => s.score >= 0)
   const unavailableScores = scores.scores.filter(s => s.score < 0)
+
+  // Build a map of projected scores by principle number for comparison
+  const projMap = new Map<number, PrincipleScore>()
+  if (projectedScores) {
+    for (const s of projectedScores.scores) {
+      projMap.set(s.principle_number, s)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -156,15 +168,38 @@ export default function ScoreCard({ scores }: { scores: DeterministicScores }) {
           Green Chemistry Scorecard
         </h3>
         <div className="flex items-center gap-3">
-          <span className="text-sm" style={{ color: '#78716C' }}>
-            {scores.total_score.toFixed(1)}/{scores.max_possible.toFixed(0)}
-          </span>
-          <span
-            className="text-2xl font-bold px-3 py-1 rounded-lg"
-            style={{ background: gradeColor.bg, color: gradeColor.text }}
-          >
-            {scores.grade}
-          </span>
+          {projectedScores && projectedScores.grade !== scores.grade ? (
+            <>
+              <span className="text-sm" style={{ color: '#A8A29E' }}>
+                <s>{scores.total_score.toFixed(1)}</s> → {projectedScores.total_score.toFixed(1)}/{projectedScores.max_possible.toFixed(0)}
+              </span>
+              <span
+                className="text-lg font-bold px-2 py-0.5 rounded-lg line-through opacity-50"
+                style={{ background: gradeColor.bg, color: gradeColor.text }}
+              >
+                {scores.grade}
+              </span>
+              <span className="text-xl" style={{ color: '#78716C' }}>→</span>
+              <span
+                className="text-2xl font-bold px-3 py-1 rounded-lg"
+                style={{ background: projGradeColor!.bg, color: projGradeColor!.text }}
+              >
+                {projectedScores.grade}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-sm" style={{ color: '#78716C' }}>
+                {scores.total_score.toFixed(1)}/{scores.max_possible.toFixed(0)}
+              </span>
+              <span
+                className="text-2xl font-bold px-3 py-1 rounded-lg"
+                style={{ background: gradeColor.bg, color: gradeColor.text }}
+              >
+                {scores.grade}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -174,6 +209,7 @@ export default function ScoreCard({ scores }: { scores: DeterministicScores }) {
         <span>· No symbol = calculated</span>
         <span>· ~ = benchmarked</span>
         <span>· ≈ = AI-estimated</span>
+        {projectedScores && <span>· Green delta = projected improvement</span>}
         <span>· Click for details</span>
       </div>
 
@@ -181,7 +217,20 @@ export default function ScoreCard({ scores }: { scores: DeterministicScores }) {
       <div className="space-y-2">
         {scores.scores
           .sort((a, b) => a.principle_number - b.principle_number)
-          .map(s => <ScoreBar key={s.principle_number} score={s} />)
+          .map(s => {
+            const proj = projMap.get(s.principle_number)
+            const improved = proj && proj.score >= 0 && s.score >= 0 && proj.score < s.score
+            return (
+              <div key={s.principle_number} className="relative">
+                <ScoreBar score={s} />
+                {improved && (
+                  <div className="absolute right-0 top-0 text-xs font-mono font-semibold" style={{ color: '#16a34a' }}>
+                    {(s.score - proj.score).toFixed(1)} ↓
+                  </div>
+                )}
+              </div>
+            )
+          })
         }
       </div>
 
@@ -190,6 +239,9 @@ export default function ScoreCard({ scores }: { scores: DeterministicScores }) {
         {availableScores.length} of 12 principles scored deterministically
         {unavailableScores.length > 0 && (
           <span> · {unavailableScores.length} need additional data</span>
+        )}
+        {projectedScores && (
+          <span> · Projected scores based on accepted recommendations</span>
         )}
       </div>
     </div>
