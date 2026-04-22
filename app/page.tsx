@@ -133,7 +133,7 @@ export default function LandingPage() {
           }}>
             <div style={{display:'flex', alignItems:'center', gap:'0.75rem'}}>
               <Mark size={32} />
-              <img src="/logo-wide-light.svg" alt="GreenChemistry.ai"
+              <img src="/wordmark-light.svg" alt="GreenChemistry.ai"
                 style={{height:'22px', width:'auto'}} />
             </div>
             <div style={{display:'flex', alignItems:'center', gap:'2.5rem'}}>
@@ -978,7 +978,7 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
         <div className="g" style={{paddingTop:'2.5rem', paddingBottom:'2.5rem'}}>
           <div className="c6" style={{display:'flex', alignItems:'center', gap:'0.75rem'}}>
             <Mark size={24} />
-            <img src="/logo-wide-light.svg" alt="GreenChemistry.ai"
+            <img src="/wordmark-light.svg" alt="GreenChemistry.ai"
               style={{height:'18px', width:'auto', opacity:0.7}} />
           </div>
           <div className="c6" style={{display:'flex', flexDirection:'column',
