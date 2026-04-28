@@ -23,28 +23,28 @@ function Bar({
   const greenPct = (greenValue / max) * 100
 
   return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-sm">
+    <div className="space-y-3">
+      <div className="flex flex-col sm:flex-row justify-between text-sm gap-1">
         <span style={{ color: '#1C1917' }}>{label}</span>
         <span className="font-[family-name:var(--font-mono)]" style={{ color: '#78716C' }}>
-          {originalValue.toFixed(2)} → {greenValue.toFixed(2)} {unit}
+          {originalValue.toFixed(2)} → {greenValue.toFixed(2)} <span className="text-[10px] uppercase opacity-70">{unit}</span>
         </span>
       </div>
       <div className="space-y-1">
         <div className="h-6 rounded overflow-hidden" style={{ background: '#F0EBE1' }}>
           <div
             className="h-full rounded transition-all duration-1000 ease-out flex items-center px-2"
-            style={{ width: `${originalPct}%`, background: '#FECACA', minWidth: originalPct > 0 ? '2rem' : '0' }}
+            style={{ width: `${originalPct}%`, background: '#FECACA', minWidth: originalPct > 0 ? '4rem' : '0' }}
           >
-            <span className="text-xs whitespace-nowrap" style={{ color: '#991B1B' }}>Original</span>
+            <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: '#991B1B' }}>Original</span>
           </div>
         </div>
         <div className="h-6 rounded overflow-hidden" style={{ background: '#F0EBE1' }}>
           <div
             className="h-full rounded transition-all duration-1000 ease-out flex items-center px-2"
-            style={{ width: `${greenPct}%`, background: color, minWidth: greenPct > 0 ? '2rem' : '0' }}
+            style={{ width: `${greenPct}%`, background: color, minWidth: greenPct > 0 ? '4rem' : '0' }}
           >
-            <span className="text-xs whitespace-nowrap" style={{ color: '#FFFFFF' }}>Green</span>
+            <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: '#FFFFFF' }}>Green</span>
           </div>
         </div>
       </div>

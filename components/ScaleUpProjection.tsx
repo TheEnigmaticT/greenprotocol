@@ -90,7 +90,7 @@ export default function ScaleUpProjection({ analysis }: { analysis: AnalysisResu
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-3 rounded-lg border" style={{ background: '#F5F0E8', borderColor: '#D6D0C4' }}>
               <div className="text-xs mb-1" style={{ color: '#78716C' }}>Global CO2e Saved</div>
               <div className="text-lg font-bold font-[family-name:var(--font-mono)]" style={{ color: '#16a34a' }}>

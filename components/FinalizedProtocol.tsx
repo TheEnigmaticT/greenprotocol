@@ -83,10 +83,12 @@ export default function FinalizedProtocol({
   analysis: AnalysisResult
   onUpdateAnalysis?: (updated: AnalysisResult) => void
 }) {
+  const total = analysis.recommendations.length
   const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
   const declined = analysis.recommendations.filter(r => r.isAccepted === false)
   const pending = analysis.recommendations.filter(r => r.isAccepted === undefined || r.isAccepted === null)
-  const total = analysis.recommendations.length
+  const canShowRevisedProtocol = accepted.length > 0 && pending.length === 0 && declined.length === 0
+  const hasInconsistentRevisedProtocol = accepted.length > 0 && !canShowRevisedProtocol
 
   const setRecAccepted = (index: number, value: boolean) => {
     if (!onUpdateAnalysis) return
@@ -121,7 +123,7 @@ export default function FinalizedProtocol({
         </p>
       </div>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
         <div>
           <h2 className="text-xl font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C1917' }}>
             Recommendations ({total})
@@ -136,7 +138,7 @@ export default function FinalizedProtocol({
         {accepted.length > 0 && (
           <button
             onClick={() => window.print()}
-            className="print:hidden text-xs px-4 py-2 rounded border flex items-center gap-2 transition-colors"
+            className="print:hidden text-xs px-4 py-2 rounded border flex items-center justify-center gap-2 transition-colors w-full sm:w-auto"
             style={{ color: '#1B4332', borderColor: '#D6D0C4', background: 'white' }}
           >
             Print Lab Manual
@@ -234,25 +236,29 @@ export default function FinalizedProtocol({
         )}
 
         {/* Revised protocol text — only show when some recs are accepted */}
-        {accepted.length > 0 && (
+        {canShowRevisedProtocol && (
           <div>
             <h3 className="text-sm font-semibold mb-2" style={{ color: '#1B4332' }}>Revised Protocol Text</h3>
-            {declined.length > 0 && (
-              <p
-                className="text-xs mb-3 p-3 rounded"
-                style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}
-              >
-                This text incorporates all AI recommendations. Manually revert{' '}
-                Step{declined.length !== 1 ? 's' : ''} {declined.map(r => r.stepNumber).join(', ')} to restore
-                the original chemicals you chose to retain.
-              </p>
-            )}
             <pre
               className="p-4 rounded-lg text-sm whitespace-pre-wrap font-[family-name:var(--font-mono)] leading-relaxed"
               style={{ background: '#F0FDF4', color: '#1C1917', border: '1px solid #BBF7D0' }}
             >
               {analysis.revisedProtocol}
             </pre>
+          </div>
+        )}
+
+        {hasInconsistentRevisedProtocol && (
+          <div>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: '#92400E' }}>Revised Protocol Text</h3>
+            <p
+              className="text-xs p-3 rounded"
+              style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}
+            >
+              Revised protocol text is hidden until all recommendations are accepted. The stored assembled text
+              currently reflects the full recommendation set, so showing it during partial acceptance would be
+              misleading.
+            </p>
           </div>
         )}
       </div>

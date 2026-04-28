@@ -4,6 +4,8 @@
 // Aesthetic: 70s Swedish modernism — floods, hairlines, knockouts, oversized type as structure
 // No 50/50 hero. No card rows. No triple CTA. Scroll-linked section color shifts.
 
+import Image from 'next/image'
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 
 const COLS = `
@@ -23,6 +25,7 @@ const COLS = `
 
 const MONO = "'IBM Plex Mono', monospace"
 const SERIF = "'Libre Baskerville', serif"
+const SHOWCASE_TABS = ['recommendations', 'protocol', 'scorecard'] as const
 const C = {
   black: '#0D1F16', forest: '#1C3822', mid: '#2D4A3A',
   vivid: '#006D15', sage: '#A8C5A2', gold: '#ECB815',
@@ -85,12 +88,14 @@ function useScrollColor(stops: {pct:number, bg:string}[]) {
 
 export default function LandingPage() {
   // Scroll-linked bg for the body wrapper
-  const SHOWCASE_TABS = ['recommendations', 'protocol', 'scorecard'] as const
   type ShowcaseTab = typeof SHOWCASE_TABS[number]
   const [showcaseTab, setShowcaseTab] = useState<ShowcaseTab>('recommendations')
   const [showcasePaused, setShowcasePaused] = useState(false)
   const showcaseTabRef = useRef<ShowcaseTab>('recommendations')
-  showcaseTabRef.current = showcaseTab
+
+  useEffect(() => {
+    showcaseTabRef.current = showcaseTab
+  }, [showcaseTab])
 
   useEffect(() => {
     if (showcasePaused) return
@@ -121,35 +126,32 @@ export default function LandingPage() {
         }
       `}</style>
 
-      {/* ── NAV ── sticky, hairline bottom only, transparent on forest */}
       <nav style={{
         position:'sticky', top:0, zIndex:50,
         background:'#1C3822', borderBottom:`1px solid ${C.mid}`,
       }}>
-        <div className="g" style={{maxWidth:'none', padding:'0 80px'}}>
+        <div className="g" style={{maxWidth:'none', padding:'0 24px'}}>
           <div className="c12" style={{
             display:'flex', alignItems:'center', justifyContent:'space-between',
-            paddingTop:'1rem', paddingBottom:'1rem',
+            paddingTop:'0.75rem', paddingBottom:'0.75rem',
           }}>
-            <div style={{display:'flex', alignItems:'center', gap:'0.75rem'}}>
-              <Mark size={32} />
-              <img src="/wordmark-light.svg" alt="GreenChemistry.ai"
-                style={{height:'22px', width:'auto'}} />
+            <div style={{display:'flex', alignItems:'center', gap:'0.5rem'}}>
+              <Mark size={24} />
+              <Image
+                src="/wordmark-light.svg"
+                alt="GreenChemistry.ai"
+                width={120}
+                height={18}
+                style={{height:'18px', width:'auto'}}
+              />
             </div>
-            <div style={{display:'flex', alignItems:'center', gap:'2.5rem'}}>
-              {[['#how-it-works','Process'],['#principles','12 Principles'],['#enterprise','Enterprise']].map(([h,l])=>(
-                <a key={h} href={h} style={{
-                  fontFamily:MONO, fontSize:'0.7rem', letterSpacing:'0.12em',
-                  textTransform:'uppercase', color:C.sage,
-                  textDecoration:'none',
-                }}>{l}</a>
-              ))}
-              <a href="/analyze" style={{
+            <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
+              <Link href="/analyze" style={{
                 background:C.gold, color:C.black,
-                fontFamily:MONO, fontSize:'0.75rem', fontWeight:700,
-                letterSpacing:'0.06em', padding:'0.6rem 1.25rem',
+                fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,
+                letterSpacing:'0.06em', padding:'0.5rem 0.8rem',
                 textDecoration:'none', display:'block',
-              }}>ANALYZE →</a>
+              }}>ANALYZE →</Link>
             </div>
           </div>
         </div>
@@ -198,7 +200,7 @@ export default function LandingPage() {
               of Green Chemistry. Specific, chemically-validated swaps
               — in seconds.
             </p>
-            <a href="/analyze" style={{
+            <Link href="/analyze" style={{
               display:'inline-block',
               background:C.gold, color:C.black,
               fontFamily:MONO, fontWeight:700, fontSize:'0.85rem',
@@ -206,7 +208,7 @@ export default function LandingPage() {
               textDecoration:'none',
             }}>
               ANALYZE A PROTOCOL
-            </a>
+            </Link>
           </div>
 
           {/* Giant := — cols 7-12, overlaps content intentionally */}
@@ -316,11 +318,11 @@ export default function LandingPage() {
                 The 12 Principles<br/>of Green Chemistry
               </h2>
             </div>
-            <a href="/analyze" style={{fontFamily:MONO, fontSize:'0.7rem',
+            <Link href="/analyze" style={{fontFamily:MONO, fontSize:'0.7rem',
               color:C.vivid, letterSpacing:'0.05em',
               textDecoration:'underline', textUnderlineOffset:'3px'}}>
               Score your protocol →
-            </a>
+            </Link>
           </div>
 
           {/* Principle grid — 12-col outer, 4 cells per row using gap-as-hairline trick */}
@@ -560,10 +562,8 @@ export default function LandingPage() {
                   </div>
 
                   {/* Rec 1 — ACCEPTED */}
-                  {(() => {
-                    const isAccepted = true
-                    return (
-                      <div style={{
+                  {(
+                    <div style={{
                         padding:'1rem', borderRadius:'8px',
                         border: `1px solid #16a34a`,
                         background:'#F0FDF4',
@@ -623,8 +623,7 @@ export default function LandingPage() {
                           </div>
                         </div>
                       </div>
-                    )
-                  })()}
+                  )}
 
                   {/* Rec 2 — PENDING */}
                   <div style={{
@@ -950,12 +949,12 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
 
           {/* CTAs — cols 7-11 */}
           <div className="c5 cs8" style={{display:'flex', flexDirection:'column', justifyContent:'center', gap:'0.875rem'}}>
-            <a href="/analyze" style={{
+            <Link href="/analyze" style={{
               display:'block', background:C.forest, color:C.cream,
               fontFamily:MONO, fontWeight:700, fontSize:'0.85rem',
               letterSpacing:'0.06em', padding:'1.1rem 2rem',
               textDecoration:'none', textAlign:'center',
-            }}>ANALYZE A PROTOCOL — FREE</a>
+            }}>ANALYZE A PROTOCOL — FREE</Link>
             <a href="mailto:hello@greenchemistry.ai?subject=Enterprise Demo Request" style={{
               display:'block', background:'transparent', color:C.forest,
               border:`2px solid ${C.forest}`,
@@ -978,8 +977,13 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
         <div className="g" style={{paddingTop:'2.5rem', paddingBottom:'2.5rem'}}>
           <div className="c6" style={{display:'flex', alignItems:'center', gap:'0.75rem'}}>
             <Mark size={24} />
-            <img src="/wordmark-light.svg" alt="GreenChemistry.ai"
-              style={{height:'18px', width:'auto', opacity:0.7}} />
+            <Image
+              src="/wordmark-light.svg"
+              alt="GreenChemistry.ai"
+              width={123}
+              height={18}
+              style={{height:'18px', width:'auto', opacity:0.7}}
+            />
           </div>
           <div className="c6" style={{display:'flex', flexDirection:'column',
             alignItems:'flex-end', justifyContent:'center', gap:'0.3rem'}}>

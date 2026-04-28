@@ -48,7 +48,7 @@ function ScoreBar({ score }: { score: PrincipleScore }) {
   // Build tooltip content from details
   const reasoning = score.details?.reasoning as string | undefined
   const methodologyNote = score.details?.methodology_note as string | undefined
-  const warnings = score.details?.warnings as string[] | undefined
+  const warnings = (score.details?.warnings as string[] | undefined) || score.compatibility_warnings
 
   return (
     <div className="space-y-1">
@@ -164,12 +164,12 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h3 className="text-lg font-semibold font-[family-name:var(--font-serif)]"
             style={{ color: '#1C1917' }}>
           Green Chemistry Scorecard
         </h3>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between sm:justify-end gap-3 bg-white/50 p-2 sm:p-0 rounded-lg sm:bg-transparent">
           {projectedScores && projectedScores.grade !== scores.grade ? (
             <>
               <span className="text-sm" style={{ color: '#A8A29E' }}>
@@ -215,8 +215,8 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
         <span>· Click for details</span>
       </div>
 
-      {/* Score bars */}
-      <div className="space-y-2">
+      {/* Principle grid - and score bars */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
         {scores.scores
           .sort((a, b) => a.principle_number - b.principle_number)
           .map(s => {
@@ -226,7 +226,7 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
               <div key={s.principle_number} className="relative">
                 <ScoreBar score={s} />
                 {improved && (
-                  <div className="absolute right-0 top-0 text-xs font-mono font-semibold" style={{ color: '#16a34a' }}>
+                  <div className="absolute right-0 top-0 text-[10px] font-mono font-bold" style={{ color: '#16a34a' }}>
                     {(s.score - proj.score).toFixed(1)} ↓
                   </div>
                 )}
@@ -237,8 +237,8 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
       </div>
 
       {/* Summary footer */}
-      <div className="flex items-center justify-between text-xs pt-2 border-t" style={{ borderColor: '#D6D0C4', color: '#78716C' }}>
-        <div>
+      <div className="flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-xs pt-4 mt-2 border-t gap-4" style={{ borderColor: '#D6D0C4', color: '#78716C' }}>
+        <div className="text-center sm:text-left">
           {availableScores.length} of 12 principles scored deterministically
           {unavailableScores.length > 0 && (
             <span> · {unavailableScores.length} need additional data</span>
@@ -251,7 +251,7 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
           <button
             onClick={onRegrade}
             disabled={isRegrading}
-            className="text-xs px-3 py-1.5 rounded border font-semibold transition-colors disabled:opacity-50"
+            className="text-[10px] sm:text-xs px-4 py-2 rounded border font-bold uppercase tracking-wider transition-colors disabled:opacity-50 w-full sm:w-auto"
             style={{ color: '#1B4332', borderColor: '#1B4332', background: 'white' }}
           >
             {isRegrading ? 'Re-grading...' : 'Re-grade with accepted changes'}
