@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { AnalysisResult, Recommendation } from '@/lib/types'
 import PrincipleTag from './PrincipleTag'
 
@@ -108,6 +107,9 @@ function RecommendationCard({
   )
 }
 
+import QuickWins from './QuickWins'
+import { useState } from 'react'
+
 export default function AnalysisResults({
   analysis,
   originalProtocol,
@@ -117,6 +119,8 @@ export default function AnalysisResults({
   originalProtocol: string
   onUpdateAnalysis?: (updated: AnalysisResult) => void
 }) {
+  const [viewMode, setViewMode] = useState<'full' | 'quick'>('full')
+
   const toggleRecommendation = (index: number) => {
     if (!onUpdateAnalysis) return
     
@@ -134,8 +138,8 @@ export default function AnalysisResults({
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
+      {/* Header & View Toggle */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div className="min-w-0">
           <h2
             className="text-xl sm:text-2xl font-bold font-[family-name:var(--font-serif)] mb-1 break-words"
@@ -145,60 +149,89 @@ export default function AnalysisResults({
           </h2>
           <p className="text-sm" style={{ color: '#78716C' }}>{analysis.chemistrySubdomain}</p>
         </div>
+
+        <div className="flex p-1 bg-[#F0EBE1] rounded-lg shrink-0">
+          <button
+            onClick={() => setViewMode('full')}
+            className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${
+              viewMode === 'full' 
+                ? 'bg-white shadow-sm text-[#1C1917]' 
+                : 'text-[#78716C] hover:text-[#1C1917]'
+            }`}
+          >
+            Full Analysis
+          </button>
+          <button
+            onClick={() => setViewMode('quick')}
+            className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${
+              viewMode === 'quick' 
+                ? 'bg-[#16a34a] text-white shadow-sm' 
+                : 'text-[#78716C] hover:text-[#1C1917]'
+            }`}
+          >
+            Quick Wins
+          </button>
+        </div>
       </div>
 
-      {/* Protocol comparison */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div>
-          <h3 className="text-sm font-semibold mb-2" style={{ color: '#DC2626' }}>Original Protocol</h3>
-          <pre
-            className="p-4 rounded-lg text-sm whitespace-pre-wrap font-[family-name:var(--font-mono)] leading-relaxed overflow-auto max-h-96"
-            style={{ background: '#FEF2F2', color: '#1C1917', border: '1px solid #FECACA' }}
-          >
-            {originalProtocol}
-          </pre>
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold mb-2" style={{ color: '#16a34a' }}>Revised Protocol</h3>
-          <pre
-            className="p-4 rounded-lg text-sm whitespace-pre-wrap font-[family-name:var(--font-mono)] leading-relaxed overflow-auto max-h-96"
-            style={{ background: '#F0FDF4', color: '#1C1917', border: '1px solid #BBF7D0' }}
-          >
-            {analysis.revisedProtocol}
-          </pre>
-        </div>
-      </div>
-
-      {/* Recommendations */}
-      {analysis.recommendations.length > 0 ? (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold" style={{ color: '#1C1917' }}>
-              Recommendations ({analysis.recommendations.length})
-            </h3>
-            {analysis.recommendations.filter(r => r.isAccepted).length > 0 && (
-              <span
-                className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                style={{ background: '#DCFCE7', color: '#16a34a' }}
-              >
-                {analysis.recommendations.filter(r => r.isAccepted).length} accepted
-              </span>
-            )}
-          </div>
-          {analysis.recommendations.map((rec, i) => (
-            <RecommendationCard 
-              key={i} 
-              rec={rec} 
-              onToggleAccept={() => toggleRecommendation(i)} 
-            />
-          ))}
-        </div>
+      {viewMode === 'quick' ? (
+        <QuickWins recommendations={analysis.recommendations} />
       ) : (
-        <div className="p-6 rounded-lg text-center" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-          <p className="text-lg" style={{ color: '#16a34a' }}>
-            This protocol is already quite green! No major changes recommended.
-          </p>
-        </div>
+        <>
+          {/* Protocol comparison */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: '#DC2626' }}>Original Protocol</h3>
+              <pre
+                className="p-4 rounded-lg text-sm whitespace-pre-wrap font-[family-name:var(--font-mono)] leading-relaxed overflow-auto max-h-96"
+                style={{ background: '#FEF2F2', color: '#1C1917', border: '1px solid #FECACA' }}
+              >
+                {originalProtocol}
+              </pre>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: '#16a34a' }}>Revised Protocol</h3>
+              <pre
+                className="p-4 rounded-lg text-sm whitespace-pre-wrap font-[family-name:var(--font-mono)] leading-relaxed overflow-auto max-h-96"
+                style={{ background: '#F0FDF4', color: '#1C1917', border: '1px solid #BBF7D0' }}
+              >
+                {analysis.revisedProtocol}
+              </pre>
+            </div>
+          </div>
+
+          {/* Recommendations */}
+          {analysis.recommendations.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold" style={{ color: '#1C1917' }}>
+                  Recommendations ({analysis.recommendations.length})
+                </h3>
+                {analysis.recommendations.filter(r => r.isAccepted).length > 0 && (
+                  <span
+                    className="text-xs px-2.5 py-1 rounded-full font-semibold"
+                    style={{ background: '#DCFCE7', color: '#16a34a' }}
+                  >
+                    {analysis.recommendations.filter(r => r.isAccepted).length} accepted
+                  </span>
+                )}
+              </div>
+              {analysis.recommendations.map((rec, i) => (
+                <RecommendationCard 
+                  key={i} 
+                  rec={rec} 
+                  onToggleAccept={() => toggleRecommendation(i)} 
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="p-6 rounded-lg text-center" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+              <p className="text-lg" style={{ color: '#16a34a' }}>
+                This protocol is already quite green! No major changes recommended.
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Overall assessment */}
