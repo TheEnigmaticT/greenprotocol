@@ -53,6 +53,7 @@ function maxHazardScore(hcodes: string[], table: Record<string, number>): number
 
 interface ChemSlot {
   name: string
+  stepNumber: number
   role: string
   quantityKg: number
   hcodes: string[]
@@ -78,6 +79,7 @@ function buildProjectedChemicals(analysis: AnalysisResult): ChemSlot[] {
 
       slots.push({
         name: chem.name,
+        stepNumber: step.stepNumber,
         role: chem.role,
         quantityKg: qty,
         hcodes: data?.ghsHazards ?? [],
@@ -97,6 +99,8 @@ function buildProjectedChemicals(analysis: AnalysisResult): ChemSlot[] {
     for (const slot of slots) {
       const origData = findChemical(rec.original.chemical)
       if (!origData) continue
+
+      if (slot.stepNumber !== rec.stepNumber) continue
 
       const slotLower = slot.name.toLowerCase()
       const origLower = rec.original.chemical.toLowerCase()
@@ -202,6 +206,7 @@ export function projectScores(analysis: AnalysisResult): DeterministicScores | n
   const available = projectedScores.filter(s => s.score >= 0)
   const totalScore = available.reduce((sum, s) => sum + s.score, 0)
   const maxPossible = available.length * 10
+  const totalScoreRounded = Math.round(totalScore * 100) / 100
 
   const pct = maxPossible > 0 ? (totalScore / maxPossible) * 100 : 0
   let grade: string
@@ -213,8 +218,9 @@ export function projectScores(analysis: AnalysisResult): DeterministicScores | n
 
   return {
     scores: projectedScores,
-    total_score: Math.round(totalScore * 100) / 100,
+    total_score: totalScoreRounded,
     max_possible: maxPossible,
+    dozn_equivalent_score: Math.round(pct * 10) / 10, // 0-100 scale
     grade,
     smiles_extraction: original.smiles_extraction,
     yield_extraction: original.yield_extraction,

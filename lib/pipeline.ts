@@ -205,7 +205,6 @@ async function evaluateAllPrinciples(
 
   const allRecommendations: Recommendation[] = []
   let succeeded = 0
-  let failed = 0
 
   for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
     const batch = batches[batchIdx]
@@ -243,7 +242,6 @@ async function evaluateAllPrinciples(
         allRecommendations.push(...recs)
         onProgress?.({ type: 'principle', number: principle.number, name: principle.name, status: 'complete', recommendations: recs.length })
       } else {
-        failed++
         console.warn(`Principle ${principle.number} evaluation failed:`, result.reason)
         onProgress?.({ type: 'principle', number: principle.number, name: principle.name, status: 'failed' })
       }
@@ -374,6 +372,13 @@ function deduplicateRecommendations(recs: Recommendation[]): Recommendation[] {
       existing.alternativesByChemical.set(altName, rec.alternative)
     }
 
+    const incomingBeatsBest =
+      SEVERITY_ORDER[rec.severity] > SEVERITY_ORDER[existing.best.severity] ||
+      (
+        SEVERITY_ORDER[rec.severity] === SEVERITY_ORDER[existing.best.severity] &&
+        CONFIDENCE_ORDER[rec.confidenceLevel] > CONFIDENCE_ORDER[existing.best.confidenceLevel]
+      )
+
     // Promote severity and confidence to the highest seen
     if (SEVERITY_ORDER[rec.severity] > SEVERITY_ORDER[existing.best.severity]) {
       existing.best.severity = rec.severity
@@ -384,9 +389,7 @@ function deduplicateRecommendations(recs: Recommendation[]): Recommendation[] {
 
     // Replace the winner's issue/alternative if the incoming rec has higher severity
     // (so the top-level fields reflect the most important concern, not the first one seen)
-    if (SEVERITY_ORDER[rec.severity] > SEVERITY_ORDER[existing.best.severity] ||
-        (rec.severity === existing.best.severity &&
-         CONFIDENCE_ORDER[rec.confidenceLevel] > CONFIDENCE_ORDER[existing.best.confidenceLevel])) {
+    if (incomingBeatsBest) {
       existing.best.original.issue = rec.original.issue
       existing.best.alternative = rec.alternative
     }
@@ -443,6 +446,7 @@ export async function analyzeProtocol(
   // Phase 1.5: Rationalize quantities + deterministic scoring (if service available)
   let deterministicScores: DeterministicScores | undefined
   let enrichedChemicals: EnrichedChemical[] | undefined
+  const unresolvedChemicals = new Set<string>()
 
   const serviceUp = await isServiceAvailable()
   if (serviceUp) {
@@ -461,6 +465,9 @@ export async function analyzeProtocol(
         for (const chem of step.chemicals) {
           if (batchIdx < batchResult.results.length) {
             const conv = batchResult.results[batchIdx]
+            if (conv.data_source === 'not_found' || conv.warnings.some(w => w.toLowerCase().includes('not found'))) {
+              unresolvedChemicals.add(conv.chemical_name || chem.name)
+            }
             chem.quantityKg = conv.quantity_kg ?? chem.quantityKg
             enrichedChemicals.push({
               ...chem,
@@ -549,5 +556,12 @@ export async function analyzeProtocol(
     overallAssessment: assembled.overallAssessment,
     deterministicScores,
     enrichedChemicals,
+    chemistryDataStatus: {
+      pending: unresolvedChemicals.size > 0,
+      unresolvedChemicals: Array.from(unresolvedChemicals).sort((a, b) => a.localeCompare(b)),
+      message: unresolvedChemicals.size > 0
+        ? 'We could not retrieve every chemical reference record live. This analysis used the best data available, and queued the missing items so the analysis can be re-run when updated reference data is available.'
+        : 'All requested chemical reference data was available from cache or bundled sources.',
+    },
   }
 }

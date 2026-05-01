@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/worktrees/
+.env*.local
+services/chemistry/cache-sync.env
+.auth/

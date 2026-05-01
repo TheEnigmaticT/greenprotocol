@@ -57,14 +57,20 @@ export async function PATCH(
   }
 
   // Update analysis — user_id check ensures ownership
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('gpc_analyses')
     .update({ analysis_result })
     .eq('id', id)
     .eq('user_id', user.id)
+    .select('id')
+    .maybeSingle()
 
   if (error) {
     return NextResponse.json({ error: 'Failed to update analysis' }, { status: 500 })
+  }
+
+  if (!data) {
+    return NextResponse.json({ error: 'Analysis not found' }, { status: 404 })
   }
 
   return NextResponse.json({ success: true })

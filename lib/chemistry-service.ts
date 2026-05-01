@@ -4,6 +4,7 @@
  */
 
 const CHEMISTRY_SERVICE_URL = process.env.CHEMISTRY_SERVICE_URL || 'http://localhost:8000'
+const CHEMISTRY_SERVICE_TOKEN = process.env.CHEMISTRY_SERVICE_TOKEN
 const TIMEOUT_MS = 90_000
 
 interface ConvertResult {
@@ -36,6 +37,7 @@ interface ScoreResult {
     chemicals_flagged: string[]
     data_sources: string[]
     confidence: 'calculated' | 'benchmark' | 'estimated' | 'partial' | 'unavailable'
+    compatibility_warnings?: string[]
   }>
   total_score: number
   max_possible: number
@@ -55,12 +57,23 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
   }
 }
 
+function serviceHeaders(extra?: HeadersInit): HeadersInit {
+  const headers = new Headers(extra)
+  if (CHEMISTRY_SERVICE_TOKEN) {
+    headers.set('X-Chemistry-Service-Token', CHEMISTRY_SERVICE_TOKEN)
+  }
+  return headers
+}
+
 /**
  * Check if the chemistry service is reachable.
  */
 export async function isServiceAvailable(): Promise<boolean> {
   try {
-    const resp = await fetchWithTimeout(`${CHEMISTRY_SERVICE_URL}/health`, { method: 'GET' })
+    const resp = await fetchWithTimeout(`${CHEMISTRY_SERVICE_URL}/health`, {
+      method: 'GET',
+      headers: serviceHeaders(),
+    })
     return resp.ok
   } catch {
     return false
@@ -76,7 +89,7 @@ export async function batchConvert(
   try {
     const resp = await fetchWithTimeout(`${CHEMISTRY_SERVICE_URL}/batch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: serviceHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ chemicals: chemicals.map(c => ({
         chemical_name: c.name,
         quantity: c.quantity,
@@ -110,7 +123,7 @@ export async function scoreProtocol(params: {
   try {
     const resp = await fetchWithTimeout(`${CHEMISTRY_SERVICE_URL}/score`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: serviceHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(params),
     })
     if (!resp.ok) return null

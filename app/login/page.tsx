@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 function LoginForm() {
@@ -9,36 +9,24 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
 
-  useEffect(() => {
+  const message = (() => {
     const msg = searchParams.get('message')
-    if (msg === 'confirmed') {
-      setMessage('Email confirmed! You can now sign in.')
-    } else if (msg === 'reset') {
-      setMessage('Password reset successful. Sign in with your new password.')
-    }
-    const err = searchParams.get('error')
-    if (err === 'verification') {
-      setError('Verification link expired or invalid. Please try signing up again.')
-    } else if (err === 'auth') {
-      setError('Authentication failed. Please try again.')
-    }
-  }, [searchParams])
+    if (msg === 'confirmed') return 'Email confirmed! You can now sign in.'
+    if (msg === 'reset') return 'Password reset successful. Sign in with your new password.'
+    return null
+  })()
 
-  async function handleGoogleLogin() {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    if (error) setError(error.message)
-  }
+  const searchError = (() => {
+    const err = searchParams.get('error')
+    if (err === 'verification') return 'Verification link expired or invalid. Please try signing up again.'
+    if (err === 'auth') return 'Authentication failed. Please try again.'
+    return null
+  })()
 
   async function handleEmailAuth(e: React.FormEvent) {
     e.preventDefault()
@@ -109,9 +97,9 @@ function LoginForm() {
             </div>
           )}
 
-          {error && (
-            <p className="text-sm" style={{ color: error.includes('Check your email') ? '#16a34a' : '#EF4444' }}>
-              {error}
+          {(error || searchError) && (
+            <p className="text-sm" style={{ color: (error || searchError || '').includes('Check your email') ? '#16a34a' : '#EF4444' }}>
+              {error || searchError}
             </p>
           )}
 

@@ -29,16 +29,16 @@ export async function POST(request: Request) {
 
   // Build the chemical list with accepted swaps applied
   const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
-  const swapMap = new Map<string, string>() // original → alternative chemical name
+  const swapMap = new Map<string, string>() // step + original → alternative chemical name
   for (const rec of accepted) {
-    swapMap.set(rec.original.chemical.toLowerCase(), rec.alternative.chemical)
+    swapMap.set(`${rec.stepNumber}:${rec.original.chemical.toLowerCase()}`, rec.alternative.chemical)
   }
 
   // Collect all chemicals, applying swaps
   const allChemicals: Array<{ name: string; quantity: string }> = []
   for (const step of analysis.steps) {
     for (const chem of step.chemicals) {
-      const swappedName = swapMap.get(chem.name.toLowerCase()) || chem.name
+      const swappedName = swapMap.get(`${step.stepNumber}:${chem.name.toLowerCase()}`) || chem.name
       allChemicals.push({ name: swappedName, quantity: chem.quantity || '' })
     }
   }
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   let batchIdx = 0
   for (const step of analysis.steps) {
     for (const chem of step.chemicals) {
-      const swappedName = swapMap.get(chem.name.toLowerCase()) || chem.name
+      const swappedName = swapMap.get(`${step.stepNumber}:${chem.name.toLowerCase()}`) || chem.name
       const conv = batchResult?.results?.[batchIdx]
       scoreChemicals.push({
         name: swappedName,
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   let protocolText = ''
   for (const step of analysis.steps) {
     const chems = step.chemicals.map(c => {
-      const swapped = swapMap.get(c.name.toLowerCase())
+      const swapped = swapMap.get(`${step.stepNumber}:${c.name.toLowerCase()}`)
       return swapped || c.name
     }).join(', ')
     protocolText += `Step ${step.stepNumber}: ${step.description} [${chems}]\n`
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       stepNumber: s.stepNumber,
       description: s.description,
       chemicals: s.chemicals.map(c => ({
-        name: swapMap.get(c.name.toLowerCase()) || c.name,
+        name: swapMap.get(`${s.stepNumber}:${c.name.toLowerCase()}`) || c.name,
         role: c.role,
       })),
       conditions: s.conditions,

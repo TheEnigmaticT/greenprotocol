@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = createClient();
-  const { id } = params;
+  const supabase = await createClient();
+  const { id } = await params;
 
   // 1. Fetch the analysis
   const { data: analysis, error } = await supabase

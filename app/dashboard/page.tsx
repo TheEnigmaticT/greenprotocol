@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { GpcProfile, AnalysisSummary } from '@/lib/types'
 import UserMenu from '@/components/UserMenu'
@@ -60,21 +61,21 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
       <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-        <a
+        <Link
           href="/"
           className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
           style={{ color: '#1B4332' }}
         >
           greenchemistry.ai
-        </a>
+        </Link>
         <div className="flex items-center gap-2 sm:gap-4">
-          <a
-            href="/"
+          <Link
+            href="/analyze"
             className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
             style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
           >
             New Analysis
-          </a>
+          </Link>
           <UserMenu />
         </div>
       </header>
@@ -85,13 +86,13 @@ export default function DashboardPage() {
             Dashboard
           </h1>
           {profile && (
-            <a
+            <Link
               href={`/u/${profile.username}`}
               className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
               style={{ color: '#7C2D36', borderColor: '#D6D0C4' }}
             >
               Public Profile &rarr;
-            </a>
+            </Link>
           )}
         </div>
 
@@ -125,13 +126,13 @@ export default function DashboardPage() {
         ) : (
           <div className="text-center py-16 space-y-4">
             <p className="text-lg" style={{ color: '#78716C' }}>No analyses yet.</p>
-            <a
-              href="/"
+            <Link
+              href="/analyze"
               className="inline-block px-6 py-3 rounded-lg font-semibold text-sm"
               style={{ background: '#7C2D36', color: '#FAF8F3' }}
             >
               Analyze Your First Protocol
-            </a>
+            </Link>
           </div>
         )}
       </main>

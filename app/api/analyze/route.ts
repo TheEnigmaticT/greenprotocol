@@ -8,6 +8,15 @@ import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 export const maxDuration = 300
 
 const DEFAULT_RUN_LIMIT = parseInt(process.env.ANALYSIS_RUN_LIMIT || '10', 10)
+const UNLIMITED_ANALYSIS_EMAILS = new Set([
+  'trevor.longino+gc1@gmail.com',
+])
+
+function hasUnlimitedAnalyses(email?: string): boolean {
+  const normalized = email?.trim().toLowerCase()
+  if (!normalized) return false
+  return UNLIMITED_ANALYSIS_EMAILS.has(normalized) || normalized.endsWith('@greenchemistry.ai')
+}
 
 export async function POST(request: Request) {
   // Auth check (must happen before streaming — can't send status codes mid-stream)
@@ -18,23 +27,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Usage limit check — count existing analyses for this user
-  const { count, error: countError } = await supabase
-    .from('gpc_analyses')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id)
+  if (!hasUnlimitedAnalyses(user.email)) {
+    // Usage limit check — count existing analyses for this user
+    const { count, error: countError } = await supabase
+      .from('gpc_analyses')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
 
-  if (countError) {
-    return NextResponse.json({ error: 'Failed to check usage limits' }, { status: 500 })
-  }
+    if (countError) {
+      return NextResponse.json({ error: 'Failed to check usage limits' }, { status: 500 })
+    }
 
-  if (count !== null && count >= DEFAULT_RUN_LIMIT) {
-    return NextResponse.json({
-      error: 'run_limit_reached',
-      message: `You've reached your analysis limit of ${DEFAULT_RUN_LIMIT} runs. Contact us to get more.`,
-      current: count,
-      limit: DEFAULT_RUN_LIMIT,
-    }, { status: 429 })
+    if (count !== null && count >= DEFAULT_RUN_LIMIT) {
+      return NextResponse.json({
+        error: 'run_limit_reached',
+        message: `You've reached your analysis limit of ${DEFAULT_RUN_LIMIT} runs. Contact us to get more.`,
+        current: count,
+        limit: DEFAULT_RUN_LIMIT,
+      }, { status: 429 })
+    }
   }
 
   // Parse request
@@ -106,17 +117,21 @@ export async function POST(request: Request) {
       const equivalencies = calculateEquivalencies(impactDelta)
 
       // Save to database
-      const { data: insertedRow } = await supabase.from('gpc_analyses').insert({
+      const { data: insertedRow, error: insertError } = await supabase.from('gpc_analyses').insert({
         user_id: user.id,
         protocol_text: protocolText,
         analysis_result: analysisResult,
         impact_delta: impactDelta,
       }).select('id').single()
 
+      if (insertError || !insertedRow?.id) {
+        throw new Error(insertError?.message || 'Failed to persist analysis')
+      }
+
       send({
         type: 'result',
         data: {
-          id: insertedRow?.id,
+          id: insertedRow.id,
           analysis: analysisResult,
           impactDelta,
           equivalencies,

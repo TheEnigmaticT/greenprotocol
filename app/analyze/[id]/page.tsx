@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
 import { calculateOriginalTotals } from '@/lib/calculations'
@@ -10,6 +11,7 @@ import ScaleUpProjection from '@/components/ScaleUpProjection'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import ScoreCard from '@/components/ScoreCard'
 import UserMenu from '@/components/UserMenu'
+import ChemistryDataNotice from '@/components/ChemistryDataNotice'
 
 interface AnalysisData {
   id: string
@@ -23,6 +25,7 @@ export default function AnalysisByIdPage() {
   const [data, setData] = useState<AnalysisData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isRegrading, setIsRegrading] = useState(false)
+  const [persistError, setPersistError] = useState<string | null>(null)
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
@@ -34,13 +37,18 @@ export default function AnalysisByIdPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       try {
-        await fetch(`/api/analyses/${analysisId}`, {
+        const res = await fetch(`/api/analyses/${analysisId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ analysis_result: analysisResult }),
         })
+        if (!res.ok) {
+          throw new Error(`PATCH /api/analyses/${analysisId} returned ${res.status}`)
+        }
+        setPersistError(null)
       } catch (err) {
         console.error('Failed to persist accepted recommendations:', err)
+        setPersistError('Failed to save your recommendation decisions. Refresh carefully before leaving this page.')
       }
     }, 400)
   }, [])
@@ -67,9 +75,9 @@ export default function AnalysisByIdPage() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
           <p className="text-lg" style={{ color: '#EF4444' }}>{error}</p>
-          <a href="/dashboard" className="text-sm underline" style={{ color: '#7C2D36' }}>
+          <Link href="/dashboard" className="text-sm underline" style={{ color: '#7C2D36' }}>
             Back to Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -119,21 +127,21 @@ export default function AnalysisByIdPage() {
   return (
     <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
       <header className="print:hidden flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-        <a
+        <Link
           href="/"
           className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
           style={{ color: '#1B4332' }}
         >
           greenchemistry.ai
-        </a>
+        </Link>
         <div className="flex items-center gap-2 sm:gap-4">
-          <a
+          <Link
             href="/"
             className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
             style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
           >
             New Analysis
-          </a>
+          </Link>
           <UserMenu />
         </div>
       </header>
@@ -144,7 +152,14 @@ export default function AnalysisByIdPage() {
             {data.analysis.protocolTitle}
           </h1>
           <p className="text-sm mt-1" style={{ color: '#78716C' }}>{data.analysis.chemistrySubdomain}</p>
+          {persistError && (
+            <p className="text-sm mt-2" style={{ color: '#B45309' }}>
+              {persistError}
+            </p>
+          )}
         </div>
+
+        <ChemistryDataNotice status={data.analysis.chemistryDataStatus} />
 
         {data.analysis.deterministicScores && (
           <section className="p-6 rounded-xl print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
@@ -153,7 +168,11 @@ export default function AnalysisByIdPage() {
         )}
 
         <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
-          <FinalizedProtocol analysis={data.analysis} onUpdateAnalysis={handleUpdateAnalysis} />
+          <FinalizedProtocol
+            analysis={data.analysis}
+            originalProtocol={data.protocolText}
+            onUpdateAnalysis={handleUpdateAnalysis}
+          />
         </section>
 
         <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>

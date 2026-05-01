@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { calculateEquivalencies } from '@/lib/equivalencies'
@@ -106,13 +107,13 @@ export default async function PublicProfilePage({ params }: Props) {
   return (
     <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
       <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-        <a
+        <Link
           href="/"
           className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
           style={{ color: '#1B4332' }}
         >
           greenchemistry.ai
-        </a>
+        </Link>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-12 space-y-12">
@@ -160,13 +161,13 @@ export default async function PublicProfilePage({ params }: Props) {
           <p className="text-sm mb-4" style={{ color: '#78716C' }}>
             Make your chemistry greener.
           </p>
-          <a
+          <Link
             href="/"
             className="inline-block px-8 py-3 rounded-lg font-semibold text-base"
             style={{ background: '#7C2D36', color: '#FAF8F3' }}
           >
             Join GreenChemistry.ai
-          </a>
+          </Link>
         </div>
       </main>
 

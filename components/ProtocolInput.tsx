@@ -185,7 +185,7 @@ export default function ProtocolInput() {
             }
           } else if (event.type === 'result') {
             setCompleted(14)
-            sessionStorage.setItem('gpc_analysis', JSON.stringify(event.data))
+            sessionStorage.setItem('gpc_analysis', JSON.stringify({ ...event.data, protocolText: text }))
             sessionStorage.setItem('gpc_protocol', text)
             await new Promise(r => setTimeout(r, 400))
             if (event.data.id) {

@@ -104,7 +104,7 @@ export default function QuickWins({ recommendations }: QuickWinProps) {
       
       <div className="p-4 rounded-lg bg-[#FDFCFB] border border-[#D6D0C4] text-[11px] text-[#78716C]">
         <p>
-          <strong>Note:</strong> "Purchasing Accelerator" results are limited to the highest-impact chemical swaps that have direct green alternatives. For a comprehensive analysis of all 12 Green Chemistry principles, switch to the Full Analysis view.
+          <strong>Note:</strong> &ldquo;Purchasing Accelerator&rdquo; results are limited to the highest-impact chemical swaps that have direct green alternatives. For a comprehensive analysis of all 12 Green Chemistry principles, switch to the Full Analysis view.
         </p>
       </div>
     </div>

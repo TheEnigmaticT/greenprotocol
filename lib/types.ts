@@ -76,6 +76,7 @@ export interface AnalysisResult {
   // v2: deterministic scoring (optional for backward compat)
   deterministicScores?: DeterministicScores
   enrichedChemicals?: EnrichedChemical[]
+  chemistryDataStatus?: ChemistryDataStatus
 }
 
 export interface ImpactDelta {
@@ -132,12 +133,14 @@ export interface PrincipleScore {
   chemicals_flagged: string[]
   data_sources: string[]
   confidence: 'calculated' | 'benchmark' | 'estimated' | 'partial' | 'unavailable'
+  compatibility_warnings?: string[]
 }
 
 export interface DeterministicScores {
   scores: PrincipleScore[]
   total_score: number
   max_possible: number
+  dozn_equivalent_score?: number // 0-100 scale for Merck/Sigma-Aldrich calibration
   grade: string
   smiles_extraction: Record<string, unknown>
   yield_extraction: Record<string, unknown>
@@ -149,6 +152,12 @@ export interface EnrichedChemical extends ParsedChemical {
   smiles?: string
   molecular_formula?: string
   data_source?: string
+}
+
+export interface ChemistryDataStatus {
+  pending: boolean
+  unresolvedChemicals: string[]
+  message: string
 }
 
 export interface CumulativeImpact {
