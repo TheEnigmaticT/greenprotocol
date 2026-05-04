@@ -1,0 +1,5 @@
+chemistry.example.com {
+  encode zstd gzip
+
+  reverse_proxy chemistry:8000
+}

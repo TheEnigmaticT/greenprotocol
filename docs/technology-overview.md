@@ -67,7 +67,7 @@ User submits protocol text
 | Technology | What It Does | Why This One |
 |-----------|-------------|-------------|
 | **FastAPI** | HTTP API framework | Async, fast, auto-generates OpenAPI docs. Python ecosystem required for RDKit. |
-| **RDKit** (`rdkit-pypi`) | Cheminformatics toolkit | Industry-standard open-source library for molecular calculations — SMILES validation, atom economy, molecular weight. No commercial alternative comes close. |
+| **RDKit** (`rdkit`) | Cheminformatics toolkit | Industry-standard open-source library for molecular calculations — SMILES validation, atom economy, molecular weight. No commercial alternative comes close. |
 | **PubChem API** | Chemical property lookups | Free, authoritative source for molecular weights, densities, CAS numbers. 110M+ compounds. |
 | **PubChem PUG-View** | GHS hazard code lookups | Structured hazard classification data (H-codes) for every compound with a CID. |
 | **CHEM21 Solvent Guide** | Solvent safety classification | Published classification (recommended / problematic / hazardous / highly hazardous) from Prat et al., Green Chem., 2016. Hard-coded in `chem21.py`. |
@@ -95,9 +95,10 @@ User submits protocol text
 | Technology | What It Does | Why This One |
 |-----------|-------------|-------------|
 | **Vercel** | Next.js hosting, auto-deploy from GitHub | Zero-config deployment for Next.js. Serverless functions for API routes. |
-| **localhost.run** | SSH tunnel for chemistry service (demo) | Exposes local FastAPI service via `api.skanzer.ai`. Temporary — production will use Hetzner VPS or Cloud Run. |
-| **launchd** | Process management (macOS) | Auto-starts chemistry service + tunnel on boot. Belt-and-suspenders for demo reliability. |
-| **Docker** (planned) | Container deployment for chemistry service | Dockerfile exists in `services/chemistry/`. Target: Hetzner VPS with Caddy for TLS. |
+| **Cloud Run** | Chemistry service hosting | Runs FastAPI/RDKit outside the Mac mini with HTTPS, autoscaling, and low ops overhead. See `docs/infra/cloud-run-chemistry.md`. |
+| **VPS + Caddy** | Alternate chemistry service hosting | Lower-level fallback if always-on VPS economics become preferable. |
+| **Docker Compose** | VPS service packaging | Runs the chemistry service and Caddy together on a VPS. |
+| **localhost.run** | SSH tunnel for chemistry service (legacy demo path) | No longer the desired production path. Use only for quick local demos. |
 
 ### Scoring Methodology
 

@@ -1,7 +1,8 @@
 """FastAPI chemistry unit conversion microservice."""
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+import os
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from models import (
     ConvertRequest, ConvertResponse,
     BatchRequest, BatchResponse,
@@ -9,6 +10,22 @@ from models import (
 )
 from converter import convert, RDKIT_AVAILABLE
 import cache
+
+
+SERVICE_TOKEN = os.environ.get("CHEMISTRY_SERVICE_TOKEN")
+
+
+async def require_service_token(
+    x_chemistry_service_token: str | None = Header(default=None),
+) -> None:
+    """Require a shared token when the service is exposed outside localhost."""
+    if not SERVICE_TOKEN:
+        return
+    if x_chemistry_service_token != SERVICE_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid chemistry service token",
+        )
 
 
 @asynccontextmanager
@@ -34,12 +51,20 @@ async def health():
     )
 
 
-@app.post("/convert", response_model=ConvertResponse)
+@app.post(
+    "/convert",
+    response_model=ConvertResponse,
+    dependencies=[Depends(require_service_token)],
+)
 async def convert_single(req: ConvertRequest):
     return await convert(req.chemical_name, req.quantity)
 
 
-@app.post("/batch", response_model=BatchResponse)
+@app.post(
+    "/batch",
+    response_model=BatchResponse,
+    dependencies=[Depends(require_service_token)],
+)
 async def convert_batch(req: BatchRequest):
     results = []
     for item in req.chemicals:
@@ -87,7 +112,30 @@ class ScoreAllResponse(BaseModel):
     yield_extraction: dict = Field(default_factory=dict, description="Metadata from yield/reaction type extraction (if triggered)")
 
 
-@app.post("/score", response_model=ScoreAllResponse)
+class CacheUpsertRequest(BaseModel):
+    entries: dict[str, dict] = Field(default_factory=dict)
+    clear_missing: list[str] = Field(default_factory=list)
+
+
+@app.get("/cache/missing", dependencies=[Depends(require_service_token)])
+async def cache_missing():
+    return {"missing": cache.missing()}
+
+
+@app.post("/cache/upsert", dependencies=[Depends(require_service_token)])
+async def cache_upsert(req: CacheUpsertRequest):
+    for key, value in req.entries.items():
+        cache.put(key, value)
+    if req.clear_missing:
+        cache.clear_missing(req.clear_missing)
+    return {"upserted": len(req.entries), "missing": cache.missing()}
+
+
+@app.post(
+    "/score",
+    response_model=ScoreAllResponse,
+    dependencies=[Depends(require_service_token)],
+)
 async def score_protocol(req: ScoreAllRequest):
     """Score a protocol against all deterministic principles (P3, P5, P6, P10, P12).
     

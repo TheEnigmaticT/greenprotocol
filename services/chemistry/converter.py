@@ -60,11 +60,13 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
         cache.put(resolved_name, pubchem_data)
         return _build_response(
             pubchem_data, chemical_name, resolved_name, quantity,
-            data_source="pubchem", cached=False, warnings=warnings,
+            data_source=pubchem_data.get("_data_source", "pubchem"),
+            cached=False, warnings=warnings,
         )
 
     # RDKit fallback — can only help if we somehow have SMILES
     warnings.append(f"Chemical '{resolved_name}' not found in PubChem")
+    cache.add_missing(resolved_name)
     return _build_response(
         {}, chemical_name, resolved_name, quantity,
         data_source="not_found", cached=False, warnings=warnings,

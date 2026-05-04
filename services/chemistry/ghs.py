@@ -1,8 +1,9 @@
 """GHS hazard code lookups from PubChem and scoring utilities."""
 
 import re
-import httpx
 import cache as chem_cache
+from local_chem_data import lookup_local_hcodes
+from pubchem import fetch_pubchem_json
 
 TIMEOUT = 15.0
 
@@ -56,33 +57,36 @@ async def lookup_hcodes(cid: int) -> list[str]:
     if cached:
         return cached.get("hcodes", [])
 
+    local = lookup_local_hcodes(cid)
+    if local:
+        chem_cache.put(cache_key, {"hcodes": local})
+        return local
+
     url = (
         f"https://pubchem.ncbi.nlm.nih.gov/rest/pug_view"
         f"/data/compound/{cid}/JSON?heading=GHS+Classification"
     )
     try:
-        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            resp = await client.get(url)
-            if resp.status_code != 200:
-                return []
-            data = resp.json()
-            hcodes: set[str] = set()
+        data = await fetch_pubchem_json(url, f"GHS CID {cid}")
+        if not data:
+            return []
+        hcodes: set[str] = set()
 
-            def walk(obj):
-                if isinstance(obj, str):
-                    for m in re.findall(r"H\d{3}[A-Za-z]*", obj):
-                        hcodes.add(m)
-                elif isinstance(obj, dict):
-                    for v in obj.values():
-                        walk(v)
-                elif isinstance(obj, list):
-                    for item in obj:
-                        walk(item)
+        def walk(obj):
+            if isinstance(obj, str):
+                for m in re.findall(r"H\d{3}[A-Za-z]*", obj):
+                    hcodes.add(m)
+            elif isinstance(obj, dict):
+                for v in obj.values():
+                    walk(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    walk(item)
 
-            walk(data)
-            result = sorted(hcodes)
-            chem_cache.put(cache_key, {"hcodes": result})
-            return result
+        walk(data)
+        result = sorted(hcodes)
+        chem_cache.put(cache_key, {"hcodes": result})
+        return result
     except Exception:
         return []
 
