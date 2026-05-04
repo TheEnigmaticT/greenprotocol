@@ -39,7 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+__pycache__/
 .claude/worktrees/
 .env*.local
 services/chemistry/cache-sync.env
+services/chemistry/*.log
 .auth/
+
+# Generated chemistry seed imports and queue outputs.
+/data/chemical-seeds/external/*
+!/data/chemical-seeds/external/.gitkeep
+/data/chemical-seeds/*.generated.json
+/data/chemical-seeds/*worker-state*.json

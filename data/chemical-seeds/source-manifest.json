@@ -1,0 +1,43 @@
+{
+  "sources": [
+    {
+      "id": "local_common_lab",
+      "label": "GreenChemistry.ai common lab chemical set",
+      "path": "data/chemical-seeds/curated-lab-chemicals.csv",
+      "score": 500,
+      "kind": "curated"
+    },
+    {
+      "id": "comptox_toxcast",
+      "label": "EPA CompTox TOXCAST chemical list",
+      "path": "data/chemical-seeds/external/comptox_toxcast.csv",
+      "download_url": "https://comptox.epa.gov/dashboard/chemical_lists/toxcast",
+      "score": 90,
+      "kind": "external_csv_export"
+    },
+    {
+      "id": "comptox_tox21sl",
+      "label": "EPA CompTox TOX21SL chemical list",
+      "path": "data/chemical-seeds/external/comptox_tox21sl.csv",
+      "download_url": "https://comptox.epa.gov/dashboard/chemical_lists/tox21sl",
+      "score": 80,
+      "kind": "external_csv_export"
+    },
+    {
+      "id": "comptox_cheminv",
+      "label": "EPA CompTox CHEMINV chemical inventory",
+      "path": "data/chemical-seeds/external/comptox_cheminv.csv",
+      "download_url": "https://comptox.epa.gov/dashboard/chemical-lists/CHEMINV",
+      "score": 70,
+      "kind": "external_csv_export"
+    },
+    {
+      "id": "comptox_cpdat",
+      "label": "EPA CompTox CPDat chemical list",
+      "path": "data/chemical-seeds/external/comptox_cpdat.csv",
+      "download_url": "https://comptox.epa.gov/dashboard/chemical-lists/CPDAT",
+      "score": 40,
+      "kind": "external_csv_export"
+    }
+  ]
+}
