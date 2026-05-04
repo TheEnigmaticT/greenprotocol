@@ -51,3 +51,4 @@ services/chemistry/*.log
 !/data/chemical-seeds/external/.gitkeep
 /data/chemical-seeds/*.generated.json
 /data/chemical-seeds/*worker-state*.json
+/data/chemical-seeds/backups/

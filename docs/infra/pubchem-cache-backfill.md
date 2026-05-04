@@ -67,6 +67,25 @@ python3 scripts/run-pubchem-cache-worker.py \
 
 The worker stores progress in `data/chemical-seeds/pubchem-cache-worker-state.json`, so it can be stopped and restarted without beginning again.
 
+## Back Up Local Progress
+
+Create a timestamped JSON-validated backup of the generated cache and worker state:
+
+```bash
+python3 scripts/backup-pubchem-cache.py
+```
+
+For an hourly local backup loop:
+
+```bash
+while true; do
+  python3 scripts/backup-pubchem-cache.py
+  sleep 3600
+done
+```
+
+Backups are written to `data/chemical-seeds/backups/`, which is intentionally gitignored. By default, the script keeps the latest 72 backups per file.
+
 To deliberately refresh the bundled cache committed with the chemistry service, pass:
 
 ```bash
