@@ -1,6 +1,54 @@
 import { describe, it, expect } from 'vitest'
-import { buildRecommendationCitationString } from '@/lib/citation'
-import type { Recommendation } from '@/lib/types'
+import { buildCitationString, buildBibtexCitation, buildRecommendationCitationString } from '@/lib/citation'
+import type { AnalysisMetadata, Recommendation } from '@/lib/types'
+
+const baseMeta: AnalysisMetadata = {
+  gcaiVersion: '0.6.0',
+  generatedAt: '2026-05-21T10:00:00Z',
+  methodologyVersion: '2',
+}
+
+describe('buildCitationString', () => {
+  it('includes version and ISO date', () => {
+    const result = buildCitationString(baseMeta)
+    expect(result).toContain('v0.6.0')
+    expect(result).toContain('2026-05-21T10:00:00.000Z')
+  })
+
+  it('uses "unknown date" when generatedAt is absent', () => {
+    const meta = { ...baseMeta, generatedAt: '' }
+    const result = buildCitationString(meta)
+    expect(result).toContain('unknown date')
+  })
+
+  it('matches the expected format', () => {
+    const result = buildCitationString(baseMeta)
+    expect(result).toBe('GreenChemistry.ai v0.6.0, analysis generated 2026-05-21T10:00:00.000Z.')
+  })
+})
+
+describe('buildBibtexCitation', () => {
+  it('includes version and year', () => {
+    const result = buildBibtexCitation(baseMeta)
+    expect(result).toContain('0.6.0')
+    expect(result).toContain('2026')
+  })
+
+  it('uses analysisId as key prefix when provided', () => {
+    const result = buildBibtexCitation(baseMeta, 'abc12345-xyz')
+    expect(result).toContain('@software{gcai-abc12345')
+  })
+
+  it('falls back to year-based key when no analysisId', () => {
+    const result = buildBibtexCitation(baseMeta)
+    expect(result).toContain('@software{gcai-2026')
+  })
+
+  it('includes the canonical URL', () => {
+    const result = buildBibtexCitation(baseMeta)
+    expect(result).toContain('https://greenchemistry.ai')
+  })
+})
 
 const baseRec: Recommendation = {
   stepNumber: 3,
