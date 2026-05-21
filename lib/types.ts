@@ -52,6 +52,9 @@ export interface Evidence {
     content: string
   }[]
   citations: Citation[]
+  // v0.6: optional SDS-backed context (scoring uses GHS/PubChem, not SDS)
+  sdsReferences?: SdsReference[]
+  sdsNotes?: SdsNote[]
 }
 
 export interface Citation {
@@ -251,6 +254,19 @@ export interface WasteAnalysis {
     notes: string
   }
   evidenceSources: string[]
+}
+
+export interface SdsReference {
+  supplier: string           // e.g. "Sigma-Aldrich", "TCI"
+  productNumber?: string
+  url?: string
+  retrievedAt?: string
+}
+
+export interface SdsNote {
+  section: string            // e.g. "Handling", "Disposal", "First Aid"
+  content: string
+  source: string
 }
 
 export interface RecommendationCitationMetadata {

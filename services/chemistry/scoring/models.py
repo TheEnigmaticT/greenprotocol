@@ -37,8 +37,18 @@ class ScoringRequest(BaseModel):
     steps: list[dict] = Field(default_factory=list)
 
 
+class SdsReference(BaseModel):
+    """Optional SDS reference for a chemical. SDS is evidence, not a scoring source."""
+    supplier: str = ""
+    product_number: str | None = None
+    url: str | None = None
+    retrieved_at: str | None = None
+
+
 class ScoringResponse(BaseModel):
     """Response with principle scores and optional waste analysis."""
     scores: list[PrincipleScore]
     summary: str = ""
     waste_analysis: dict | None = None
+    # Placeholder: SDS references per chemical, keyed by name
+    sds_references: dict[str, list[SdsReference]] | None = None
