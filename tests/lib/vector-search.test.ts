@@ -63,4 +63,14 @@ describe('searchLiterature', () => {
     })
     expect(results).toEqual([])
   })
+
+  it('throws when RPC returns an error', async () => {
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    vi.mocked(createAdminClient).mockReturnValueOnce({
+      rpc: vi.fn().mockResolvedValue({ data: null, error: new Error('pgvector failure') }),
+    } as never)
+    const { searchLiterature } = await import('@/lib/vector-search')
+    await expect(searchLiterature({ query: 'test', limit: 3, threshold: 0.35 }))
+      .rejects.toThrow('pgvector failure')
+  })
 })
