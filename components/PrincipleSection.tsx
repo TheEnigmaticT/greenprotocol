@@ -267,7 +267,9 @@ export default function PrincipleSection({
                   <strong>{rec.original.chemical}</strong> → <strong style={{ color: '#166534' }}>{rec.alternative.chemical}</strong>
                 </p>
                 <p className="text-xs" style={{ color: '#57534E' }}>{rec.original.issue}</p>
-                <p className="text-xs mt-1" style={{ color: '#2D6A4F' }}>{rec.alternative.rationale}</p>
+                {(rec.evidenceTier ?? 'inferred') === 'sourced' && (
+                  <p className="text-xs mt-1" style={{ color: '#2D6A4F' }}>{rec.alternative.rationale}</p>
+                )}
 
                 {/* Evidence */}
                 {rec.evidence && (
