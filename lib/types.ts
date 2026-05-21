@@ -81,6 +81,11 @@ export interface Recommendation {
   evidence?: Evidence
   confidenceLevel: 'high' | 'medium' | 'low'
   isAccepted?: boolean
+  // v0.6: waste + citability
+  primaryBenefit?: string
+  secondaryBenefits?: string[]
+  wasteDelta?: Record<string, unknown>
+  citationMetadata?: RecommendationCitationMetadata
 }
 
 export interface AnalysisResult {
@@ -110,6 +115,9 @@ export interface AnalysisResult {
   deterministicScores?: DeterministicScores
   enrichedChemicals?: EnrichedChemical[]
   chemistryDataStatus?: ChemistryDataStatus
+  // v0.6: waste analysis + citability
+  analysisMetadata?: AnalysisMetadata
+  wasteAnalysis?: WasteAnalysis
 }
 
 export interface ImpactDelta {
@@ -194,6 +202,61 @@ export interface ChemistryDataStatus {
   pending: boolean
   unresolvedChemicals: string[]
   message: string
+}
+
+// ─── v0.6: Waste Analysis & Citability Types ─────────────────────
+
+export interface AnalysisMetadata {
+  generatedAt: string
+  gcaiVersion: string
+  methodologyVersion: string
+}
+
+export interface WasteSummary {
+  wasteImpactScore: number    // 0-10
+  grade: string               // A-F
+  primaryDriver: string       // one-sentence explanation
+  bestNextAction?: string
+  confidence: 'calculated' | 'partial' | 'estimated'
+}
+
+export interface HazardBucket {
+  category: string            // toxic, cmr, flammable, corrosive, environmental
+  totalKg: number
+  chemicalsCount: number
+  chemicals: string[]
+}
+
+export interface WasteAnalysis {
+  summary: WasteSummary
+  directWaste: {
+    totalWasteKg: number
+    solventWasteKg: number
+    nonSolventWasteKg: number
+  }
+  hazardSegments: HazardBucket[]
+  liquidBurden: {
+    totalLiquidHandledKg: number
+    totalLiquidDiscardedKg: number
+  }
+  processBurden: {
+    transferCount: number
+    vesselCount: number
+    purificationCount: number
+    washStepCount: number
+    workflowComplexity: number
+  }
+  upstream: {
+    lcaAvailable: boolean
+    notes: string
+  }
+  evidenceSources: string[]
+}
+
+export interface RecommendationCitationMetadata {
+  gcaiVersion: string
+  analysisId?: string
+  generatedAt: string
 }
 
 export interface CumulativeImpact {

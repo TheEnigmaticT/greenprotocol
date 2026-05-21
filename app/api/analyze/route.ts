@@ -4,6 +4,7 @@ import { findChemical } from '@/lib/chemicals'
 import { calculateEquivalencies } from '@/lib/equivalencies'
 import { AnalysisResult, ImpactDelta, ProgressEvent } from '@/lib/types'
 import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
+import { getAnalysisMetadata } from '@/lib/version'
 
 export const maxDuration = 300
 
@@ -115,6 +116,9 @@ export async function POST(request: Request) {
 
       // Generate equivalencies
       const equivalencies = calculateEquivalencies(impactDelta)
+
+      // Stamp version metadata
+      analysisResult.analysisMetadata = getAnalysisMetadata()
 
       // Save to database
       const { data: insertedRow, error: insertError } = await supabase.from('gpc_analyses').insert({
