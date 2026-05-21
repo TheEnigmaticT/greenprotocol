@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical } from '@/lib/types'
+import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis } from '@/lib/types'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
+import { getAnalysisMetadata } from '@/lib/version'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
@@ -458,6 +459,7 @@ export async function analyzeProtocol(
   // Phase 1.5: Rationalize quantities + deterministic scoring (if service available)
   let deterministicScores: DeterministicScores | undefined
   let enrichedChemicals: EnrichedChemical[] | undefined
+  let wasteAnalysis: WasteAnalysis | undefined
   const unresolvedChemicals = new Set<string>()
 
   const serviceUp = await isServiceAvailable()
@@ -531,6 +533,11 @@ export async function analyzeProtocol(
 
     if (scoreResult) {
       deterministicScores = scoreResult
+      // v0.6: capture structured waste analysis
+      if (scoreResult.waste_analysis) {
+        wasteAnalysis = scoreResult.waste_analysis as unknown as WasteAnalysis
+        console.log(`Waste analysis: grade ${wasteAnalysis.summary?.grade} (score ${wasteAnalysis.summary?.wasteImpactScore}/10)`)
+      }
       console.log(`Deterministic scoring complete: grade ${scoreResult.grade} (${scoreResult.total_score}/${scoreResult.max_possible})`)
 
       // Stream individual scores to the UI
@@ -635,6 +642,15 @@ export async function analyzeProtocol(
     }
   }
 
+  // v0.6: Stamp citation metadata on all recommendations
+  const metadata = getAnalysisMetadata()
+  for (const rec of recommendations) {
+    rec.citationMetadata = {
+      gcaiVersion: metadata.gcaiVersion,
+      generatedAt: metadata.generatedAt,
+    }
+  }
+
   // Phase 3: Assemble revised protocol
   onProgress?.({ type: 'phase', phase: 3, message: 'Assembling revised protocol...' })
   const assembled = await assembleResult(protocolText, parsed.steps, recommendations)
@@ -666,6 +682,8 @@ export async function analyzeProtocol(
     overallAssessment: assembled.overallAssessment,
     deterministicScores,
     enrichedChemicals,
+    analysisMetadata: metadata,
+    wasteAnalysis,
     chemistryDataStatus: {
       pending: unresolvedChemicals.size > 0,
       unresolvedChemicals: Array.from(unresolvedChemicals).sort((a, b) => a.localeCompare(b)),

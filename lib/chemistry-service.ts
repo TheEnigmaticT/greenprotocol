@@ -47,6 +47,8 @@ interface ScoreResult {
   grade: string
   smiles_extraction: Record<string, unknown>
   yield_extraction: Record<string, unknown>
+  // v0.6: structured waste analysis from chemistry service
+  waste_analysis?: Record<string, unknown>
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
