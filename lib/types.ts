@@ -41,6 +41,27 @@ export interface ParsedChemical {
   quantityKg: number | null
 }
 
+export interface Evidence {
+  why_flagged: {
+    source: string
+    content: string
+  }[]
+  why_replacement: {
+    chemical: string
+    source: string
+    content: string
+  }[]
+  citations: Citation[]
+}
+
+export interface Citation {
+  source_id: string
+  source_name: string
+  citation: string
+  url?: string
+  doi?: string
+}
+
 export interface Recommendation {
   stepNumber: number
   principleNumbers: number[]
@@ -57,6 +78,7 @@ export interface Recommendation {
     caveats: string
     evidenceBasis: string
   }
+  evidence?: Evidence
   confidenceLevel: 'high' | 'medium' | 'low'
   isAccepted?: boolean
 }
@@ -72,6 +94,17 @@ export interface AnalysisResult {
     mostImpactfulChange: string
     experimentalValidationNeeded: boolean
     disclaimer: string
+    processComplexity?: {
+      score: number
+      metrics: {
+        transfer_count: number
+        vessel_count: number
+        prep_count: number
+        purification_count: number
+        step_count: number
+      }
+      level: string
+    }
   }
   // v2: deterministic scoring (optional for backward compat)
   deterministicScores?: DeterministicScores
@@ -151,6 +184,9 @@ export interface EnrichedChemical extends ParsedChemical {
   density_g_per_ml?: number
   smiles?: string
   molecular_formula?: string
+  ghs_hazards?: { code: string; description: string; source: string }[]
+  green_alternatives?: { chemical: string; source: string; content: string }[]
+  citations?: Citation[]
   data_source?: string
 }
 

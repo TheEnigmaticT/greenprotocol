@@ -4,6 +4,7 @@ import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
+// import { searchLiterature, SearchResult } from '@/lib/vector-search'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
 
@@ -266,6 +267,17 @@ interface AssembleResult {
     mostImpactfulChange: string
     experimentalValidationNeeded: boolean
     disclaimer: string
+    processComplexity?: {
+      score: number
+      metrics: {
+        transfer_count: number
+        vessel_count: number
+        prep_count: number
+        purification_count: number
+        step_count: number
+      }
+      level: string
+    }
   }
 }
 
@@ -475,6 +487,9 @@ export async function analyzeProtocol(
               density_g_per_ml: conv.density_g_per_ml ?? undefined,
               smiles: conv.smiles ?? undefined,
               molecular_formula: conv.molecular_formula ?? undefined,
+              ghs_hazards: conv.ghs_hazards,
+              green_alternatives: conv.green_alternatives,
+              citations: conv.citations,
               data_source: conv.data_source,
             })
           }
@@ -537,14 +552,109 @@ export async function analyzeProtocol(
   onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
   const rawRecommendations = await evaluateAllPrinciples(parsed.steps, onProgress)
 
+  // Phase 2.5: Ground recommendations in literature via Vector Search
+  onProgress?.({ type: 'phase', phase: 2, message: 'Grounding recommendations in literature (skipped)...' })
+  /*
+  for (const rec of rawRecommendations) {
+    try {
+      const query = `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
+      const matches = await searchLiterature({
+        query,
+        limit: 3,
+        threshold: 0.35,
+        principles: rec.principleNumbers,
+        chemicals: [rec.original.chemical.toLowerCase(), rec.alternative.chemical.toLowerCase()]
+      })
+
+      if (matches.length > 0) {
+        if (!rec.evidence) {
+          rec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
+        }
+        
+        // Add matches to citations if not already present
+        for (const match of matches) {
+          const alreadyExists = rec.evidence.citations.some(c => c.doi === match.doi)
+          if (!alreadyExists) {
+            rec.evidence.citations.push({
+              source_id: match.id,
+              source_name: match.journal || match.title,
+              citation: `${match.authors || 'Unknown'} (${match.year || 'n.d.'}). ${match.title}.`,
+              url: match.url || undefined,
+              doi: match.doi || undefined
+            })
+            
+            // If the snippet is relevant, add it to why_replacement
+            if (match.content_snippet) {
+              rec.evidence.why_replacement.push({
+                chemical: rec.alternative.chemical,
+                source: match.journal || 'Literature',
+                content: match.content_snippet
+              })
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[pipeline] Grounding failed for ${rec.original.chemical}:`, err)
+    }
+  }
+  */
+
   // Deduplicate: merge recommendations for the same chemical in the same step
   const recommendations = deduplicateRecommendations(rawRecommendations)
   console.log(`Deduplication: ${rawRecommendations.length} raw → ${recommendations.length} merged`)
   onProgress?.({ type: 'phase', phase: 2, message: `Found ${recommendations.length} recommendations` })
 
+  // Attach evidence to recommendations based on enriched chemical data
+  for (const rec of recommendations) {
+    const enriched = enrichedChemicals?.find(e => 
+      e.name.toLowerCase() === rec.original.chemical.toLowerCase() ||
+      rec.original.chemical.toLowerCase().includes(e.name.toLowerCase()) ||
+      e.name.toLowerCase().includes(rec.original.chemical.toLowerCase())
+    )
+    
+    if (enriched) {
+      const why_flagged = (enriched.ghs_hazards || []).map(h => ({
+        source: h.source,
+        content: `${h.code}: ${h.description}`
+      }))
+      
+      const why_replacement = (enriched.green_alternatives || []).map(a => ({
+        chemical: a.chemical,
+        source: a.source,
+        content: a.content
+      }))
+      
+      if (why_flagged.length > 0 || why_replacement.length > 0) {
+        rec.evidence = {
+          why_flagged,
+          why_replacement,
+          citations: enriched.citations || []
+        }
+      }
+    }
+  }
+
   // Phase 3: Assemble revised protocol
   onProgress?.({ type: 'phase', phase: 3, message: 'Assembling revised protocol...' })
   const assembled = await assembleResult(protocolText, parsed.steps, recommendations)
+
+  // Attach process complexity from deterministic scores
+  const complexityScore = deterministicScores?.scores.find(s => s.principle_number === 13)
+  if (complexityScore) {
+    assembled.overallAssessment.processComplexity = {
+      score: complexityScore.score,
+      metrics: {
+        transfer_count: complexityScore.details.transfer_count as number,
+        vessel_count: complexityScore.details.vessel_count as number,
+        prep_count: complexityScore.details.prep_count as number,
+        purification_count: complexityScore.details.purification_count as number,
+        step_count: complexityScore.details.step_count as number,
+      },
+      level: complexityScore.details.complexity_level as string,
+    }
+  }
+
   onProgress?.({ type: 'phase', phase: 3, message: 'Assembly complete' })
 
   return {

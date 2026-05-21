@@ -98,6 +98,9 @@ export function buildChemicalContext(steps: AnalysisStep[]): string {
       seen.add(key)
 
       const data = findChemical(chem.name)
+      // v2: prefer live enriched data if available, but for the prompt we use what's in buildChemicalContext
+      // The calling pipeline already has enrichedChemicals, but buildChemicalContext doesn't see it yet.
+      // For now, keep using hardcoded DB for the prompt context to ensure stability.
       if (!data) {
         entries.push(`- ${chem.name}: Not in our database. Use your chemistry knowledge.`)
         continue

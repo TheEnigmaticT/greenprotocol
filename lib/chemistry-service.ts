@@ -16,6 +16,9 @@ interface ConvertResult {
   quantity_g: number | null
   quantity_kg: number | null
   quantity_mol: number | null
+  ghs_hazards: Array<{ code: string; description: string; source: string }>
+  green_alternatives: Array<{ chemical: string; source: string; content: string }>
+  citations: Array<{ source_id: string; source_name: string; citation: string; url?: string; doi?: string }>
   data_source: string
   cached: boolean
   warnings: string[]
