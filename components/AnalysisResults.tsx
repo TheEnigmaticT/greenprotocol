@@ -4,6 +4,8 @@ import PrincipleTag from './PrincipleTag'
 import QuickWins from './QuickWins'
 import { useState } from 'react'
 import { AnalysisResult, Recommendation, Evidence } from '@/lib/types'
+import WasteScoreCard from './WasteScoreCard'
+import WasteDetailsPanel from './WasteDetailsPanel'
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -138,10 +140,15 @@ function RecommendationCard({
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         {rec.principleNumbers.map((n) => (
           <PrincipleTag key={n} number={n} />
         ))}
+        {rec.primaryBenefit && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#D1FAE5', color: '#065F46' }}>
+            {rec.primaryBenefit}
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -194,6 +201,7 @@ export default function AnalysisResults({
   onUpdateAnalysis?: (updated: AnalysisResult) => void 
 }) {
   const [viewMode, setViewMode] = useState<'full' | 'quick'>('full')
+  const [wasteDetailsOpen, setWasteDetailsOpen] = useState(false)
 
   const toggleRecommendation = (index: number) => {
     if (!onUpdateAnalysis) return
@@ -247,6 +255,21 @@ export default function AnalysisResults({
           </button>
         </div>
       </div>
+
+      {/* v0.6: Waste Score Card */}
+      {analysis.wasteAnalysis && (
+        <div className="space-y-2">
+          <WasteScoreCard
+            wasteAnalysis={analysis.wasteAnalysis}
+            gcaiVersion={analysis.analysisMetadata?.gcaiVersion}
+            onToggleDetails={() => setWasteDetailsOpen(!wasteDetailsOpen)}
+            detailsOpen={wasteDetailsOpen}
+          />
+          {wasteDetailsOpen && (
+            <WasteDetailsPanel wasteAnalysis={analysis.wasteAnalysis} />
+          )}
+        </div>
+      )}
 
       {viewMode === 'quick' ? (
         <QuickWins recommendations={analysis.recommendations} />
