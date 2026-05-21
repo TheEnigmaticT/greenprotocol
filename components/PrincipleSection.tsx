@@ -1,6 +1,7 @@
 'use client'
 
 import { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical } from '@/lib/types'
+import { buildRecommendationCitationString } from '@/lib/citation'
 import PrincipleTag from './PrincipleTag'
 
 const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -33,6 +34,7 @@ interface PrincipleSectionProps {
   enrichedChemicals?: EnrichedChemical[]
   // P1-specific: waste analysis data
   wasteAnalysis?: WasteAnalysis
+  analysisId?: string
 }
 
 export default function PrincipleSection({
@@ -42,6 +44,7 @@ export default function PrincipleSection({
   recommendations,
   enrichedChemicals,
   wasteAnalysis,
+  analysisId,
 }: PrincipleSectionProps) {
   const anchorId = `p${principleNumber}`
 
@@ -261,6 +264,20 @@ export default function PrincipleSection({
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/50">
                       Model-inferred
                     </span>
+                  )}
+                  {analysisId && (
+                    <button
+                      title="Copy citation for this recommendation"
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"
+                      onClick={() => {
+                        navigator.clipboard.writeText(buildRecommendationCitationString(rec, analysisId)).catch(() => {})
+                      }}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
                   )}
                 </div>
                 <p className="text-xs mb-1" style={{ color: '#1C1917' }}>

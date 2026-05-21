@@ -1,8 +1,9 @@
 'use client'
 
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { AnalysisResult } from '@/lib/types'
-import { buildCitationString } from '@/lib/citation'
+import { buildCitationString, buildBibtexCitation } from '@/lib/citation'
 import EvidenceSidebar, { SidebarSection } from './EvidenceSidebar'
 import PrincipleSection from './PrincipleSection'
 import UserMenu from './UserMenu'
@@ -60,6 +61,19 @@ function getActivePrinciples(analysis: AnalysisResult): number[] {
 export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasProps) {
   const activePrinciples = getActivePrinciples(analysis)
   const metadata = analysis.analysisMetadata
+
+  const [citeOpen, setCiteOpen] = useState(false)
+  const citeDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (citeDropdownRef.current && !citeDropdownRef.current.contains(e.target as Node)) {
+        setCiteOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   // Build sidebar sections
   const sidebarSections: SidebarSection[] = [
@@ -126,17 +140,40 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
               <span className="text-xs" style={{ color: '#A8A29E' }}>
                 GC.ai v{metadata.gcaiVersion} · Generated {new Date(metadata.generatedAt).toLocaleDateString()}
               </span>
-              <button
-                onClick={() => {
-                  if (metadata) {
-                    navigator.clipboard.writeText(buildCitationString(metadata)).catch(() => {})
-                  }
-                }}
-                className="print:hidden text-[10px] px-2 py-0.5 rounded border border-[#D6D0C4] hover:bg-white transition-colors font-bold uppercase tracking-tight"
-                style={{ color: '#78716C' }}
-              >
-                Cite
-              </button>
+              {/* Citation dropdown */}
+              <div className="relative inline-block print:hidden" ref={citeDropdownRef}>
+                <button
+                  onClick={() => setCiteOpen(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors"
+                >
+                  Cite
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {citeOpen && (
+                  <div className="absolute right-0 mt-1 w-48 rounded-md bg-zinc-800 border border-zinc-700 shadow-lg z-10">
+                    <button
+                      className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 rounded-t-md"
+                      onClick={() => {
+                        navigator.clipboard.writeText(buildCitationString(metadata)).catch(() => {})
+                        setCiteOpen(false)
+                      }}
+                    >
+                      Copy citation (plain text)
+                    </button>
+                    <button
+                      className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 rounded-b-md"
+                      onClick={() => {
+                        navigator.clipboard.writeText(buildBibtexCitation(metadata, analysisId)).catch(() => {})
+                        setCiteOpen(false)
+                      }}
+                    >
+                      Copy BibTeX
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -156,6 +193,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                 recommendations={recs}
                 enrichedChemicals={analysis.enrichedChemicals}
                 wasteAnalysis={pn === 1 ? analysis.wasteAnalysis : undefined}
+                analysisId={analysisId}
               />
             )
           })}
