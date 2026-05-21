@@ -13,25 +13,20 @@ const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
 export default function WasteScoreCard({
   wasteAnalysis,
   gcaiVersion,
-  onToggleDetails,
-  detailsOpen,
 }: {
   wasteAnalysis: WasteAnalysis
   gcaiVersion?: string
-  onToggleDetails?: () => void
-  detailsOpen?: boolean
 }) {
   const { summary } = wasteAnalysis
   const gc = GRADE_COLORS[summary.grade] || GRADE_COLORS.C
 
   return (
     <div
-      className="p-4 rounded-lg border"
+      className="p-4 rounded-lg border hover:border-[#16a34a] transition-colors cursor-pointer"
       style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}
     >
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-4">
-          {/* Grade badge */}
           <div
             className="flex items-center justify-center w-14 h-14 rounded-lg text-2xl font-bold shrink-0"
             style={{ background: gc.bg, color: gc.text }}
@@ -58,15 +53,12 @@ export default function WasteScoreCard({
         </div>
 
         <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
-          {/* Score pill */}
           <span
             className="text-xs px-2.5 py-1 rounded-full font-semibold"
             style={{ background: gc.bg, color: gc.text }}
           >
             {summary.wasteImpactScore}/10
           </span>
-
-          {/* Confidence */}
           <span
             className="text-[10px] px-2 py-0.5 rounded"
             style={{ background: '#F0EBE1', color: '#78716C' }}
@@ -76,22 +68,18 @@ export default function WasteScoreCard({
         </div>
       </div>
 
-      {/* Footer: version + details toggle */}
       <div className="flex items-center justify-between mt-3 pt-2 border-t border-[#E7E5E4]">
         {gcaiVersion && (
           <span className="text-[10px]" style={{ color: '#A8A29E' }}>
             GC.ai v{gcaiVersion}
           </span>
         )}
-        {onToggleDetails && (
-          <button
-            onClick={onToggleDetails}
-            className="text-[10px] px-2 py-0.5 rounded border border-[#D6D0C4] hover:bg-white transition-colors font-bold uppercase tracking-tight"
-            style={{ color: detailsOpen ? '#16a34a' : '#78716C' }}
-          >
-            {detailsOpen ? 'Hide Details' : 'Show Details'}
-          </button>
-        )}
+        <span
+          className="text-[10px] font-bold uppercase tracking-tight"
+          style={{ color: '#16a34a' }}
+        >
+          View Evidence →
+        </span>
       </div>
     </div>
   )

@@ -130,3 +130,28 @@ body {
   background-clip: text;
   animation: shimmer 3s linear infinite;
 }
+
+/* ── Evidence Atlas print stylesheet ─────────────────────────── */
+@media print {
+  /* Hide interactive chrome */
+  .print\:hidden { display: none !important; }
+  .print\:block { display: block !important; }
+
+  /* Single-column, no sidebar offset */
+  main { padding-left: 0 !important; margin: 0 !important; max-width: 100% !important; }
+
+  /* Expand all sections */
+  section { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Page breaks between major sections */
+  section + section { page-break-before: auto; }
+
+  /* Use system fonts for print legibility */
+  body { font-family: 'Times New Roman', Times, serif; }
+
+  /* Remove backgrounds for ink savings */
+  div, section { background: white !important; }
+
+  /* Keep borders subtle */
+  * { border-color: #ccc !important; }
+}

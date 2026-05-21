@@ -4,8 +4,8 @@ import PrincipleTag from './PrincipleTag'
 import QuickWins from './QuickWins'
 import { useState } from 'react'
 import { AnalysisResult, Recommendation, Evidence } from '@/lib/types'
+import Link from 'next/link'
 import WasteScoreCard from './WasteScoreCard'
-import WasteDetailsPanel from './WasteDetailsPanel'
 import { buildCitationString } from '@/lib/citation'
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -94,10 +94,12 @@ function EvidenceView({ evidence }: { evidence: Evidence }) {
 
 function RecommendationCard({ 
   rec, 
-  onToggleAccept 
+  onToggleAccept,
+  analysisId,
 }: { 
   rec: Recommendation; 
-  onToggleAccept: () => void 
+  onToggleAccept: () => void;
+  analysisId?: string;
 }) {
   const isAccepted = !!rec.isAccepted
   const [showEvidence, setShowEvidence] = useState(false)
@@ -143,7 +145,13 @@ function RecommendationCard({
 
       <div className="flex flex-wrap items-center gap-1">
         {rec.principleNumbers.map((n) => (
-          <PrincipleTag key={n} number={n} />
+          analysisId ? (
+            <Link key={n} href={`/analyze/${analysisId}/evidence#p${n}`}>
+              <PrincipleTag number={n} />
+            </Link>
+          ) : (
+            <PrincipleTag key={n} number={n} />
+          )
         ))}
         {rec.primaryBenefit && (
           <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#D1FAE5', color: '#065F46' }}>
@@ -195,14 +203,15 @@ function RecommendationCard({
 export default function AnalysisResults({ 
   analysis, 
   originalProtocol, 
-  onUpdateAnalysis 
+  onUpdateAnalysis,
+  analysisId,
 }: { 
   analysis: AnalysisResult; 
   originalProtocol: string; 
-  onUpdateAnalysis?: (updated: AnalysisResult) => void 
+  onUpdateAnalysis?: (updated: AnalysisResult) => void;
+  analysisId?: string;
 }) {
   const [viewMode, setViewMode] = useState<'full' | 'quick'>('full')
-  const [wasteDetailsOpen, setWasteDetailsOpen] = useState(false)
 
   const toggleRecommendation = (index: number) => {
     if (!onUpdateAnalysis) return
@@ -257,17 +266,21 @@ export default function AnalysisResults({
         </div>
       </div>
 
-      {/* v0.6: Waste Score Card */}
+      {/* v0.6: Waste Score Card — links to Evidence Atlas */}
       {analysis.wasteAnalysis && (
-        <div className="space-y-2">
-          <WasteScoreCard
-            wasteAnalysis={analysis.wasteAnalysis}
-            gcaiVersion={analysis.analysisMetadata?.gcaiVersion}
-            onToggleDetails={() => setWasteDetailsOpen(!wasteDetailsOpen)}
-            detailsOpen={wasteDetailsOpen}
-          />
-          {wasteDetailsOpen && (
-            <WasteDetailsPanel wasteAnalysis={analysis.wasteAnalysis} />
+        <div>
+          {analysisId ? (
+            <Link href={`/analyze/${analysisId}/evidence#p1`}>
+              <WasteScoreCard
+                wasteAnalysis={analysis.wasteAnalysis}
+                gcaiVersion={analysis.analysisMetadata?.gcaiVersion}
+              />
+            </Link>
+          ) : (
+            <WasteScoreCard
+              wasteAnalysis={analysis.wasteAnalysis}
+              gcaiVersion={analysis.analysisMetadata?.gcaiVersion}
+            />
           )}
         </div>
       )}
@@ -318,7 +331,8 @@ export default function AnalysisResults({
                 <RecommendationCard 
                   key={i} 
                   rec={rec} 
-                  onToggleAccept={() => toggleRecommendation(i)} 
+                  onToggleAccept={() => toggleRecommendation(i)}
+                  analysisId={analysisId}
                 />
               ))}
             </div>
@@ -398,16 +412,27 @@ export default function AnalysisResults({
               <span className="text-[10px]" style={{ color: '#A8A29E' }}>
                 {buildCitationString(analysis.analysisMetadata)}
               </span>
-              <button
-                onClick={() => {
-                  const text = buildCitationString(analysis.analysisMetadata!)
-                  navigator.clipboard.writeText(text).catch(() => {})
-                }}
-                className="text-[10px] px-2 py-0.5 rounded border border-[#D6D0C4] hover:bg-white transition-colors font-bold uppercase tracking-tight"
-                style={{ color: '#78716C' }}
-              >
-                Cite
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const text = buildCitationString(analysis.analysisMetadata!)
+                    navigator.clipboard.writeText(text).catch(() => {})
+                  }}
+                  className="text-[10px] px-2 py-0.5 rounded border border-[#D6D0C4] hover:bg-white transition-colors font-bold uppercase tracking-tight"
+                  style={{ color: '#78716C' }}
+                >
+                  Cite
+                </button>
+                {analysisId && (
+                  <Link
+                    href={`/analyze/${analysisId}/evidence`}
+                    className="text-[10px] px-2 py-0.5 rounded border border-[#D6D0C4] hover:bg-white transition-colors font-bold uppercase tracking-tight"
+                    style={{ color: '#166534' }}
+                  >
+                    View Full Evidence
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
         )}
