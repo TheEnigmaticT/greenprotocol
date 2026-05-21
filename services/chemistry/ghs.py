@@ -50,8 +50,53 @@ PHYSICAL_HAZARD_CODES = {
 }
 
 
+async def lookup_hcodes_with_details(cid: int) -> list[dict]:
+    """Fetch GHS H-codes and their descriptions for a compound from PubChem."""
+    url = (
+        f"https://pubchem.ncbi.nlm.nih.gov/rest/pug_view"
+        f"/data/compound/{cid}/JSON?heading=GHS+Classification"
+    )
+    try:
+        data = await fetch_pubchem_json(url, f"GHS CID {cid}")
+        if not data:
+            return []
+        
+        hazards = []
+        seen_codes = set()
+        
+        sections = data.get("Record", {}).get("Section", [])
+        for section in sections:
+            # Look for GHS Classification section
+            for sub in section.get("Section", []):
+                if "GHS Classification" in sub.get("TOCHeading", ""):
+                    for info in sub.get("Information", []):
+                        if info.get("Name") == "GHS Hazard Statements":
+                            for val in info.get("Value", {}).get("StringWithMarkup", []):
+                                s = val.get("String", "")
+                                # Pattern: H300 (100%): Fatal if swallowed
+                                match = re.match(r"(H\d{3}[A-Za-z]*)[^:]*:\s*(.*)", s)
+                                if match:
+                                    code, desc = match.groups()
+                                    if code not in seen_codes:
+                                        hazards.append({
+                                            "code": code,
+                                            "description": desc.strip(),
+                                            "source": "PubChem GHS Classification"
+                                        })
+                                        seen_codes.add(code)
+        return hazards
+    except Exception as e:
+        print(f"[ghs] details lookup error for CID {cid}: {e}")
+        return []
+
+    """Fetch GHS H-codes for a compound from PubChem."""
 async def lookup_hcodes(cid: int) -> list[str]:
     """Fetch GHS H-codes for a compound from PubChem."""
+    details = await lookup_hcodes_with_details(cid)
+    if details:
+        return [d["code"] for d in details]
+    
+    # Fallback to simple set-based extraction if structured crawl failed
     cache_key = f"ghs_{cid}"
     cached = chem_cache.get(cache_key)
     if cached:

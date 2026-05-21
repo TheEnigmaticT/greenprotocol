@@ -33,6 +33,8 @@ class ScoringRequest(BaseModel):
     chemicals: list[ChemicalInput]
     protocol_title: str = ""
     step_number: int | None = None
+    reaction_smiles: str | None = None
+    steps: list[dict] = Field(default_factory=list)
 
 
 class ScoringResponse(BaseModel):
