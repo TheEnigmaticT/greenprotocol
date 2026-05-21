@@ -5,7 +5,7 @@ import { getAnalysisMetadata } from '@/lib/version'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
-// import { searchLiterature, SearchResult } from '@/lib/vector-search'
+import { searchLiterature } from '@/lib/vector-search'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
 
@@ -327,6 +327,27 @@ async function assembleResult(
   }
 }
 
+// ─── Evidence Tier & Ranking ─────────────────────────────────────
+
+export const SEVERITY_WEIGHT: Record<string, number> = { high: 3, medium: 2, low: 1 }
+export const TIER_MULTIPLIER: Record<string, number> = { sourced: 1.5, inferred: 1.0 }
+
+export function deriveEvidenceTier(rec: Recommendation): 'sourced' | 'inferred' {
+  return (rec.evidence?.citations?.length ?? 0) > 0 ? 'sourced' : 'inferred'
+}
+
+export function rankRecommendations(recs: Recommendation[]): Recommendation[] {
+  return [...recs].sort((a, b) => {
+    const scoreA = (SEVERITY_WEIGHT[a.severity] ?? 1) * (TIER_MULTIPLIER[a.evidenceTier ?? 'inferred'] ?? 1)
+    const scoreB = (SEVERITY_WEIGHT[b.severity] ?? 1) * (TIER_MULTIPLIER[b.evidenceTier ?? 'inferred'] ?? 1)
+    if (scoreB !== scoreA) return scoreB - scoreA
+    // Tiebreak: sourced wins
+    if (a.evidenceTier === 'sourced' && b.evidenceTier !== 'sourced') return -1
+    if (b.evidenceTier === 'sourced' && a.evidenceTier !== 'sourced') return 1
+    return 0
+  })
+}
+
 // ─── Deduplication ───────────────────────────────────────────────
 
 const SEVERITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 }
@@ -561,52 +582,61 @@ export async function analyzeProtocol(
   const rawRecommendations = await evaluateAllPrinciples(parsed.steps, onProgress)
 
   // Phase 2.5: Ground recommendations in literature via Vector Search
-  onProgress?.({ type: 'phase', phase: 2, message: 'Grounding recommendations in literature (skipped)...' })
-  /*
-  for (const rec of rawRecommendations) {
-    try {
-      const query = `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
-      const matches = await searchLiterature({
-        query,
-        limit: 3,
-        threshold: 0.35,
-        principles: rec.principleNumbers,
-        chemicals: [rec.original.chemical.toLowerCase(), rec.alternative.chemical.toLowerCase()]
-      })
+  onProgress?.({ type: 'phase', phase: 2, message: 'Grounding recommendations in literature...' })
+  try {
+    // Build all query strings first, then batch-retrieve
+    const queries = rawRecommendations.map(rec =>
+      `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
+    )
 
-      if (matches.length > 0) {
-        if (!rec.evidence) {
-          rec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
-        }
-        
-        // Add matches to citations if not already present
-        for (const match of matches) {
-          const alreadyExists = rec.evidence.citations.some(c => c.doi === match.doi)
-          if (!alreadyExists) {
-            rec.evidence.citations.push({
-              source_id: match.id,
-              source_name: match.journal || match.title,
-              citation: `${match.authors || 'Unknown'} (${match.year || 'n.d.'}). ${match.title}.`,
-              url: match.url || undefined,
-              doi: match.doi || undefined
+    const results = await Promise.allSettled(
+      rawRecommendations.map((rec, i) =>
+        searchLiterature({
+          query: queries[i],
+          limit: 3,
+          threshold: 0.35,
+          principles: rec.principleNumbers,
+          chemicals: [rec.original.chemical.toLowerCase(), rec.alternative.chemical.toLowerCase()],
+        })
+      )
+    )
+
+    for (let i = 0; i < rawRecommendations.length; i++) {
+      const result = results[i]
+      if (result.status === 'rejected') {
+        console.warn(`[pipeline] Phase 2.5 retrieval failed for ${rawRecommendations[i].original.chemical}:`, result.reason)
+        continue
+      }
+      const matches = result.value
+      if (matches.length === 0) continue
+
+      const rec = rawRecommendations[i]
+      if (!rec.evidence) {
+        rec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
+      }
+      for (const match of matches) {
+        const alreadyExists = rec.evidence.citations.some(c => c.doi && match.doi && c.doi === match.doi)
+        if (!alreadyExists) {
+          rec.evidence.citations.push({
+            source_id: match.id,
+            source_name: match.journal || match.title,
+            citation: `${match.authors || 'Unknown'} (${match.year || 'n.d.'}). ${match.title}.`,
+            url: match.url ?? undefined,
+            doi: match.doi ?? undefined,
+          })
+          if (match.content_snippet) {
+            rec.evidence.why_replacement.push({
+              chemical: rec.alternative.chemical,
+              source: match.journal || 'Literature',
+              content: match.content_snippet,
             })
-            
-            // If the snippet is relevant, add it to why_replacement
-            if (match.content_snippet) {
-              rec.evidence.why_replacement.push({
-                chemical: rec.alternative.chemical,
-                source: match.journal || 'Literature',
-                content: match.content_snippet
-              })
-            }
           }
         }
       }
-    } catch (err) {
-      console.warn(`[pipeline] Grounding failed for ${rec.original.chemical}:`, err)
     }
+  } catch (err) {
+    console.warn('[pipeline] Phase 2.5 skipped due to error:', err)
   }
-  */
 
   // Deduplicate: merge recommendations for the same chemical in the same step
   const recommendations = deduplicateRecommendations(rawRecommendations)
@@ -642,6 +672,19 @@ export async function analyzeProtocol(
       }
     }
   }
+
+  // v0.6: Derive evidence tier and rerank
+  for (const rec of recommendations) {
+    rec.evidenceTier = deriveEvidenceTier(rec)
+  }
+  recommendations.sort((a, b) => {
+    const scoreA = (SEVERITY_WEIGHT[a.severity] ?? 1) * (TIER_MULTIPLIER[a.evidenceTier ?? 'inferred'] ?? 1)
+    const scoreB = (SEVERITY_WEIGHT[b.severity] ?? 1) * (TIER_MULTIPLIER[b.evidenceTier ?? 'inferred'] ?? 1)
+    if (scoreB !== scoreA) return scoreB - scoreA
+    if (a.evidenceTier === 'sourced' && b.evidenceTier !== 'sourced') return -1
+    if (b.evidenceTier === 'sourced' && a.evidenceTier !== 'sourced') return 1
+    return 0
+  })
 
   // v0.6: Derive primaryBenefit if the LLM didn't provide one
   for (const rec of recommendations) {
