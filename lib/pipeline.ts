@@ -664,10 +664,18 @@ export async function analyzeProtocol(
       }))
       
       if (why_flagged.length > 0 || why_replacement.length > 0) {
+        const existingCitations = rec.evidence?.citations ?? []
+        const newCitations = enriched.citations || []
+        // Merge: keep Phase 2.5 citations; append enriched ones not already present
+        const mergedCitations = [...existingCitations]
+        for (const c of newCitations) {
+          const alreadyExists = mergedCitations.some(e => e.source_id === c.source_id)
+          if (!alreadyExists) mergedCitations.push(c)
+        }
         rec.evidence = {
           why_flagged,
           why_replacement,
-          citations: enriched.citations || []
+          citations: mergedCitations,
         }
       }
     }
