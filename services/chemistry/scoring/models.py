@@ -38,6 +38,7 @@ class ScoringRequest(BaseModel):
 
 
 class ScoringResponse(BaseModel):
-    """Response with principle scores."""
+    """Response with principle scores and optional waste analysis."""
     scores: list[PrincipleScore]
     summary: str = ""
+    waste_analysis: dict | None = None

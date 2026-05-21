@@ -5,6 +5,7 @@ from scoring.p2_atom_economy import score_p2
 from scoring.p3_less_hazardous import score_p3
 from scoring.p5_safer_solvents import score_p5
 from scoring.p6_energy_efficiency import score_p6
+from scoring.waste_analysis import compute_waste_analysis
 from ghs import lookup_hcodes
 import asyncio
 
@@ -43,7 +44,15 @@ async def score_protocol(request: ScoringRequest):
     p5 = score_p5(chemicals=request.chemicals)
     p6 = score_p6(steps=request.steps)
 
+    # Compute structured waste analysis
+    waste = compute_waste_analysis(
+        chemicals=request.chemicals,
+        hcodes_map=hcodes_map,
+        process_metrics=None,  # Will be wired to process_complexity when available
+    )
+
     return ScoringResponse(
         scores=[p1, p2, p3, p5, p6],
-        summary="Green Chemistry Analysis complete."
+        summary="Green Chemistry Analysis complete.",
+        waste_analysis=waste,
     )
