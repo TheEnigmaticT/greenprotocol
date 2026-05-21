@@ -9,17 +9,34 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 
 const COLS = `
-  .g { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.5rem; max-width: 1360px; margin: 0 auto; padding: 0 80px; }
+  .g { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.5rem; width: 100%; max-width: 1360px; box-sizing: border-box; margin: 0 auto; padding: 0 80px; }
+  .g > * { min-width: 0; }
   .c1{grid-column:span 1} .c2{grid-column:span 2} .c3{grid-column:span 3}
   .c4{grid-column:span 4} .c5{grid-column:span 5} .c6{grid-column:span 6}
   .c7{grid-column:span 7} .c8{grid-column:span 8} .c9{grid-column:span 9}
   .c10{grid-column:span 10} .c11{grid-column:span 11} .c12{grid-column:span 12}
   .cs2{grid-column-start:2} .cs3{grid-column-start:3} .cs4{grid-column-start:4}
   .cs5{grid-column-start:5} .cs7{grid-column-start:7} .cs8{grid-column-start:8} .cs9{grid-column-start:9}
+  .principles-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:1px; background:#C8C2B0; }
+  .showcase-urlbar { flex:1 1 auto; width:100%; max-width:480px; min-width:0; margin:0 auto; overflow:hidden; }
+  .showcase-urlbar-text { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dropcap { float:left; font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:clamp(4.5rem, 10vw, 7rem); line-height:0.78; margin:0.08em 0.16em 0 0; text-transform:uppercase; }
+  .dropcap-gold { color:#ECB815; }
+  .dropcap-forest { color:#1C3822; }
+  .stack-facts-col { width:100%; }
+  .stack-energy-chip { width:100%; box-sizing:border-box; }
+  .stack-energy-row { display:grid; grid-template-columns:auto minmax(0, 1fr); align-items:end; column-gap:0.75rem; row-gap:0.5rem; }
+  .contact-cta-col { width:100%; }
+  .contact-cta-link { display:block; width:100%; box-sizing:border-box; }
   @media(max-width:900px){
     .g{padding:0 24px}
-    .c3,.c4,.c5,.c6,.c7,.c8,.c9,.c10{grid-column:span 12}
+    .c3,.c4,.c5,.c6,.c7,.c8,.c9,.c10{grid-column:1 / -1}
     .cs2,.cs3,.cs4,.cs5,.cs7,.cs8,.cs9{grid-column-start:1}
+    .principles-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
+    .dropcap{font-size:clamp(3.4rem, 16vw, 5rem); line-height:0.82; margin:0.04em 0.14em 0 0}
+    .stack-energy-row{grid-template-columns:1fr}
+    .contact-cta-col{margin-top:2rem}
+    .contact-cta-link{padding:1rem 1.25rem}
   }
 `
 
@@ -196,7 +213,7 @@ export default function LandingPage() {
               fontFamily:SERIF, fontSize:'1.05rem', lineHeight:1.75,
               color:C.sage, maxWidth:'38ch', margin:'0 0 3rem',
             }}>
-              Paste any lab protocol. Scored against all 12 Principles
+              <span className="dropcap dropcap-gold" aria-hidden="true">P</span>{'aste any lab protocol. Scored against all 12 Principles'}
               of Green Chemistry. Specific, chemically-validated swaps
               — in seconds.
             </p>
@@ -326,10 +343,7 @@ export default function LandingPage() {
           </div>
 
           {/* Principle grid — 12-col outer, 4 cells per row using gap-as-hairline trick */}
-          <div className="c12" style={{
-            display:'grid', gridTemplateColumns:'repeat(4,1fr)',
-            gap:'1px', background:'#C8C2B0',
-          }}>
+          <div className="c12 principles-grid">
             {[
               {n:1,l:'Prevention',s:'Waste prevention over treatment'},
               {n:2,l:'Atom Economy',s:'Maximize atom incorporation'},
@@ -461,14 +475,13 @@ export default function LandingPage() {
                   <div key={c} style={{width:'12px', height:'12px', borderRadius:'50%', background:c}} />
                 ))}
               </div>
-              <div style={{
-                flex:1, maxWidth:'480px', margin:'0 auto',
+              <div className="showcase-urlbar" style={{
                 background:'#0D1F16', borderRadius:'4px',
                 padding:'0.3rem 0.75rem',
                 fontFamily:MONO, fontSize:'0.65rem', color:C.sage,
                 letterSpacing:'0.03em',
               }}>
-                app.greenchemistry.ai/analyze/triazolo-peptidomimetics
+                <span className="showcase-urlbar-text">app.greenchemistry.ai/analyze/triazolo-peptidomimetics</span>
               </div>
             </div>
 
@@ -850,17 +863,11 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
 
           {/* Claim — cols 1-7 */}
           <div className="c7">
-            {/* Float-left dropcap R */}
-            <div style={{
-              float:'left', fontFamily:MONO, fontWeight:700,
-              fontSize:'clamp(7rem,13vw,11rem)', lineHeight:0.8,
-              color:C.gold, marginRight:'0.12em', marginBottom:0,
-            }} aria-hidden="true">R</div>
             <p style={{
               fontFamily:SERIF, fontSize:'clamp(1.2rem,2.2vw,1.7rem)',
               lineHeight:1.55, color:C.cream, margin:0,
             }}>
-              DKit and PubChem power every recommendation.
+              <span className="dropcap dropcap-gold" aria-hidden="true">P</span>{'ubChem and RDKit power every recommendation.'}
               GreenChemistry.ai is AI as interface — making decades of
               deterministic cheminformatics accessible in a conversation.
             </p>
@@ -876,14 +883,14 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
           </div>
 
           {/* Stack facts — cols 9-12 */}
-          <div className="c4 cs9">
+          <div className="c4 cs9 stack-facts-col">
             {/* Energy stat chip */}
-            <div style={{background:C.black, padding:'1.5rem', marginBottom:'0.1rem'}}>
+            <div className="stack-energy-chip" style={{background:C.black, padding:'1.5rem', marginBottom:'0.1rem'}}>
               <div style={{fontFamily:MONO, fontSize:'0.6rem', letterSpacing:'0.12em',
                 textTransform:'uppercase', color:C.goldDark, marginBottom:'1rem'}}>
                 Actually Green AI
               </div>
-              <div style={{display:'flex', alignItems:'flex-end', gap:'0.75rem', marginBottom:'0.75rem'}}>
+              <div className="stack-energy-row" style={{marginBottom:'0.75rem'}}>
                 <span style={{fontFamily:MONO, fontWeight:700, fontSize:'2.6rem',
                   color:C.gold, lineHeight:1}}>&lt;0.1%</span>
                 <div style={{fontFamily:SERIF, fontSize:'0.8rem', color:C.cream,
@@ -942,21 +949,21 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
             <div style={{width:'40px', height:'2px', background:C.forest, margin:'2rem 0'}} />
             <p style={{fontFamily:SERIF, color:C.forest, fontSize:'0.95rem',
               lineHeight:1.75, maxWidth:'38ch', margin:0}}>
-              Custom integrations, ELN connectors, DOZN export, and team
+              <span className="dropcap dropcap-forest" aria-hidden="true">C</span>{'ustom integrations, ELN connectors, DOZN export, and team'}
               dashboards for R&amp;D teams and sustainability officers.
             </p>
           </div>
 
           {/* CTAs — cols 7-11 */}
-          <div className="c5 cs8" style={{display:'flex', flexDirection:'column', justifyContent:'center', gap:'0.875rem'}}>
-            <Link href="/analyze" style={{
-              display:'block', background:C.forest, color:C.cream,
+          <div className="c5 cs8 contact-cta-col" style={{display:'flex', flexDirection:'column', justifyContent:'center', gap:'0.875rem'}}>
+            <Link href="/analyze" className="contact-cta-link" style={{
+              background:C.forest, color:C.cream,
               fontFamily:MONO, fontWeight:700, fontSize:'0.85rem',
               letterSpacing:'0.06em', padding:'1.1rem 2rem',
               textDecoration:'none', textAlign:'center',
             }}>ANALYZE A PROTOCOL — FREE</Link>
-            <a href="mailto:hello@greenchemistry.ai?subject=Enterprise Demo Request" style={{
-              display:'block', background:'transparent', color:C.forest,
+            <a href="mailto:hello@greenchemistry.ai?subject=Enterprise Demo Request" className="contact-cta-link" style={{
+              background:'transparent', color:C.forest,
               border:`2px solid ${C.forest}`,
               fontFamily:MONO, fontWeight:700, fontSize:'0.85rem',
               letterSpacing:'0.06em', padding:'1.1rem 2rem',

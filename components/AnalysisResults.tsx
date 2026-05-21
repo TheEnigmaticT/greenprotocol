@@ -1,7 +1,9 @@
 'use client'
 
-import { AnalysisResult, Recommendation } from '@/lib/types'
 import PrincipleTag from './PrincipleTag'
+import QuickWins from './QuickWins'
+import { useState } from 'react'
+import { AnalysisResult, Recommendation, Evidence } from '@/lib/types'
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -28,6 +30,65 @@ function ConfidenceBadge({ level }: { level: string }) {
   )
 }
 
+function EvidenceView({ evidence }: { evidence: Evidence }) {
+  return (
+    <div className="mt-4 pt-4 border-t border-[#D6D0C4] space-y-4">
+      {evidence.why_flagged.length > 0 && (
+        <div>
+          <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#7C2D36' }}>
+            Why Flagged (Evidence)
+          </h4>
+          <ul className="space-y-1">
+            {evidence.why_flagged.map((ef, idx) => (
+              <li key={idx} className="text-xs flex gap-2" style={{ color: '#44403C' }}>
+                <span className="font-bold text-[10px] bg-[#FEE2E2] px-1 rounded h-fit shrink-0">{ef.source}</span>
+                <span>{ef.content}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {evidence.why_replacement.length > 0 && (
+        <div>
+          <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#166534' }}>
+            Why Replacement (Evidence)
+          </h4>
+          <ul className="space-y-1">
+            {evidence.why_replacement.map((er, idx) => (
+              <li key={idx} className="text-xs flex gap-2" style={{ color: '#44403C' }}>
+                <span className="font-bold text-[10px] bg-[#DCFCE7] px-1 rounded h-fit shrink-0">{er.source}</span>
+                <span><strong>{er.chemical}:</strong> {er.content}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {evidence.citations.length > 0 && (
+        <div className="bg-white/50 p-2 rounded border border-[#E7E5E4]">
+          <h4 className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: '#78716C' }}>
+            Sources & Citations
+          </h4>
+          <div className="space-y-1">
+            {evidence.citations.map((cite, idx) => (
+              <div key={idx} className="text-[10px] italic leading-tight" style={{ color: '#57534E' }}>
+                {cite.citation}
+                {cite.url && (
+                  <a href={cite.url} target="_blank" rel="noopener noreferrer" className="ml-1 text-[#16a34a] hover:underline not-italic font-bold">
+                    [Link]
+                  </a>
+                )}
+                {cite.doi && <span className="ml-1 not-italic opacity-60">DOI: {cite.doi}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RecommendationCard({ 
   rec, 
   onToggleAccept 
@@ -36,6 +97,7 @@ function RecommendationCard({
   onToggleAccept: () => void 
 }) {
   const isAccepted = !!rec.isAccepted
+  const [showEvidence, setShowEvidence] = useState(false)
 
   return (
     <div
@@ -53,6 +115,15 @@ function RecommendationCard({
           </span>
           <SeverityBadge severity={rec.severity} />
           <ConfidenceBadge level={rec.confidenceLevel} />
+          {rec.evidence && (
+            <button 
+              onClick={() => setShowEvidence(!showEvidence)}
+              className="text-[10px] px-2 py-0.5 rounded border border-[#D6D0C4] hover:bg-white transition-colors font-bold uppercase tracking-tight"
+              style={{ color: showEvidence ? '#16a34a' : '#78716C', borderColor: showEvidence ? '#16a34a' : '#D6D0C4' }}
+            >
+              {showEvidence ? 'Hide Evidence' : 'Show Evidence'}
+            </button>
+          )}
         </div>
         
         <button
@@ -98,26 +169,29 @@ function RecommendationCard({
               <strong>Note:</strong> {rec.alternative.caveats}
             </p>
           )}
-          <p className="text-xs mt-1" style={{ color: '#A8A29E' }}>
-            Source: {rec.alternative.evidenceBasis}
-          </p>
+          {!rec.evidence && (
+            <p className="text-xs mt-1" style={{ color: '#A8A29E' }}>
+              Source: {rec.alternative.evidenceBasis}
+            </p>
+          )}
         </div>
       </div>
+
+      {showEvidence && rec.evidence && (
+        <EvidenceView evidence={rec.evidence} />
+      )}
     </div>
   )
 }
 
-import QuickWins from './QuickWins'
-import { useState } from 'react'
-
-export default function AnalysisResults({
-  analysis,
-  originalProtocol,
-  onUpdateAnalysis,
-}: {
-  analysis: AnalysisResult
-  originalProtocol: string
-  onUpdateAnalysis?: (updated: AnalysisResult) => void
+export default function AnalysisResults({ 
+  analysis, 
+  originalProtocol, 
+  onUpdateAnalysis 
+}: { 
+  analysis: AnalysisResult; 
+  originalProtocol: string; 
+  onUpdateAnalysis?: (updated: AnalysisResult) => void 
 }) {
   const [viewMode, setViewMode] = useState<'full' | 'quick'>('full')
 
@@ -243,6 +317,45 @@ export default function AnalysisResults({
         <p className="text-sm mb-2" style={{ color: '#1C1917' }}>
           <strong>Most impactful change:</strong> {analysis.overallAssessment.mostImpactfulChange}
         </p>
+        {analysis.overallAssessment.processComplexity && (
+          <div className="mb-4 p-3 rounded bg-white/50 border border-[#D6D0C4]">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#1C1917' }}>Process Complexity</h4>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                analysis.overallAssessment.processComplexity.level === 'low' ? 'bg-green-100 text-green-700' :
+                analysis.overallAssessment.processComplexity.level === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                'bg-red-100 text-red-700'
+              }`}>
+                {analysis.overallAssessment.processComplexity.level} (Score: {analysis.overallAssessment.processComplexity.score}/10)
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+              <div className="p-1">
+                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.step_count}</div>
+                <div className="text-[9px] uppercase text-stone-500">Steps</div>
+              </div>
+              <div className="p-1">
+                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.transfer_count}</div>
+                <div className="text-[9px] uppercase text-stone-500">Transfers</div>
+              </div>
+              <div className="p-1">
+                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.vessel_count}</div>
+                <div className="text-[9px] uppercase text-stone-500">Vessels</div>
+              </div>
+              <div className="p-1">
+                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.prep_count}</div>
+                <div className="text-[9px] uppercase text-stone-500">Preps</div>
+              </div>
+              <div className="p-1">
+                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.purification_count}</div>
+                <div className="text-[9px] uppercase text-stone-500">Purifications</div>
+              </div>
+            </div>
+            <p className="mt-2 text-[10px] text-stone-500 italic">
+              Complexity metrics serve as proxies for waste (transfer loss), failure risk, and operator burden.
+            </p>
+          </div>
+        )}
         {analysis.overallAssessment.greenPrinciplesViolated.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {analysis.overallAssessment.greenPrinciplesViolated.map((n) => (
