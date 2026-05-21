@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { AnalysisResult, Recommendation, Evidence } from '@/lib/types'
 import WasteScoreCard from './WasteScoreCard'
 import WasteDetailsPanel from './WasteDetailsPanel'
+import { buildCitationString } from '@/lib/citation'
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -389,6 +390,27 @@ export default function AnalysisResults({
         <p className="text-xs italic" style={{ color: '#78716C' }}>
           {analysis.overallAssessment.disclaimer}
         </p>
+
+        {/* v0.6: Citation affordance */}
+        {analysis.analysisMetadata && (
+          <div className="mt-3 pt-2 border-t border-[#D6D0C4]">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px]" style={{ color: '#A8A29E' }}>
+                {buildCitationString(analysis.analysisMetadata)}
+              </span>
+              <button
+                onClick={() => {
+                  const text = buildCitationString(analysis.analysisMetadata!)
+                  navigator.clipboard.writeText(text).catch(() => {})
+                }}
+                className="text-[10px] px-2 py-0.5 rounded border border-[#D6D0C4] hover:bg-white transition-colors font-bold uppercase tracking-tight"
+                style={{ color: '#78716C' }}
+              >
+                Cite
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
