@@ -172,14 +172,19 @@ export default function PrincipleSection({
             Scoring Details
           </h4>
           <div className="space-y-1">
-            {Object.entries(score.details).map(([key, value]) => (
-              <div key={key} className="flex justify-between text-xs">
-                <span style={{ color: '#57534E' }}>{key.replace(/_/g, ' ')}</span>
-                <span className="font-semibold" style={{ color: '#1C1917' }}>
-                  {typeof value === 'number' ? value.toFixed(2) : String(value)}
-                </span>
-              </div>
-            ))}
+            {score.details._summary != null && (
+              <p className="text-sm text-zinc-300 mb-3 italic">
+                {String(score.details._summary)}
+              </p>
+            )}
+            {Object.entries(score.details)
+              .filter(([key]) => key !== '_summary')
+              .map(([key, val]) => (
+                <div key={key} className="flex justify-between text-sm py-0.5">
+                  <span className="text-zinc-400">{key.replace(/_/g, ' ')}</span>
+                  <span className="text-zinc-200 font-mono">{String(val ?? '—')}</span>
+                </div>
+              ))}
           </div>
         </div>
       )}
@@ -247,6 +252,16 @@ export default function PrincipleSection({
                       Accepted
                     </span>
                   )}
+                  {/* Evidence tier badge */}
+                  {(rec.evidenceTier ?? 'inferred') === 'sourced' ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">
+                      Literature-backed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/50">
+                      Model-inferred
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs mb-1" style={{ color: '#1C1917' }}>
                   <strong>{rec.original.chemical}</strong> → <strong style={{ color: '#166534' }}>{rec.alternative.chemical}</strong>
@@ -271,6 +286,15 @@ export default function PrincipleSection({
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+                {/* Model reasoning — shown when no literature citations */}
+                {(rec.evidenceTier ?? 'inferred') === 'inferred' && rec.alternative.rationale && (
+                  <div className="mt-3 rounded-md bg-amber-950/30 border border-amber-800/30 p-3">
+                    <p className="text-xs font-medium text-amber-400/80 uppercase tracking-wide mb-1">
+                      Model reasoning
+                    </p>
+                    <p className="text-sm text-zinc-300">{rec.alternative.rationale}</p>
                   </div>
                 )}
               </div>
