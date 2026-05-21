@@ -6,7 +6,7 @@
  *   2. SDS — supporting evidence and workflow context only
  */
 
-import type { AnalysisMetadata } from '@/lib/types'
+import type { AnalysisMetadata, Recommendation } from '@/lib/types'
 
 /**
  * Build a short software citation string for display or export.
@@ -36,4 +36,23 @@ export function buildBibtexCitation(metadata: AnalysisMetadata, analysisId?: str
   year = {${year}},
   url = {https://greenchemistry.ai}
 }`
+}
+
+/**
+ * Build a per-recommendation citation string for display or export.
+ *
+ * Example output:
+ *   "GreenChemistry.ai v0.6.0. Recommendation: replace DMF with DMSO (Step 3). Generated 2026-05-21."
+ */
+export function buildRecommendationCitationString(
+  rec: Recommendation,
+  analysisId?: string
+): string {
+  const version = rec.citationMetadata?.gcaiVersion ?? 'unknown'
+  const date = rec.citationMetadata?.generatedAt
+    ? new Date(rec.citationMetadata.generatedAt).toISOString().split('T')[0]
+    : new Date().toISOString().split('T')[0]
+  const id = analysisId ?? rec.citationMetadata?.analysisId
+  const idPart = id ? ` Analysis ID: ${id}.` : ''
+  return `GreenChemistry.ai v${version}. Recommendation: replace ${rec.original.chemical} with ${rec.alternative.chemical} (Step ${rec.stepNumber}).${idPart} Generated ${date}.`
 }

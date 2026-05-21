@@ -89,6 +89,7 @@ export interface Recommendation {
   secondaryBenefits?: string[]
   wasteDelta?: Record<string, unknown>
   citationMetadata?: RecommendationCitationMetadata
+  evidenceTier?: 'sourced' | 'inferred'
 }
 
 export interface AnalysisResult {
