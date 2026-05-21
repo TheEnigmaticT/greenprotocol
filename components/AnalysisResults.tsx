@@ -423,17 +423,26 @@ export default function AnalysisResults({
                 >
                   Cite
                 </button>
-                {analysisId && (
-                  <Link
-                    href={`/analyze/${analysisId}/evidence`}
-                    className="text-[10px] px-2 py-0.5 rounded border border-[#D6D0C4] hover:bg-white transition-colors font-bold uppercase tracking-tight"
-                    style={{ color: '#166534' }}
-                  >
-                    View Full Evidence
-                  </Link>
-                )}
               </div>
             </div>
+
+            {analysisId && (
+              <div className="mt-4 rounded-lg border border-zinc-700/60 bg-zinc-900/50 p-4 flex items-start gap-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-zinc-200">Evidence Atlas</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Full citations, calculation trails, and confidence tiers for every recommendation.
+                    Share this URL to reference this analysis.
+                  </p>
+                </div>
+                <a
+                  href={`/analyze/${analysisId}/evidence`}
+                  className="shrink-0 px-3 py-1.5 rounded-md text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors"
+                >
+                  View →
+                </a>
+              </div>
+            )}
           </div>
         )}
       </div>
