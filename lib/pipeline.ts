@@ -102,6 +102,7 @@ const PRINCIPLE_SCHEMA: InputSchema = {
             required: ['chemical', 'rationale'],
           },
           confidenceLevel: { type: 'string', enum: ['high', 'medium', 'low'] },
+          primaryBenefit: { type: 'string' },
         },
         required: ['stepNumber', 'original', 'alternative'],
       },
@@ -638,6 +639,29 @@ export async function analyzeProtocol(
           why_replacement,
           citations: enriched.citations || []
         }
+      }
+    }
+  }
+
+  // v0.6: Derive primaryBenefit if the LLM didn't provide one
+  for (const rec of recommendations) {
+    if (!rec.primaryBenefit) {
+      // Derive from principle numbers
+      const principles = rec.principleNumbers || []
+      if (principles.includes(1)) {
+        rec.primaryBenefit = 'Reduces direct chemical waste'
+      } else if (principles.includes(3)) {
+        rec.primaryBenefit = 'Lowers toxicity and hazard exposure'
+      } else if (principles.includes(5)) {
+        rec.primaryBenefit = 'Replaces hazardous solvent with safer alternative'
+      } else if (principles.includes(6)) {
+        rec.primaryBenefit = 'Reduces energy consumption'
+      } else if (principles.includes(12)) {
+        rec.primaryBenefit = 'Improves process safety'
+      } else if (principles.includes(9)) {
+        rec.primaryBenefit = 'Enables catalytic efficiency'
+      } else {
+        rec.primaryBenefit = 'Improves green chemistry profile'
       }
     }
   }
