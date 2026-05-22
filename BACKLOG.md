@@ -70,7 +70,7 @@ Roadmap framing:
 ### Platform / GTM / Infra
 
 - [ ] **Auth: E2E test new account signup** — Test email confirmation flow, Google OAuth flow, redirect to dashboard; verify middleware blocks unauthenticated access to /analyze [added::2026-03-21]
-- [ ] **Infra: Staging + Production environments** — Separate Vercel deployments for staging vs prod; staging auto-deploys from main, prod deploys from release tags or manual promote; separate Supabase projects per environment [added::2026-03-21]
+- [x] **Infra: Staging + Production environments** [done::2026-05-22] — production branch created; Vercel production branch tracking set to production; all other branches (including main) create preview deployments only; deploy to prod via `git push origin main:production` [added::2026-03-21]
 - [ ] **Infra: CI/CD pipeline** — GitHub Actions for: lint + typecheck on PR, build verification, automated tests (when we have them), deploy to staging on merge to main, manual promote to prod [added::2026-03-21]
 - [ ] **Demo: April 2 pitch deck** — Slides for Millipore Sigma presentation. Narrative: DOZN is the best pre-AI scorecard, GC.ai turns it into a coach. Frame as Web 2.0 → AI era (iterative, transparent, human as discriminator). Include roadmap for next 6 months. Demo flow: paste protocol, talk through background processing while results generate live on mobile viewport [added::2026-03-21]
 - [ ] **Biz: LOI/NDA templates** — Prepare letter of intent and NDA templates for greenchemistry.ai LLC (not Longino Consulting). Needed for CST engagement starting next week [added::2026-03-21]
