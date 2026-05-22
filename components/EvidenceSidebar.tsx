@@ -13,7 +13,9 @@ export default function EvidenceSidebar({
 }: {
   sections: SidebarSection[]
 }) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : true
+  )
   const [activeId, setActiveId] = useState<string>('')
 
   // Scroll-spy: track which section is currently in view

@@ -27,8 +27,12 @@ export default function EvidencePage() {
           router.push('/login')
           return
         }
-        if (!res.ok) {
+        if (res.status === 404) {
           setError('Analysis not found')
+          return
+        }
+        if (!res.ok) {
+          setError(`Unable to load analysis (server error ${res.status}). Please try again.`)
           return
         }
         const json = await res.json()

@@ -265,7 +265,7 @@ export default function PrincipleSection({
                       Model-inferred
                     </span>
                   )}
-                  {analysisId && (
+                  {analysisId && rec.citationMetadata && (
                     <button
                       title="Copy citation for this recommendation"
                       className="text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"

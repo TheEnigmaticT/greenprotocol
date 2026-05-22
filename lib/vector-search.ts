@@ -1,8 +1,6 @@
 import OpenAI from 'openai'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
 export interface SearchResult {
   id: string
   title: string
@@ -22,6 +20,7 @@ export async function searchLiterature(params: {
   principles?: number[]
   chemicals?: string[]
 }): Promise<SearchResult[]> {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const embeddingResponse = await openai.embeddings.create({
     model: 'text-embedding-3-small',
     input: params.query,
