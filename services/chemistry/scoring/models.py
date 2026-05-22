@@ -32,6 +32,7 @@ class ScoringRequest(BaseModel):
     """Request to score a protocol's chemicals."""
     chemicals: list[ChemicalInput]
     protocol_title: str = ""
+    protocol_text: str = ""
     step_number: int | None = None
     reaction_smiles: str | None = None
     steps: list[dict] = Field(default_factory=list)
@@ -49,6 +50,10 @@ class ScoringResponse(BaseModel):
     """Response with principle scores and optional waste analysis."""
     scores: list[PrincipleScore]
     summary: str = ""
+    total_score: float = 0.0
+    max_possible: float = 0.0
+    grade: str = "C"
     waste_analysis: dict | None = None
-    # Placeholder: SDS references per chemical, keyed by name
     sds_references: dict[str, list[SdsReference]] | None = None
+    smiles_extraction: dict = Field(default_factory=dict)
+    yield_extraction: dict = Field(default_factory=dict)

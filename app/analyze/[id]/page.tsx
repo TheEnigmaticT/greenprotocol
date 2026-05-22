@@ -167,6 +167,24 @@ export default function AnalysisByIdPage() {
           </section>
         )}
 
+        {data.analysis.analysisMetadata && (
+          <div className="print:hidden rounded-lg border border-zinc-700/60 bg-zinc-900/50 p-4 flex items-start gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-zinc-200">Evidence Atlas</p>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Full citations, calculation trails, and confidence tiers for every recommendation.
+                Share this URL to cite this analysis in publications or methods sections.
+              </p>
+            </div>
+            <a
+              href={`/analyze/${id}/evidence`}
+              className="shrink-0 px-3 py-1.5 rounded-md text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors"
+            >
+              View →
+            </a>
+          </div>
+        )}
+
         <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
           <FinalizedProtocol
             analysis={data.analysis}

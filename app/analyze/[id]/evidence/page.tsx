@@ -21,17 +21,21 @@ export default function EvidencePage() {
 
   useEffect(() => {
     async function load() {
-      const res = await fetch(`/api/analyses/${id}`)
-      if (res.status === 401) {
-        router.push('/login')
-        return
+      try {
+        const res = await fetch(`/api/analyses/${id}`)
+        if (res.status === 401) {
+          router.push('/login')
+          return
+        }
+        if (!res.ok) {
+          setError('Analysis not found')
+          return
+        }
+        const json = await res.json()
+        setData(json)
+      } catch {
+        setError('Failed to load analysis. Please try again.')
       }
-      if (!res.ok) {
-        setError('Analysis not found')
-        return
-      }
-      const json = await res.json()
-      setData(json)
     }
     load()
   }, [id, router])
