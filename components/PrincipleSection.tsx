@@ -176,7 +176,7 @@ export default function PrincipleSection({
           </h4>
           <div className="space-y-1">
             {score.details._summary != null && (
-              <p className="text-sm text-zinc-300 mb-3 italic">
+              <p className="text-sm mb-3 italic" style={{ color: '#57534E' }}>
                 {String(score.details._summary)}
               </p>
             )}
@@ -184,8 +184,8 @@ export default function PrincipleSection({
               .filter(([key]) => key !== '_summary')
               .map(([key, val]) => (
                 <div key={key} className="flex justify-between text-sm py-0.5">
-                  <span className="text-zinc-400">{key.replace(/_/g, ' ')}</span>
-                  <span className="text-zinc-200 font-mono">{String(val ?? '—')}</span>
+                  <span style={{ color: '#78716C' }}>{key.replace(/_/g, ' ')}</span>
+                  <span className="font-mono" style={{ color: '#1C1917' }}>{String(val ?? '—')}</span>
                 </div>
               ))}
           </div>
