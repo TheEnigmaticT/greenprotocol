@@ -16,6 +16,36 @@ PUBCHEM_HEADERS = {
     ),
 }
 
+# Organic liquid packing fraction: vdW molar volume / actual liquid molar volume.
+# Tuned to ~5% error across common lab solvents; polar molecules may read 5-10% low.
+_PACKING_FACTOR = 0.55
+
+
+def estimate_density_rdkit(smiles: str, mw: float) -> float | None:
+    """Estimate density (g/mL) from SMILES using RDKit vdW volume + packing correction.
+
+    Returns None if RDKit cannot embed the molecule.
+    """
+    try:
+        import os
+        from rdkit import Chem, RDLogger
+        from rdkit.Chem import AllChem
+
+        RDLogger.DisableLog("rdApp.*")
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        mol_h = Chem.AddHs(mol)
+        if AllChem.EmbedMolecule(mol_h, randomSeed=42) != 0:
+            return None
+        AllChem.MMFFOptimizeMolecule(mol_h)
+        vol_angstrom3 = AllChem.ComputeMolVolume(mol_h)
+        # Convert: 1 Å³/molecule × Avogadro × 1e-24 cm³/Å³ = 0.6022 cm³/mol
+        vdw_density = mw / (vol_angstrom3 * 0.6022)
+        return round(vdw_density * _PACKING_FACTOR, 4)
+    except Exception:
+        return None
+
 
 async def fetch_pubchem_json(url: str, label: str) -> dict | None:
     async with httpx.AsyncClient(timeout=TIMEOUT, headers=PUBCHEM_HEADERS) as client:
@@ -95,7 +125,7 @@ async def lookup_density(cid: int) -> float | None:
 
 
 async def lookup_chemical(name: str) -> dict | None:
-    """Full lookup: properties + density."""
+    """Full lookup: properties + density (PubChem experimental, then RDKit estimate)."""
     props = await lookup_properties(name)
     if not props:
         local = lookup_local_properties(name)
@@ -103,12 +133,26 @@ async def lookup_chemical(name: str) -> dict | None:
             print(f"[pubchem] using local fallback for {name!r}")
             return {**local, "_data_source": "local_fallback"}
         return None
-    
-    density = None
+
+    density: float | None = None
+    density_source: str | None = None
+
     if props.get("cid"):
         density = await lookup_density(props["cid"])
-    
+        if density is not None:
+            density_source = "pubchem"
+
+    if density is None:
+        smiles = props.get("canonical_smiles")
+        mw = props.get("molecular_weight")
+        if smiles and mw:
+            density = estimate_density_rdkit(smiles, mw)
+            if density is not None:
+                density_source = "calculated_rdkit"
+                print(f"[pubchem] rdkit density fallback for {name!r}: {density:.3f}")
+
     return {
         **props,
         "density_g_per_ml": density,
+        "density_source": density_source,
     }

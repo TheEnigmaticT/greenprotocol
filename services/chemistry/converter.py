@@ -2,7 +2,8 @@
 
 from models import ConvertResponse
 from parser import parse_quantity
-from synonyms import resolve_synonym
+from chem21 import get_vetted_evidence
+from ghs import lookup_hcodes_with_details
 from pubchem import lookup_chemical
 import cache
 
@@ -44,6 +45,17 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
     # Check cache first
     cached_data = cache.get(resolved_name)
     if cached_data:
+        # Re-fetch evidence even for cached if it's missing (migration support)
+        if "ghs_hazards" not in cached_data or "green_alternatives" not in cached_data:
+            evidence = get_vetted_evidence(resolved_name, cached_data.get("cid"))
+            cid = cached_data.get("cid")
+            if cid:
+                ghs_details = await lookup_hcodes_with_details(cid)
+                cached_data["ghs_hazards"] = ghs_details
+            cached_data["green_alternatives"] = evidence["why_replacement"]
+            cached_data["citations"] = evidence["citations"]
+            cache.put(resolved_name, cached_data)
+
         return _build_response(
             cached_data, chemical_name, resolved_name, quantity,
             data_source="cache", cached=True, warnings=warnings,
@@ -57,6 +69,16 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
         pubchem_data = await lookup_chemical(chemical_name)
 
     if pubchem_data:
+        # Augment with GHS details and Green Alternatives evidence
+        cid = pubchem_data.get("cid")
+        if cid:
+            ghs_details = await lookup_hcodes_with_details(cid)
+            pubchem_data["ghs_hazards"] = ghs_details
+            
+        evidence = get_vetted_evidence(resolved_name, cid)
+        pubchem_data["green_alternatives"] = evidence["why_replacement"]
+        pubchem_data["citations"] = evidence["citations"]
+        
         cache.put(resolved_name, pubchem_data)
         return _build_response(
             pubchem_data, chemical_name, resolved_name, quantity,
@@ -140,6 +162,9 @@ def _build_response(
         quantity_g=round(quantity_g, 6) if quantity_g is not None else None,
         quantity_kg=round(quantity_kg, 8) if quantity_kg is not None else None,
         quantity_mol=round(quantity_mol, 8) if quantity_mol is not None else None,
+        ghs_hazards=chem_data.get("ghs_hazards", []),
+        green_alternatives=chem_data.get("green_alternatives", []),
+        citations=chem_data.get("citations", []),
         data_source=data_source,
         cached=cached,
         warnings=warnings,

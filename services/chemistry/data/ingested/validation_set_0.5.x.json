@@ -1,0 +1,30 @@
+[
+  {
+    "target_chemical": "Dichloromethane",
+    "evidence_pmid": "39913068",
+    "evidence_title": "Scope and Limitations of the Use of Methanesulfonic Acid (MSA) as a Green Acid for Global Deprotection in Solid-Phase Peptide Synthesis.",
+    "context": "No abstract available",
+    "proposed_substitutions": []
+  },
+  {
+    "target_chemical": "Dimethylformamide",
+    "evidence_pmid": "41243892",
+    "evidence_title": "Life Cycle Assessment of Solvothermal Zeolitic Imidazolate Framework-8 Synthesis: Is the Substitution of N,N-Dimethylformamide with Glycerol Carbonate Environmentally Sustainable?",
+    "context": "No abstract available",
+    "proposed_substitutions": []
+  },
+  {
+    "target_chemical": "Benzene",
+    "evidence_pmid": "41558021",
+    "evidence_title": "Stable Isotopic Labeling and Automated Reactivity-Directed Approach Accelerating Discovery of Toxic Disinfection Byproducts in Chlorinated and Chloraminated Waters.",
+    "context": "No abstract available",
+    "proposed_substitutions": []
+  },
+  {
+    "target_chemical": "Toluene",
+    "evidence_pmid": "39337330",
+    "evidence_title": "One-Pot, Multi-Component Green Microwave-Assisted Synthesis of Bridgehead Bicyclo[4.4.0]boron Heterocycles and DNA Affinity Studies.",
+    "context": "No abstract available",
+    "proposed_substitutions": []
+  }
+]

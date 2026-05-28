@@ -1,0 +1,48 @@
+name,source_id,source_label,source_url,score,category
+Water,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Ethanol,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Methanol,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Isopropanol,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Acetone,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Ethyl acetate,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Acetonitrile,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Dichloromethane,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Tetrahydrofuran,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Toluene,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Hexane,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+Dimethyl sulfoxide,local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+"N,N-Dimethylformamide",local_common_lab,GreenChemistry.ai common lab chemical set,,120,solvent
+"N,N-Dimethylacetamide",local_common_lab,GreenChemistry.ai common lab chemical set,,110,solvent
+N-Methyl-2-pyrrolidone,local_common_lab,GreenChemistry.ai common lab chemical set,,110,solvent
+"1,4-Dioxane",local_common_lab,GreenChemistry.ai common lab chemical set,,110,solvent
+Chloroform,local_common_lab,GreenChemistry.ai common lab chemical set,,110,solvent
+Carbon tetrachloride,local_common_lab,GreenChemistry.ai common lab chemical set,,110,solvent
+Diethyl ether,local_common_lab,GreenChemistry.ai common lab chemical set,,110,solvent
+Pentane,local_common_lab,GreenChemistry.ai common lab chemical set,,100,solvent
+Hydrochloric acid,local_common_lab,GreenChemistry.ai common lab chemical set,,100,acid
+Sulfuric acid,local_common_lab,GreenChemistry.ai common lab chemical set,,100,acid
+Nitric acid,local_common_lab,GreenChemistry.ai common lab chemical set,,100,acid
+Acetic acid,local_common_lab,GreenChemistry.ai common lab chemical set,,100,acid
+Trifluoroacetic acid,local_common_lab,GreenChemistry.ai common lab chemical set,,100,acid
+Phosphoric acid,local_common_lab,GreenChemistry.ai common lab chemical set,,100,acid
+Sodium hydroxide,local_common_lab,GreenChemistry.ai common lab chemical set,,100,base
+Potassium hydroxide,local_common_lab,GreenChemistry.ai common lab chemical set,,100,base
+Triethylamine,local_common_lab,GreenChemistry.ai common lab chemical set,,100,base
+"N,N-Diisopropylethylamine",local_common_lab,GreenChemistry.ai common lab chemical set,,100,base
+Piperidine,local_common_lab,GreenChemistry.ai common lab chemical set,,100,base
+Sodium borohydride,local_common_lab,GreenChemistry.ai common lab chemical set,,95,reagent
+Lithium aluminium hydride,local_common_lab,GreenChemistry.ai common lab chemical set,,95,reagent
+Palladium on carbon,local_common_lab,GreenChemistry.ai common lab chemical set,,95,catalyst
+Tetrakis(triphenylphosphine)palladium(0),local_common_lab,GreenChemistry.ai common lab chemical set,,95,catalyst
+Copper(II) sulfate,local_common_lab,GreenChemistry.ai common lab chemical set,,95,reagent
+Sodium ascorbate,local_common_lab,GreenChemistry.ai common lab chemical set,,95,reagent
+Sodium azide,local_common_lab,GreenChemistry.ai common lab chemical set,,95,reagent
+Potassium carbonate,local_common_lab,GreenChemistry.ai common lab chemical set,,90,reagent
+Sodium sulfate,local_common_lab,GreenChemistry.ai common lab chemical set,,90,reagent
+Magnesium sulfate,local_common_lab,GreenChemistry.ai common lab chemical set,,90,reagent
+Sodium chloride,local_common_lab,GreenChemistry.ai common lab chemical set,,90,reagent
+Ammonium chloride,local_common_lab,GreenChemistry.ai common lab chemical set,,90,reagent
+Salicylic acid,local_common_lab,GreenChemistry.ai common lab chemical set,,90,reagent
+Acetic anhydride,local_common_lab,GreenChemistry.ai common lab chemical set,,90,reagent
+Dihydrolevoglucosenone,local_common_lab,GreenChemistry.ai common lab chemical set,,90,greener_solvent
+N-Butylpyrrolidinone,local_common_lab,GreenChemistry.ai common lab chemical set,,90,greener_solvent

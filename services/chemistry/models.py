@@ -24,6 +24,9 @@ class ConvertResponse(BaseModel):
     data_source: str = Field("unknown", description="pubchem, rdkit, cache, or synonym_table")
     cached: bool = False
     warnings: list[str] = Field(default_factory=list)
+    ghs_hazards: list[dict] = Field(default_factory=list, description="GHS H-codes and descriptions")
+    green_alternatives: list[dict] = Field(default_factory=list, description="Citable alternatives with source evidence")
+    citations: list[dict] = Field(default_factory=list, description="Structured source citations")
     error: str | None = None
 
 

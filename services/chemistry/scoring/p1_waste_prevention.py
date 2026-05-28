@@ -103,6 +103,7 @@ def score_p1(
             principle_name="Prevention (Waste / PMI)",
             score=-1.0, normalized=-1.0,
             details={
+                "_summary": "PMI unavailable — no yield data and no reaction type benchmark.",
                 "error": "Cannot calculate PMI — no yield data and no "
                          "reaction type benchmark available",
                 "total_input_g": round(total_input_g, 2),
@@ -135,6 +136,12 @@ def score_p1(
         score=score,
         normalized=round(score / 10.0, 4),
         details={
+            "_summary": (
+                f"PMI = {round(pmi, 2):.1f} "
+                f"({round(total_input_g, 1):.0f} g input → {round(product_mass_g, 1):.0f} g product, "
+                f"{yield_used}% yield). "
+                + (f"vs. {reaction_type} benchmark PMI {benchmark_pmi}: {vs_benchmark.replace('_', ' ')}." if vs_benchmark else "No benchmark available.")
+            ),
             "pmi": round(pmi, 2),
             "total_input_g": round(total_input_g, 2),
             "product_mass_g": round(product_mass_g, 2) if product_mass_g else None,

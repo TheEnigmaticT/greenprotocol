@@ -16,6 +16,9 @@ interface ConvertResult {
   quantity_g: number | null
   quantity_kg: number | null
   quantity_mol: number | null
+  ghs_hazards: Array<{ code: string; description: string; source: string }>
+  green_alternatives: Array<{ chemical: string; source: string; content: string }>
+  citations: Array<{ source_id: string; source_name: string; citation: string; url?: string; doi?: string }>
   data_source: string
   cached: boolean
   warnings: string[]
@@ -44,6 +47,8 @@ interface ScoreResult {
   grade: string
   smiles_extraction: Record<string, unknown>
   yield_extraction: Record<string, unknown>
+  // v0.6: structured waste analysis from chemistry service
+  waste_analysis?: Record<string, unknown>
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {

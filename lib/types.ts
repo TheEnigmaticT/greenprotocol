@@ -41,6 +41,30 @@ export interface ParsedChemical {
   quantityKg: number | null
 }
 
+export interface Evidence {
+  why_flagged: {
+    source: string
+    content: string
+  }[]
+  why_replacement: {
+    chemical: string
+    source: string
+    content: string
+  }[]
+  citations: Citation[]
+  // v0.6: optional SDS-backed context (scoring uses GHS/PubChem, not SDS)
+  sdsReferences?: SdsReference[]
+  sdsNotes?: SdsNote[]
+}
+
+export interface Citation {
+  source_id: string
+  source_name: string
+  citation: string
+  url?: string
+  doi?: string
+}
+
 export interface Recommendation {
   stepNumber: number
   principleNumbers: number[]
@@ -57,8 +81,15 @@ export interface Recommendation {
     caveats: string
     evidenceBasis: string
   }
+  evidence?: Evidence
   confidenceLevel: 'high' | 'medium' | 'low'
   isAccepted?: boolean
+  // v0.6: waste + citability
+  primaryBenefit?: string
+  secondaryBenefits?: string[]
+  wasteDelta?: Record<string, unknown>
+  citationMetadata?: RecommendationCitationMetadata
+  evidenceTier?: 'sourced' | 'inferred'
 }
 
 export interface AnalysisResult {
@@ -72,11 +103,25 @@ export interface AnalysisResult {
     mostImpactfulChange: string
     experimentalValidationNeeded: boolean
     disclaimer: string
+    processComplexity?: {
+      score: number
+      metrics: {
+        transfer_count: number
+        vessel_count: number
+        prep_count: number
+        purification_count: number
+        step_count: number
+      }
+      level: string
+    }
   }
   // v2: deterministic scoring (optional for backward compat)
   deterministicScores?: DeterministicScores
   enrichedChemicals?: EnrichedChemical[]
   chemistryDataStatus?: ChemistryDataStatus
+  // v0.6: waste analysis + citability
+  analysisMetadata?: AnalysisMetadata
+  wasteAnalysis?: WasteAnalysis
 }
 
 export interface ImpactDelta {
@@ -151,6 +196,9 @@ export interface EnrichedChemical extends ParsedChemical {
   density_g_per_ml?: number
   smiles?: string
   molecular_formula?: string
+  ghs_hazards?: { code: string; description: string; source: string }[]
+  green_alternatives?: { chemical: string; source: string; content: string }[]
+  citations?: Citation[]
   data_source?: string
 }
 
@@ -158,6 +206,74 @@ export interface ChemistryDataStatus {
   pending: boolean
   unresolvedChemicals: string[]
   message: string
+}
+
+// ─── v0.6: Waste Analysis & Citability Types ─────────────────────
+
+export interface AnalysisMetadata {
+  generatedAt: string
+  gcaiVersion: string
+  methodologyVersion: string
+}
+
+export interface WasteSummary {
+  wasteImpactScore: number    // 0-10
+  grade: string               // A-F
+  primaryDriver: string       // one-sentence explanation
+  bestNextAction?: string
+  confidence: 'calculated' | 'partial' | 'estimated'
+}
+
+export interface HazardBucket {
+  category: string            // toxic, cmr, flammable, corrosive, environmental
+  totalKg: number
+  chemicalsCount: number
+  chemicals: string[]
+}
+
+export interface WasteAnalysis {
+  summary: WasteSummary
+  directWaste: {
+    totalWasteKg: number
+    solventWasteKg: number
+    nonSolventWasteKg: number
+  }
+  hazardSegments: HazardBucket[]
+  liquidBurden: {
+    totalLiquidHandledKg: number
+    totalLiquidDiscardedKg: number
+  }
+  processBurden: {
+    transferCount: number
+    vesselCount: number
+    purificationCount: number
+    washStepCount: number
+    workflowComplexity: number
+  }
+  upstream: {
+    lcaAvailable: boolean
+    notes: string
+  }
+  evidenceSources: string[]
+}
+
+export interface SdsReference {
+  supplier: string           // e.g. "Sigma-Aldrich", "TCI"
+  productNumber?: string
+  url?: string
+  retrievedAt?: string
+}
+
+export interface SdsNote {
+  section: string            // e.g. "Handling", "Disposal", "First Aid"
+  content: string
+  source: string
+}
+
+export interface RecommendationCitationMetadata {
+  gcaiVersion: string
+  analysisId?: string
+  generatedAt: string
 }
 
 export interface CumulativeImpact {

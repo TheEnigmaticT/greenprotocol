@@ -26,7 +26,7 @@ def score_p3(
             principle_number=3,
             principle_name="Less Hazardous Chemical Syntheses",
             score=0.0, normalized=0.0,
-            details={"note": "No chemicals to evaluate"},
+            details={"_summary": "No chemicals to evaluate.", "note": "No chemicals to evaluate"},
             confidence="calculated",
             data_sources=["pubchem_ghs"],
         )
@@ -74,6 +74,10 @@ def score_p3(
         score=score,
         normalized=round(score / 10.0, 4),
         details={
+            "_summary": (
+                f"{len(chem_details)} chemical(s) evaluated totalling {round(total_mass_g, 1):.0f} g; "
+                f"{sum(1 for d in chem_details if d['is_cmr'])} CMR substance(s) flagged."
+            ),
             "total_mass_g": round(total_mass_g, 2),
             "chemicals": chem_details,
             "cmr_chemicals_count": sum(1 for d in chem_details if d["is_cmr"]),

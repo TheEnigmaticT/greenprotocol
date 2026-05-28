@@ -34,7 +34,7 @@ def score_p5(chemicals: list[ChemicalInput]) -> PrincipleScore:
             principle_name="Safer Solvents and Auxiliaries",
             score=0.0,
             normalized=0.0,
-            details={"note": "No solvents identified in protocol"},
+            details={"_summary": "No solvents identified in protocol.", "note": "No solvents identified in protocol"},
             confidence="calculated",
             data_sources=["chem21"],
         )
@@ -90,6 +90,10 @@ def score_p5(chemicals: list[ChemicalInput]) -> PrincipleScore:
         score=score,
         normalized=round(score / 10.0, 4),
         details={
+            "_summary": (
+                f"{round(total_mass_g, 1):.0f} g total solvent; "
+                f"{len(flagged)} solvent(s) of concern per CHEM21 guide."
+            ),
             "total_solvent_mass_g": round(total_mass_g, 2),
             "solvents": solvent_details,
         },

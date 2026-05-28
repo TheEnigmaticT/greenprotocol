@@ -86,6 +86,31 @@ def lookup_solvent(name: str) -> SolventEntry | None:
     return CHEM21_SOLVENTS.get(name.lower().strip())
 
 
+def lookup_solvent_with_evidence(name: str) -> dict | None:
+    """Look up a solvent in the CHEM21 guide with citable evidence."""
+    entry = lookup_solvent(name)
+    if not entry:
+        return None
+        
+    return {
+        "name": entry.name,
+        "classification": entry.classification,
+        "scores": {
+            "safety": entry.safety,
+            "health": entry.health,
+            "environment": entry.environment,
+            "overall": entry.overall
+        },
+        "evidence": {
+            "source_id": "CHEM21",
+            "source_name": "CHEM21 Solvent Selection Guide",
+            "citation": "Prat et al., Green Chem., 2016, 18, 288-296",
+            "url": "https://doi.org/10.1039/C5GC01008J",
+            "doi": "10.1039/C5GC01008J"
+        }
+    }
+
+
 def classify_solvent(name: str) -> str:
     """Get the CHEM21 classification for a solvent.
     
@@ -93,3 +118,34 @@ def classify_solvent(name: str) -> str:
     """
     entry = lookup_solvent(name)
     return entry.classification if entry else "unknown"
+
+
+def get_vetted_evidence(chemical_name: str, cid: int | None = None) -> dict:
+    """Consolidate vetted evidence from PubChem and CHEM21."""
+    evidence = {
+        "why_flagged": [],
+        "why_replacement": [],
+        "citations": []
+    }
+    
+    # Check CHEM21 for solvent-specific evidence
+    c21 = lookup_solvent_with_evidence(chemical_name)
+    if c21:
+        if c21["classification"] != "recommended":
+            evidence["why_flagged"].append({
+                "source": "CHEM21",
+                "content": f"Classified as '{c21['classification']}' in CHEM21 selection guide (Score: {c21['scores']['overall']}/10)."
+            })
+            # Add citation
+            evidence["citations"].append(c21["evidence"])
+            
+            # Find alternatives
+            alts = get_recommended_alternatives(c21["classification"])
+            for alt in alts:
+                evidence["why_replacement"].append({
+                    "chemical": alt["name"],
+                    "source": "CHEM21",
+                    "content": "Recommended as a green replacement with lower safety/health/environmental impact."
+                })
+
+    return evidence

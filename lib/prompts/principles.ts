@@ -98,6 +98,9 @@ export function buildChemicalContext(steps: AnalysisStep[]): string {
       seen.add(key)
 
       const data = findChemical(chem.name)
+      // v2: prefer live enriched data if available, but for the prompt we use what's in buildChemicalContext
+      // The calling pipeline already has enrichedChemicals, but buildChemicalContext doesn't see it yet.
+      // For now, keep using hardcoded DB for the prompt context to ensure stability.
       if (!data) {
         entries.push(`- ${chem.name}: Not in our database. Use your chemistry knowledge.`)
         continue
@@ -150,6 +153,7 @@ INSTRUCTIONS:
 - Be CONSERVATIVE — only recommend alternatives with published evidence or well-established precedent.
 - Do NOT hallucinate citations — say "published studies" or "CHEM21 solvent guide" if referencing general knowledge.
 - Use chemical names from our database when referring to alternatives listed above.
+- For EACH recommendation, include a "primaryBenefit" field: a short (under 15 words) workflow-relevant reason such as "reduces toxic waste", "cuts liquid cleanup burden", "lowers direct chemical waste", or "reduces purification steps". This must be a concrete benefit, not a restatement of the principle.
 
 Return ONLY valid JSON (no markdown fences, no extra text):
 
@@ -172,7 +176,8 @@ Return ONLY valid JSON (no markdown fences, no extra text):
         "caveats": "Important limitations",
         "evidenceBasis": "Source of recommendation"
       },
-      "confidenceLevel": "high|medium|low"
+      "confidenceLevel": "high|medium|low",
+      "primaryBenefit": "Short workflow-relevant reason this swap helps"
     }
   ]
 }

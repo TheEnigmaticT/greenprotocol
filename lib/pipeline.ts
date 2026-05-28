@@ -1,9 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical } from '@/lib/types'
+import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis } from '@/lib/types'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
+import { getAnalysisMetadata } from '@/lib/version'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
+import { searchLiterature } from '@/lib/vector-search'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
 
@@ -100,6 +102,7 @@ const PRINCIPLE_SCHEMA: InputSchema = {
             required: ['chemical', 'rationale'],
           },
           confidenceLevel: { type: 'string', enum: ['high', 'medium', 'low'] },
+          primaryBenefit: { type: 'string' },
         },
         required: ['stepNumber', 'original', 'alternative'],
       },
@@ -266,6 +269,17 @@ interface AssembleResult {
     mostImpactfulChange: string
     experimentalValidationNeeded: boolean
     disclaimer: string
+    processComplexity?: {
+      score: number
+      metrics: {
+        transfer_count: number
+        vessel_count: number
+        prep_count: number
+        purification_count: number
+        step_count: number
+      }
+      level: string
+    }
   }
 }
 
@@ -311,6 +325,27 @@ async function assembleResult(
       },
     }
   }
+}
+
+// ─── Evidence Tier & Ranking ─────────────────────────────────────
+
+export const SEVERITY_WEIGHT: Record<string, number> = { high: 3, medium: 2, low: 1 }
+export const TIER_MULTIPLIER: Record<string, number> = { sourced: 1.5, inferred: 1.0 }
+
+export function deriveEvidenceTier(rec: Recommendation): 'sourced' | 'inferred' {
+  return (rec.evidence?.citations?.length ?? 0) > 0 ? 'sourced' : 'inferred'
+}
+
+export function rankRecommendations(recs: Recommendation[]): Recommendation[] {
+  return [...recs].sort((a, b) => {
+    const scoreA = (SEVERITY_WEIGHT[a.severity] ?? 1) * (TIER_MULTIPLIER[a.evidenceTier ?? 'inferred'] ?? 1)
+    const scoreB = (SEVERITY_WEIGHT[b.severity] ?? 1) * (TIER_MULTIPLIER[b.evidenceTier ?? 'inferred'] ?? 1)
+    if (scoreB !== scoreA) return scoreB - scoreA
+    // Tiebreak: sourced wins
+    if (a.evidenceTier === 'sourced' && b.evidenceTier !== 'sourced') return -1
+    if (b.evidenceTier === 'sourced' && a.evidenceTier !== 'sourced') return 1
+    return 0
+  })
 }
 
 // ─── Deduplication ───────────────────────────────────────────────
@@ -446,6 +481,7 @@ export async function analyzeProtocol(
   // Phase 1.5: Rationalize quantities + deterministic scoring (if service available)
   let deterministicScores: DeterministicScores | undefined
   let enrichedChemicals: EnrichedChemical[] | undefined
+  let wasteAnalysis: WasteAnalysis | undefined
   const unresolvedChemicals = new Set<string>()
 
   const serviceUp = await isServiceAvailable()
@@ -475,6 +511,9 @@ export async function analyzeProtocol(
               density_g_per_ml: conv.density_g_per_ml ?? undefined,
               smiles: conv.smiles ?? undefined,
               molecular_formula: conv.molecular_formula ?? undefined,
+              ghs_hazards: conv.ghs_hazards,
+              green_alternatives: conv.green_alternatives,
+              citations: conv.citations,
               data_source: conv.data_source,
             })
           }
@@ -516,6 +555,11 @@ export async function analyzeProtocol(
 
     if (scoreResult) {
       deterministicScores = scoreResult
+      // v0.6: capture structured waste analysis
+      if (scoreResult.waste_analysis) {
+        wasteAnalysis = scoreResult.waste_analysis as unknown as WasteAnalysis
+        console.log(`Waste analysis: grade ${wasteAnalysis.summary?.grade} (score ${wasteAnalysis.summary?.wasteImpactScore}/10)`)
+      }
       console.log(`Deterministic scoring complete: grade ${scoreResult.grade} (${scoreResult.total_score}/${scoreResult.max_possible})`)
 
       // Stream individual scores to the UI
@@ -537,14 +581,171 @@ export async function analyzeProtocol(
   onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
   const rawRecommendations = await evaluateAllPrinciples(parsed.steps, onProgress)
 
+  // Phase 2.5: Ground recommendations in literature via Vector Search
+  onProgress?.({ type: 'phase', phase: 2, message: 'Grounding recommendations in literature...' })
+  try {
+    // Build all query strings first, then batch-retrieve
+    const queries = rawRecommendations.map(rec =>
+      `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
+    )
+
+    const results = await Promise.allSettled(
+      rawRecommendations.map((rec, i) =>
+        searchLiterature({
+          query: queries[i],
+          limit: 3,
+          threshold: 0.35,
+          principles: rec.principleNumbers,
+          chemicals: [rec.original.chemical.toLowerCase(), rec.alternative.chemical.toLowerCase()],
+        })
+      )
+    )
+
+    for (let i = 0; i < rawRecommendations.length; i++) {
+      const result = results[i]
+      if (result.status === 'rejected') {
+        console.warn(`[pipeline] Phase 2.5 retrieval failed for ${rawRecommendations[i].original.chemical}:`, result.reason)
+        continue
+      }
+      const matches = result.value
+      if (matches.length === 0) continue
+
+      const rec = rawRecommendations[i]
+      if (!rec.evidence) {
+        rec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
+      }
+      for (const match of matches) {
+        const alreadyExists = rec.evidence.citations.some(c => c.doi && match.doi && c.doi === match.doi)
+        if (!alreadyExists) {
+          rec.evidence.citations.push({
+            source_id: match.id,
+            source_name: match.journal || match.title,
+            citation: `${match.authors || 'Unknown'} (${match.year || 'n.d.'}). ${match.title}.`,
+            url: match.url ?? undefined,
+            doi: match.doi ?? undefined,
+          })
+          if (match.content_snippet) {
+            rec.evidence.why_replacement.push({
+              chemical: rec.alternative.chemical,
+              source: match.journal || 'Literature',
+              content: match.content_snippet,
+            })
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[pipeline] Phase 2.5 skipped due to error:', err)
+  }
+
   // Deduplicate: merge recommendations for the same chemical in the same step
   const recommendations = deduplicateRecommendations(rawRecommendations)
   console.log(`Deduplication: ${rawRecommendations.length} raw → ${recommendations.length} merged`)
   onProgress?.({ type: 'phase', phase: 2, message: `Found ${recommendations.length} recommendations` })
 
+  // Attach evidence to recommendations based on enriched chemical data
+  for (const rec of recommendations) {
+    const enriched = enrichedChemicals?.find(e => 
+      e.name.toLowerCase() === rec.original.chemical.toLowerCase() ||
+      rec.original.chemical.toLowerCase().includes(e.name.toLowerCase()) ||
+      e.name.toLowerCase().includes(rec.original.chemical.toLowerCase())
+    )
+    
+    if (enriched) {
+      const why_flagged = (enriched.ghs_hazards || []).map(h => ({
+        source: h.source,
+        content: `${h.code}: ${h.description}`
+      }))
+      
+      const why_replacement = (enriched.green_alternatives || []).map(a => ({
+        chemical: a.chemical,
+        source: a.source,
+        content: a.content
+      }))
+      
+      if (why_flagged.length > 0 || why_replacement.length > 0) {
+        const existingCitations = rec.evidence?.citations ?? []
+        const newCitations = enriched.citations || []
+        // Merge: keep Phase 2.5 citations; append enriched ones not already present
+        const mergedCitations = [...existingCitations]
+        for (const c of newCitations) {
+          const alreadyExists = mergedCitations.some(e => e.source_id === c.source_id)
+          if (!alreadyExists) mergedCitations.push(c)
+        }
+        rec.evidence = {
+          why_flagged,
+          why_replacement,
+          citations: mergedCitations,
+        }
+      }
+    }
+  }
+
+  // v0.6: Derive evidence tier and rerank
+  for (const rec of recommendations) {
+    rec.evidenceTier = deriveEvidenceTier(rec)
+  }
+  recommendations.sort((a, b) => {
+    const scoreA = (SEVERITY_WEIGHT[a.severity] ?? 1) * (TIER_MULTIPLIER[a.evidenceTier ?? 'inferred'] ?? 1)
+    const scoreB = (SEVERITY_WEIGHT[b.severity] ?? 1) * (TIER_MULTIPLIER[b.evidenceTier ?? 'inferred'] ?? 1)
+    if (scoreB !== scoreA) return scoreB - scoreA
+    if (a.evidenceTier === 'sourced' && b.evidenceTier !== 'sourced') return -1
+    if (b.evidenceTier === 'sourced' && a.evidenceTier !== 'sourced') return 1
+    return 0
+  })
+
+  // v0.6: Derive primaryBenefit if the LLM didn't provide one
+  for (const rec of recommendations) {
+    if (!rec.primaryBenefit) {
+      // Derive from principle numbers
+      const principles = rec.principleNumbers || []
+      if (principles.includes(1)) {
+        rec.primaryBenefit = 'Reduces direct chemical waste'
+      } else if (principles.includes(3)) {
+        rec.primaryBenefit = 'Lowers toxicity and hazard exposure'
+      } else if (principles.includes(5)) {
+        rec.primaryBenefit = 'Replaces hazardous solvent with safer alternative'
+      } else if (principles.includes(6)) {
+        rec.primaryBenefit = 'Reduces energy consumption'
+      } else if (principles.includes(12)) {
+        rec.primaryBenefit = 'Improves process safety'
+      } else if (principles.includes(9)) {
+        rec.primaryBenefit = 'Enables catalytic efficiency'
+      } else {
+        rec.primaryBenefit = 'Improves green chemistry profile'
+      }
+    }
+  }
+
+  // v0.6: Stamp citation metadata on all recommendations
+  const metadata = getAnalysisMetadata()
+  for (const rec of recommendations) {
+    rec.citationMetadata = {
+      gcaiVersion: metadata.gcaiVersion,
+      generatedAt: metadata.generatedAt,
+    }
+  }
+
   // Phase 3: Assemble revised protocol
   onProgress?.({ type: 'phase', phase: 3, message: 'Assembling revised protocol...' })
   const assembled = await assembleResult(protocolText, parsed.steps, recommendations)
+
+  // Attach process complexity from deterministic scores
+  const complexityScore = deterministicScores?.scores.find(s => s.principle_number === 13)
+  if (complexityScore) {
+    assembled.overallAssessment.processComplexity = {
+      score: complexityScore.score,
+      metrics: {
+        transfer_count: complexityScore.details.transfer_count as number,
+        vessel_count: complexityScore.details.vessel_count as number,
+        prep_count: complexityScore.details.prep_count as number,
+        purification_count: complexityScore.details.purification_count as number,
+        step_count: complexityScore.details.step_count as number,
+      },
+      level: complexityScore.details.complexity_level as string,
+    }
+  }
+
   onProgress?.({ type: 'phase', phase: 3, message: 'Assembly complete' })
 
   return {
@@ -556,6 +757,8 @@ export async function analyzeProtocol(
     overallAssessment: assembled.overallAssessment,
     deterministicScores,
     enrichedChemicals,
+    analysisMetadata: metadata,
+    wasteAnalysis,
     chemistryDataStatus: {
       pending: unresolvedChemicals.size > 0,
       unresolvedChemicals: Array.from(unresolvedChemicals).sort((a, b) => a.localeCompare(b)),
