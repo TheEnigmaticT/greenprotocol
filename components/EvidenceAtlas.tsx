@@ -67,6 +67,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
   const metadata = analysis.analysisMetadata
 
   const [citeOpen, setCiteOpen] = useState(false)
+  const [chemicalsOpen, setChemicalsOpen] = useState(false)
   const citeDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -203,56 +204,73 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
           )}
         </div>
 
-        {/* Chemicals of Concern — deduplicated across all principles */}
+        {/* Chemicals of Concern — collapsed by default, deduplicated across all principles */}
         {flaggedChemicals.length > 0 && (
           <section id="chemicals" className="scroll-mt-20 mb-12">
-            <h2 className="text-lg font-bold font-[family-name:var(--font-serif)] mb-1" style={{ color: '#1C1917' }}>
-              Chemicals of Concern
-            </h2>
-            <p className="text-xs mb-4" style={{ color: '#78716C' }}>
-              Each chemical flagged in this protocol, listed once. The principles column shows which scoring dimensions flagged it.
+            <button
+              onClick={() => setChemicalsOpen(v => !v)}
+              className="flex items-center gap-2 w-full text-left group"
+            >
+              <h2 className="text-lg font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C1917' }}>
+                Chemicals of Concern
+              </h2>
+              <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#FEF2F2', color: '#991B1B', fontFamily: 'var(--font-mono)' }}>
+                {flaggedChemicals.length}
+              </span>
+              <svg
+                className="w-4 h-4 ml-auto transition-transform"
+                style={{ color: '#A8A29E', transform: chemicalsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <p className="text-xs mt-1 mb-3" style={{ color: '#78716C' }}>
+              Each flagged chemical listed once — see which principles flagged it and its GHS hazard codes.
             </p>
-            <div className="rounded-lg overflow-hidden" style={{ border: '1px solid #E7E5E4' }}>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr style={{ background: '#F0EBE1' }}>
-                    <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>Chemical</th>
-                    <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>Flagged in</th>
-                    <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>GHS Hazards</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {flaggedChemicals.map(([chem, principles], i) => {
-                    const enriched = analysis.enrichedChemicals?.find(
-                      (e) => e.name.toLowerCase() === chem.toLowerCase()
-                    )
-                    return (
-                      <tr key={chem} style={{ background: i % 2 === 0 ? '#FAFAF8' : '#F6F3EB', borderTop: '1px solid #E7E5E4' }}>
-                        <td className="px-3 py-2 font-semibold font-[family-name:var(--font-mono)]" style={{ color: '#991B1B' }}>
-                          {chem}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex flex-wrap gap-1">
-                            {principles.map(pn => (
-                              <a key={pn} href={`#p${pn}`} className="hover:opacity-70 transition-opacity"
-                                style={{ background: '#ECB815', color: '#1C3822', padding: '0.05rem 0.4rem', borderRadius: '3px', fontSize: '0.6rem', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                                P{pn}
-                              </a>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2" style={{ color: '#57534E' }}>
-                          {enriched?.ghs_hazards && enriched.ghs_hazards.length > 0
-                            ? enriched.ghs_hazards.slice(0, 3).map(h => h.code).join(', ')
-                            : <span style={{ color: '#A8A29E' }}>—</span>
-                          }
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {chemicalsOpen && (
+              <div className="rounded-lg overflow-hidden" style={{ border: '1px solid #E7E5E4' }}>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ background: '#F0EBE1' }}>
+                      <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>Chemical</th>
+                      <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>Flagged in</th>
+                      <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>GHS Hazards</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {flaggedChemicals.map(([chem, principles], i) => {
+                      const enriched = analysis.enrichedChemicals?.find(
+                        (e) => e.name.toLowerCase() === chem.toLowerCase()
+                      )
+                      return (
+                        <tr key={chem} style={{ background: i % 2 === 0 ? '#FAFAF8' : '#F6F3EB', borderTop: '1px solid #E7E5E4' }}>
+                          <td className="px-3 py-2 font-semibold font-[family-name:var(--font-mono)]" style={{ color: '#991B1B' }}>
+                            {chem}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-1">
+                              {principles.map(pn => (
+                                <a key={pn} href={`#p${pn}`} className="hover:opacity-70 transition-opacity"
+                                  style={{ background: '#ECB815', color: '#1C3822', padding: '0.05rem 0.4rem', borderRadius: '3px', fontSize: '0.6rem', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                  P{pn}
+                                </a>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2" style={{ color: '#57534E' }}>
+                            {enriched?.ghs_hazards && enriched.ghs_hazards.length > 0
+                              ? enriched.ghs_hazards.slice(0, 3).map(h => h.code).join(', ')
+                              : <span style={{ color: '#A8A29E' }}>—</span>
+                            }
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 

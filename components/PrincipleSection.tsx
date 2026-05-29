@@ -311,6 +311,32 @@ export default function PrincipleSection({
         <DetailBlock details={score.details} />
       )}
 
+      {/* Flagged chemicals — deduplicated per principle */}
+      {score && score.chemicals_flagged.length > 0 && (
+        <div className="mb-4">
+          <h4 className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#7C2D36', fontFamily: 'var(--font-mono)', letterSpacing: '0.12em' }}>
+            Flagged Chemicals
+          </h4>
+          <div className="flex flex-wrap gap-1">
+            {[...new Set(score.chemicals_flagged)].map((chem) => {
+              const enriched = enrichedChemicals?.find(
+                (e) => e.name.toLowerCase() === chem.toLowerCase()
+              )
+              return (
+                <span
+                  key={chem}
+                  className="text-xs px-2 py-0.5 rounded border font-[family-name:var(--font-mono)]"
+                  style={{ background: '#FEF2F2', borderColor: '#FECACA', color: '#991B1B' }}
+                  title={enriched?.ghs_hazards?.map((h) => `${h.code}: ${h.description}`).join(' · ')}
+                >
+                  {chem}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Recommendations */}
       {recommendations.length > 0 && (
         <div className="mb-4">
