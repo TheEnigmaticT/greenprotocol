@@ -192,7 +192,7 @@ export default function AnalyzePage() {
 
         {data.analysis.deterministicScores && (
           <section className="p-6 rounded-xl print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
-            <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} />
+            <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} analysisId={data.id} />
           </section>
         )}
 

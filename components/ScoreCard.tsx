@@ -143,11 +143,12 @@ function ScoreBar({ score }: { score: PrincipleScore }) {
 }
 
 
-export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrading }: {
+export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrading, analysisId }: {
   scores: DeterministicScores
   projectedScores?: DeterministicScores | null
   onRegrade?: () => void
   isRegrading?: boolean
+  analysisId?: string
 }) {
   const gradeColor = GRADE_COLORS[scores.grade] || GRADE_COLORS.C
   const projGradeColor = projectedScores ? (GRADE_COLORS[projectedScores.grade] || GRADE_COLORS.C) : null
@@ -165,10 +166,29 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h3 className="text-lg font-semibold font-[family-name:var(--font-serif)]"
-            style={{ color: '#1C1917' }}>
-          Green Chemistry Scorecard
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold font-[family-name:var(--font-serif)]"
+              style={{ color: '#1C1917' }}>
+            Green Chemistry Scorecard
+          </h3>
+          {analysisId && (
+            <a
+              href={`/analyze/${analysisId}/evidence`}
+              aria-label="View Evidence Atlas for this analysis"
+              className="hover:opacity-70 transition-opacity"
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.65rem',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                color: '#ECB815',
+                textDecoration: 'none',
+              }}
+            >
+              EVIDENCE ATLAS →
+            </a>
+          )}
+        </div>
         <div className="flex items-center justify-between sm:justify-end gap-3 bg-white/50 p-2 sm:p-0 rounded-lg sm:bg-transparent">
           {projectedScores && projectedScores.grade !== scores.grade ? (
             <>
