@@ -26,6 +26,88 @@ function ScoreBadge({ score, maxScore, confidence }: { score: number; maxScore: 
   )
 }
 
+// Fields that are internal scoring machinery — not meaningful to display
+const SKIP_DETAIL_FIELDS = new Set([
+  'products', 'reactants', 'balance', 'balance_detail', 'warnings',
+  'reasoning', 'error', 'methodology_note',
+])
+
+function renderDetailValue(key: string, val: unknown): string | null {
+  if (val == null) return '—'
+  if (typeof val === 'boolean') return val ? 'yes' : 'no'
+  if (typeof val === 'number') return Number.isInteger(val) ? String(val) : val.toFixed(3)
+  if (typeof val === 'string') return val
+  if (Array.isArray(val)) {
+    // Array of plain strings — join them
+    if (val.every(v => typeof v === 'string' || typeof v === 'number')) {
+      return val.join(', ')
+    }
+    // Array of objects — skip (too complex for inline display)
+    return null
+  }
+  // Skip nested objects
+  return null
+}
+
+function DetailBlock({ details }: { details: Record<string, unknown> }) {
+  const summary = details._summary != null ? String(details._summary) : null
+
+  // Separate SMILES from regular scalar rows
+  const smiles = typeof details.reaction_smiles === 'string' ? details.reaction_smiles : null
+  const detailWarnings = Array.isArray(details.warnings)
+    ? details.warnings.filter(w => typeof w === 'string') as string[]
+    : typeof details.warnings === 'string' ? [details.warnings] : []
+
+  const rows = Object.entries(details).filter(([key, val]) => {
+    if (SKIP_DETAIL_FIELDS.has(key) || key === '_summary' || key === 'reaction_smiles') return false
+    return renderDetailValue(key, val) !== null
+  })
+
+  if (!summary && rows.length === 0 && !smiles && detailWarnings.length === 0) return null
+
+  return (
+    <div className="mb-4 p-3 rounded-lg" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
+      <h4 className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#1C1917', letterSpacing: '0.12em', fontFamily: 'var(--font-mono)' }}>
+        Scoring Details
+      </h4>
+      {summary && (
+        <p className="text-sm mb-3 italic" style={{ color: '#57534E' }}>{summary}</p>
+      )}
+      {rows.length > 0 && (
+        <div className="space-y-1.5">
+          {rows.map(([key, val]) => (
+            <div key={key} className="grid gap-1" style={{ gridTemplateColumns: '10rem 1fr' }}>
+              <span className="text-xs shrink-0" style={{ color: '#78716C' }}>
+                {key.replace(/_/g, ' ')}
+              </span>
+              <span className="text-xs font-[family-name:var(--font-mono)] break-all" style={{ color: '#1C1917' }}>
+                {renderDetailValue(key, val)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {smiles && (
+        <div className="mt-2 pt-2 border-t" style={{ borderColor: '#E7E5E4' }}>
+          <span className="text-[10px] uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)' }}>
+            reaction smiles
+          </span>
+          <p className="text-[10px] break-all mt-0.5 font-[family-name:var(--font-mono)]" style={{ color: '#A8A29E' }}>
+            {smiles}
+          </p>
+        </div>
+      )}
+      {detailWarnings.length > 0 && (
+        <div className="mt-2 pt-2 border-t" style={{ borderColor: '#E7E5E4' }}>
+          {detailWarnings.map((w, i) => (
+            <p key={i} className="text-xs" style={{ color: '#D97706' }}>⚠ {w}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface PrincipleSectionProps {
   principleNumber: number
   principleName: string
@@ -170,26 +252,7 @@ export default function PrincipleSection({
 
       {/* Principle-specific detail data (from deterministic scores) */}
       {score && Object.keys(score.details).length > 0 && principleNumber !== 1 && (
-        <div className="mb-4 p-3 rounded-lg" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
-          <h4 className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#1C1917' }}>
-            Scoring Details
-          </h4>
-          <div className="space-y-1">
-            {score.details._summary != null && (
-              <p className="text-sm mb-3 italic" style={{ color: '#57534E' }}>
-                {String(score.details._summary)}
-              </p>
-            )}
-            {Object.entries(score.details)
-              .filter(([key]) => key !== '_summary')
-              .map(([key, val]) => (
-                <div key={key} className="flex justify-between text-sm py-0.5">
-                  <span style={{ color: '#78716C' }}>{key.replace(/_/g, ' ')}</span>
-                  <span className="font-mono" style={{ color: '#1C1917' }}>{String(val ?? '—')}</span>
-                </div>
-              ))}
-          </div>
-        </div>
+        <DetailBlock details={score.details} />
       )}
 
       {/* Flagged chemicals */}
@@ -257,18 +320,19 @@ export default function PrincipleSection({
                   )}
                   {/* Evidence tier badge */}
                   {(rec.evidenceTier ?? 'inferred') === 'sourced' ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: '#DCFCE7', color: '#166534' }}>
                       Literature-backed
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/50">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: '#FEF3C7', color: '#92400E' }}>
                       Model-inferred
                     </span>
                   )}
                   {analysisId && rec.citationMetadata && (
                     <button
                       title="Copy citation for this recommendation"
-                      className="text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"
+                      className="transition-opacity hover:opacity-60 ml-auto"
+                      style={{ color: '#A8A29E' }}
                       onClick={() => {
                         navigator.clipboard.writeText(buildRecommendationCitationString(rec, analysisId)).catch(() => {})
                       }}
@@ -309,11 +373,11 @@ export default function PrincipleSection({
                 )}
                 {/* Model reasoning — shown when no literature citations */}
                 {(rec.evidenceTier ?? 'inferred') === 'inferred' && rec.alternative.rationale && (
-                  <div className="mt-3 rounded-md bg-amber-950/30 border border-amber-800/30 p-3">
-                    <p className="text-xs font-medium text-amber-400/80 uppercase tracking-wide mb-1">
+                  <div className="mt-3 p-3 rounded" style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#92400E', fontFamily: 'var(--font-mono)' }}>
                       Model reasoning
                     </p>
-                    <p className="text-sm text-zinc-300">{rec.alternative.rationale}</p>
+                    <p className="text-xs" style={{ color: '#78350F' }}>{rec.alternative.rationale}</p>
                   </div>
                 )}
               </div>

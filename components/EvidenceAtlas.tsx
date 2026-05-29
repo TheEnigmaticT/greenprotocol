@@ -144,17 +144,29 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
               <div className="relative inline-block print:hidden" ref={citeDropdownRef}>
                 <button
                   onClick={() => setCiteOpen(v => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors"
+                  className="flex items-center gap-1.5 transition-opacity hover:opacity-70"
+                  style={{
+                    padding: '0.3rem 0.75rem',
+                    borderRadius: '4px',
+                    fontSize: '0.7rem',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    background: '#1C3822',
+                    color: '#F6F3EB',
+                    border: 'none',
+                  }}
                 >
-                  Cite
+                  CITE
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 {citeOpen && (
-                  <div className="absolute right-0 mt-1 w-48 rounded-md bg-zinc-800 border border-zinc-700 shadow-lg z-10">
+                  <div className="absolute right-0 mt-1 w-52 rounded shadow-lg z-10" style={{ background: '#F6F3EB', border: '1px solid #D6D0C4' }}>
                     <button
-                      className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 rounded-t-md"
+                      className="w-full text-left px-4 py-2 text-xs hover:opacity-70 transition-opacity rounded-t"
+                      style={{ color: '#1C1917', fontFamily: 'var(--font-mono)' }}
                       onClick={() => {
                         navigator.clipboard.writeText(buildCitationString(metadata)).catch(() => {})
                         setCiteOpen(false)
@@ -163,7 +175,8 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                       Copy citation (plain text)
                     </button>
                     <button
-                      className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 rounded-b-md"
+                      className="w-full text-left px-4 py-2 text-xs hover:opacity-70 transition-opacity rounded-b border-t"
+                      style={{ color: '#1C1917', fontFamily: 'var(--font-mono)', borderColor: '#D6D0C4' }}
                       onClick={() => {
                         navigator.clipboard.writeText(buildBibtexCitation(metadata, analysisId)).catch(() => {})
                         setCiteOpen(false)
@@ -210,13 +223,13 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                     Complexity Score: {analysis.overallAssessment.processComplexity.score}/10
                   </span>
                   <span
-                    className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
-                      analysis.overallAssessment.processComplexity.level === 'low'
-                        ? 'bg-green-100 text-green-700'
-                        : analysis.overallAssessment.processComplexity.level === 'medium'
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}
+                    className="text-[10px] px-2 py-0.5 rounded font-bold uppercase"
+                    style={{
+                      background: analysis.overallAssessment.processComplexity.level === 'low' ? '#F0FDF4'
+                        : analysis.overallAssessment.processComplexity.level === 'medium' ? '#FEF3C7' : '#FEF2F2',
+                      color: analysis.overallAssessment.processComplexity.level === 'low' ? '#16a34a'
+                        : analysis.overallAssessment.processComplexity.level === 'medium' ? '#D97706' : '#DC2626',
+                    }}
                   >
                     {analysis.overallAssessment.processComplexity.level}
                   </span>
@@ -229,13 +242,13 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                     { label: 'Preps', value: analysis.overallAssessment.processComplexity.metrics.prep_count },
                     { label: 'Purifications', value: analysis.overallAssessment.processComplexity.metrics.purification_count },
                   ].map((m) => (
-                    <div key={m.label} className="p-2 rounded bg-white/60">
-                      <div className="text-lg font-bold">{m.value}</div>
-                      <div className="text-[9px] uppercase text-stone-500">{m.label}</div>
+                    <div key={m.label} className="p-2 rounded" style={{ background: 'rgba(255,255,255,0.6)' }}>
+                      <div className="text-lg font-bold" style={{ color: '#1C1917' }}>{m.value}</div>
+                      <div className="text-[9px] uppercase" style={{ color: '#A8A29E', fontFamily: 'var(--font-mono)' }}>{m.label}</div>
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-[10px] text-stone-500 italic">
+                <p className="mt-3 text-[10px] italic" style={{ color: '#A8A29E' }}>
                   Complexity metrics serve as proxies for waste (transfer loss), failure risk, and operator burden.
                 </p>
               </div>
