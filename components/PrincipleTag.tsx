@@ -3,7 +3,7 @@ const PRINCIPLE_COLORS: Record<string, { bg: string; text: string }> = {
   '1': { bg: '#DCFCE7', text: '#15803d' },
   '2': { bg: '#DCFCE7', text: '#16a34a' },
   '3': { bg: '#DCFCE7', text: '#2D6A4F' },
-  '4': { bg: '#DCFCE7', text: '#1B4332' },
+  '4': { bg: '#DCFCE7', text: '#1C3822' },
   // Principles 5-8: blues (materials)
   '5': { bg: '#DBEAFE', text: '#1d4ed8' },
   '6': { bg: '#DBEAFE', text: '#2563eb' },

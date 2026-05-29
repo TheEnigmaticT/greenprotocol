@@ -69,7 +69,7 @@ export default function ScaleUpProjection({ analysis }: { analysis: AnalysisResu
                 onChange={(e) => setRunsPerYear(Math.max(1, Number(e.target.value) || 1))}
                 className="w-full px-3 py-2 rounded-lg border font-[family-name:var(--font-mono)] text-sm focus:outline-none"
                 style={{ background: '#F5F0E8', color: '#1C1917', borderColor: '#D6D0C4' }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#1C3822')}
                 onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
               />
             </div>
@@ -84,7 +84,7 @@ export default function ScaleUpProjection({ analysis }: { analysis: AnalysisResu
                 onChange={(e) => setLabsWorldwide(Math.max(1, Number(e.target.value) || 1))}
                 className="w-full px-3 py-2 rounded-lg border font-[family-name:var(--font-mono)] text-sm focus:outline-none"
                 style={{ background: '#F5F0E8', color: '#1C1917', borderColor: '#D6D0C4' }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+                onFocus={(e) => (e.currentTarget.style.borderColor = '#1C3822')}
                 onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
               />
             </div>

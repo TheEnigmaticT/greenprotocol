@@ -252,7 +252,7 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
             onClick={onRegrade}
             disabled={isRegrading}
             className="text-[10px] sm:text-xs px-4 py-2 rounded border font-bold uppercase tracking-wider transition-colors disabled:opacity-50 w-full sm:w-auto"
-            style={{ color: '#1B4332', borderColor: '#1B4332', background: 'white' }}
+            style={{ color: '#1C3822', borderColor: '#1C3822', background: 'white' }}
           >
             {isRegrading ? 'Re-grading...' : 'Re-grade with accepted changes'}
           </button>

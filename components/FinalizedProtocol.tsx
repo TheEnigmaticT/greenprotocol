@@ -137,7 +137,7 @@ export default function FinalizedProtocol({
           <button
             onClick={() => window.print()}
             className="print:hidden text-xs px-4 py-2 rounded border flex items-center justify-center gap-2 transition-colors w-full sm:w-auto"
-            style={{ color: '#1B4332', borderColor: '#D6D0C4', background: 'white' }}
+            style={{ color: '#1C3822', borderColor: '#D6D0C4', background: 'white' }}
           >
             Print Lab Manual
           </button>
@@ -236,7 +236,7 @@ export default function FinalizedProtocol({
         {/* Finalized protocol text — reflects accepted changes and keeps declined items unchanged */}
         {shouldShowFinalizedProtocol && (
           <div>
-            <h3 className="text-sm font-semibold mb-2" style={{ color: '#1B4332' }}>{procedureTitle}</h3>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: '#1C3822' }}>{procedureTitle}</h3>
             {pending.length > 0 && (
               <p
                 className="text-xs p-3 rounded mb-3"

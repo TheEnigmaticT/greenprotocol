@@ -32,7 +32,7 @@ export default function UserMenu() {
     router.refresh()
   }
 
-  const textColor = isDark ? '#86efac' : '#1B4332'
+  const textColor = isDark ? '#86efac' : '#1C3822'
   const mutedColor = isDark ? '#86efac' : '#78716C'
   const borderColor = isDark ? '#15803d' : '#D6D0C4'
 

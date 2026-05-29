@@ -30,7 +30,7 @@ function PrincipleItem({ num, name, short }: { num: number; name: string; short:
       <div className="pt-1 min-w-0">
         <h3
           className="font-[family-name:var(--font-serif)] font-bold text-base mb-0.5"
-          style={{ color: '#1B4332' }}
+          style={{ color: '#1C3822' }}
         >
           {name}
         </h3>

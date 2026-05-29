@@ -109,7 +109,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
         <Link
           href="/"
           className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
-          style={{ color: '#1B4332' }}
+          style={{ color: '#1C3822' }}
         >
           greenchemistry.ai
         </Link>
@@ -117,7 +117,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
           <Link
             href={`/analyze/${analysisId}`}
             className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
-            style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
+            style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
           >
             ← Back to Analysis
           </Link>

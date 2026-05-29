@@ -138,8 +138,8 @@ export default function LandingPage() {
       <style>{COLS}</style>
       <style>{`
         @keyframes showcase-progress {
-          from { width: 0% }
-          to   { width: 100% }
+          from { transform: scaleX(0) }
+          to   { transform: scaleX(1) }
         }
       `}</style>
 
@@ -441,8 +441,9 @@ export default function LandingPage() {
                     <span
                       key={id + String(showcasePaused)}
                       style={{
-                        position:'absolute', bottom:0, left:0, height:'2px',
+                        position:'absolute', bottom:0, left:0, height:'2px', width:'100%',
                         background: C.black, opacity: 0.35,
+                        transformOrigin: 'left',
                         animation: `showcase-progress 10s linear ${showcasePaused ? 'paused' : 'running'}`,
                       }}
                     />

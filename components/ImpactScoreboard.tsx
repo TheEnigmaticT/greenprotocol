@@ -188,7 +188,7 @@ export default function ImpactScoreboard({
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm" style={{ color: '#57534E' }}>
           {equivalencies.map((eq, i) => (
             <span key={i}>
-              {eq.icon} <strong className="font-[family-name:var(--font-mono)]" style={{ color: '#1B4332' }}>{eq.value}</strong> {eq.description}
+              {eq.icon} <strong className="font-[family-name:var(--font-mono)]" style={{ color: '#1C3822' }}>{eq.value}</strong> {eq.description}
               {i < equivalencies.length - 1 && <span style={{ color: '#D6D0C4' }}> · </span>}
             </span>
           ))}
