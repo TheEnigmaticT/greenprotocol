@@ -142,7 +142,8 @@ export default function EvidenceSidebar({
       {/* Overlay for mobile when sidebar is open */}
       {!collapsed && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/20 z-30 print:hidden"
+          className="lg:hidden fixed inset-0 z-30 print:hidden"
+          style={{ background: 'rgba(28, 56, 34, 0.5)' }}
           onClick={() => setCollapsed(true)}
         />
       )}

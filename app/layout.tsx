@@ -39,6 +39,13 @@ export default function RootLayout({
       <body
         className={`${ibmPlexMono.variable} ${libreBaskerville.variable} antialiased`}
       >
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded focus:text-sm focus:font-bold"
+          style={{ background: '#ECB815', color: '#1C3822' }}
+        >
+          Skip to main content
+        </a>
         {children}
       </body>
     </html>

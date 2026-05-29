@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
 import { calculateOriginalTotals } from '@/lib/calculations'
 import { projectScores } from '@/lib/projected-scores'
@@ -22,9 +23,20 @@ interface StoredData {
 }
 
 export default function AnalyzePage() {
+  const router = useRouter()
   const [data, setData] = useState<StoredData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [persistError, setPersistError] = useState<string | null>(null)
+
+  function handleNewAnalysis() {
+    const hasAccepted = data?.analysis.recommendations.some(r => r.isAccepted)
+    if (hasAccepted) {
+      if (!window.confirm('Starting a new analysis will clear your current results, including any accepted recommendations. Continue?')) return
+    }
+    sessionStorage.removeItem('gpc_analysis')
+    sessionStorage.removeItem('gpc_protocol')
+    router.push('/')
+  }
 
   useEffect(() => {
     const stored = sessionStorage.getItem('gpc_analysis')
@@ -116,8 +128,8 @@ export default function AnalyzePage() {
   if (!loaded) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
-        <div className="text-center space-y-4">
-          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#1C3822', borderTopColor: 'transparent' }} />
+        <div role="status" aria-label="Loading analysis" className="text-center space-y-4">
+          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#1C3822', borderTopColor: 'transparent' }} aria-hidden="true" />
           <p style={{ color: '#78716C' }}>Loading analysis...</p>
         </div>
       </div>
@@ -164,13 +176,13 @@ export default function AnalyzePage() {
           greenchemistry.ai
         </Link>
         <div className="flex items-center gap-2 sm:gap-4">
-          <Link
-            href="/"
-            className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
-            style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
+          <button
+            onClick={handleNewAnalysis}
+            className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)] hover:border-[#1C3822] cursor-pointer"
+            style={{ color: '#1C3822', borderColor: '#D6D0C4', background: 'transparent' }}
           >
             New Analysis
-          </Link>
+          </button>
           <UserMenu />
         </div>
       </header>

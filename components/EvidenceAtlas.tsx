@@ -258,11 +258,37 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                               ))}
                             </div>
                           </td>
-                          <td className="px-3 py-2" style={{ color: '#57534E' }}>
-                            {enriched?.ghs_hazards && enriched.ghs_hazards.length > 0
-                              ? enriched.ghs_hazards.slice(0, 3).map(h => h.code).join(', ')
-                              : <span style={{ color: '#A8A29E' }}>—</span>
-                            }
+                          <td className="px-3 py-2">
+                            {enriched?.ghs_hazards && enriched.ghs_hazards.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {enriched.ghs_hazards.slice(0, 4).map(h => (
+                                  <span
+                                    key={h.code}
+                                    title={h.description}
+                                    className="cursor-help"
+                                    style={{
+                                      fontFamily: 'var(--font-mono)',
+                                      fontSize: '0.6rem',
+                                      fontWeight: 700,
+                                      padding: '0.1rem 0.4rem',
+                                      borderRadius: '3px',
+                                      background: '#FEF2F2',
+                                      color: '#991B1B',
+                                      border: '1px solid #FECACA',
+                                    }}
+                                  >
+                                    {h.code}
+                                  </span>
+                                ))}
+                                {enriched.ghs_hazards.length > 4 && (
+                                  <span style={{ color: '#A8A29E', fontSize: '0.6rem' }}>
+                                    +{enriched.ghs_hazards.length - 4}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#A8A29E' }}>—</span>
+                            )}
                           </td>
                         </tr>
                       )
