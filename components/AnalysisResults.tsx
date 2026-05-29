@@ -2,7 +2,7 @@
 
 import PrincipleTag from './PrincipleTag'
 import QuickWins from './QuickWins'
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { AnalysisResult, Recommendation, Evidence } from '@/lib/types'
 import Link from 'next/link'
 import WasteScoreCard from './WasteScoreCard'
@@ -200,18 +200,50 @@ function RecommendationCard({
   )
 }
 
-export default function AnalysisResults({ 
-  analysis, 
-  originalProtocol, 
+type FilterMode = 'all' | 'high' | 'medium' | 'low' | 'unreviewed'
+const SEVERITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 }
+
+export default function AnalysisResults({
+  analysis,
+  originalProtocol,
   onUpdateAnalysis,
   analysisId,
-}: { 
-  analysis: AnalysisResult; 
-  originalProtocol: string; 
+}: {
+  analysis: AnalysisResult;
+  originalProtocol: string;
   onUpdateAnalysis?: (updated: AnalysisResult) => void;
   analysisId?: string;
 }) {
   const [viewMode, setViewMode] = useState<'full' | 'quick'>('full')
+
+  const [filterMode, setFilterMode] = useState<FilterMode>('all')
+
+  const filteredRecs = useMemo(() => {
+    return analysis.recommendations
+      .map((rec, i) => ({ rec, originalIndex: i }))
+      .sort((a, b) => (SEVERITY_RANK[a.rec.severity] ?? 3) - (SEVERITY_RANK[b.rec.severity] ?? 3))
+      .filter(({ rec }) => {
+        if (filterMode === 'all') return true
+        if (filterMode === 'unreviewed') return !rec.isAccepted
+        return rec.severity === filterMode
+      })
+  }, [analysis.recommendations, filterMode])
+
+  const recCounts = useMemo(() => ({
+    high:           analysis.recommendations.filter(r => r.severity === 'high').length,
+    highUnaccepted: analysis.recommendations.filter(r => r.severity === 'high' && !r.isAccepted).length,
+    medium:         analysis.recommendations.filter(r => r.severity === 'medium').length,
+    low:            analysis.recommendations.filter(r => r.severity === 'low').length,
+    unreviewed:     analysis.recommendations.filter(r => !r.isAccepted).length,
+  }), [analysis.recommendations])
+
+  const handleAcceptAllHigh = useCallback(() => {
+    if (!onUpdateAnalysis) return
+    const updated = analysis.recommendations.map(rec =>
+      rec.severity === 'high' ? { ...rec, isAccepted: true } : rec
+    )
+    onUpdateAnalysis({ ...analysis, recommendations: updated })
+  }, [analysis, onUpdateAnalysis])
 
   const toggleRecommendation = (index: number) => {
     if (!onUpdateAnalysis) return
@@ -314,27 +346,69 @@ export default function AnalysisResults({
           {/* Recommendations */}
           {analysis.recommendations.length > 0 ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-semibold" style={{ color: '#1C1917' }}>
-                  Recommendations ({analysis.recommendations.length})
-                </h3>
-                {analysis.recommendations.filter(r => r.isAccepted).length > 0 && (
-                  <span
-                    className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                    style={{ background: '#DCFCE7', color: '#16a34a' }}
+              <div className="space-y-3">
+                {/* Filter tabs */}
+                <div className="flex flex-wrap items-center gap-1">
+                  {([
+                    ['all',        `All (${analysis.recommendations.length})`],
+                    ['high',       `HIGH (${recCounts.high})`],
+                    ['medium',     `MEDIUM (${recCounts.medium})`],
+                    ['low',        `LOW (${recCounts.low})`],
+                    ['unreviewed', `Unreviewed (${recCounts.unreviewed})`],
+                  ] as const).map(([id, label]) => (
+                    <button
+                      key={id}
+                      onClick={() => setFilterMode(id)}
+                      className="text-xs font-bold uppercase tracking-wider transition-colors"
+                      style={{
+                        padding: '0.3rem 0.75rem',
+                        borderRadius: '4px',
+                        border: filterMode === id
+                          ? '1px solid #1C3822'
+                          : '1px solid #D6D0C4',
+                        background: filterMode === id ? '#1C3822' : 'transparent',
+                        color: filterMode === id ? '#F6F3EB' : '#78716C',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Bulk accept */}
+                {recCounts.highUnaccepted > 0 && onUpdateAnalysis && (
+                  <button
+                    onClick={handleAcceptAllHigh}
+                    className="text-xs font-bold uppercase tracking-wider transition-opacity hover:opacity-80"
+                    style={{
+                      padding: '0.35rem 0.875rem',
+                      border: '1px solid #DC2626',
+                      borderRadius: '4px',
+                      color: '#DC2626',
+                      fontFamily: 'var(--font-mono)',
+                      background: 'transparent',
+                      letterSpacing: '0.06em',
+                    }}
                   >
-                    {analysis.recommendations.filter(r => r.isAccepted).length} accepted
-                  </span>
+                    Accept all HIGH severity ({recCounts.highUnaccepted})
+                  </button>
                 )}
               </div>
-              {analysis.recommendations.map((rec, i) => (
-                <RecommendationCard 
-                  key={i} 
-                  rec={rec} 
-                  onToggleAccept={() => toggleRecommendation(i)}
-                  analysisId={analysisId}
-                />
-              ))}
+              {filteredRecs.length === 0 ? (
+                <div className="py-8 text-center" style={{ color: '#A8A29E', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                  No recommendations match this filter.
+                </div>
+              ) : (
+                filteredRecs.map(({ rec, originalIndex }) => (
+                  <RecommendationCard
+                    key={originalIndex}
+                    rec={rec}
+                    onToggleAccept={() => toggleRecommendation(originalIndex)}
+                    analysisId={analysisId}
+                  />
+                ))
+              )}
             </div>
           ) : (
             <div className="p-6 rounded-lg text-center" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
