@@ -25,11 +25,11 @@ export default function QuickWins({ recommendations }: QuickWinProps) {
 
   return (
     <div className="space-y-6">
-      <div className="border-l-4 border-[#16a34a] pl-4 py-1">
+      <div className="pb-4" style={{ borderBottom: '2px solid #ECB815' }}>
         <h3 className="text-xl font-bold text-[#1C1917] font-[family-name:var(--font-serif)]">
           Purchasing Accelerator
         </h3>
-        <p className="text-sm text-[#78716C]">
+        <p className="text-sm" style={{ color: '#78716C' }}>
           Direct drop-in replacements available from Millipore Sigma
         </p>
       </div>

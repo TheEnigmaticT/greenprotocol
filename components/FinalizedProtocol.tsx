@@ -2,7 +2,6 @@
 
 import { AnalysisResult, Recommendation } from '@/lib/types'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
-import PrincipleTag from './PrincipleTag'
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -49,12 +48,6 @@ function PendingCard({ rec, onAccept, onDecline }: {
             Decline
           </button>
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1">
-        {(Array.isArray(rec.principleNumbers) ? rec.principleNumbers : []).map((n) => (
-          <PrincipleTag key={n} number={n} />
-        ))}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
