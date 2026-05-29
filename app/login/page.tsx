@@ -33,25 +33,29 @@ function LoginForm() {
     setLoading(true)
     setError(null)
 
-    const authFn = isSignUp
-      ? supabase.auth.signUp({ email, password })
-      : supabase.auth.signInWithPassword({ email, password })
+    try {
+      const authFn = isSignUp
+        ? supabase.auth.signUp({ email, password })
+        : supabase.auth.signInWithPassword({ email, password })
 
-    const { error } = await authFn
+      const { error } = await authFn
 
-    if (error) {
-      setError(error.message)
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      if (isSignUp) {
+        setError('Check your email for a confirmation link.')
+        return
+      }
+
+      router.push('/analyze')
+    } catch {
+      setError('Something went wrong. Check your connection and try again.')
+    } finally {
       setLoading(false)
-      return
     }
-
-    if (isSignUp) {
-      setError('Check your email for a confirmation link.')
-      setLoading(false)
-      return
-    }
-
-    router.push('/analyze')
   }
 
   return (
@@ -98,9 +102,16 @@ function LoginForm() {
           )}
 
           {(error || searchError) && (
-            <p className="text-sm" style={{ color: (error || searchError || '').includes('Check your email') ? '#16a34a' : '#EF4444' }}>
+            <div
+              className="p-3 rounded-lg text-sm"
+              style={{
+                background: (error || searchError || '').includes('Check your email') ? '#F0FDF4' : '#FEF2F2',
+                color: (error || searchError || '').includes('Check your email') ? '#16a34a' : '#DC2626',
+                border: `1px solid ${(error || searchError || '').includes('Check your email') ? '#BBF7D0' : '#FECACA'}`,
+              }}
+            >
               {error || searchError}
-            </p>
+            </div>
           )}
 
           <button
