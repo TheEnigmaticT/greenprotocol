@@ -950,7 +950,7 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
             <div style={{width:'40px', height:'2px', background:C.forest, margin:'2rem 0'}} />
             <p style={{fontFamily:SERIF, color:C.forest, fontSize:'0.95rem',
               lineHeight:1.75, maxWidth:'38ch', margin:0}}>
-              <span className="dropcap dropcap-forest" aria-hidden="true">C</span>{'ustom integrations, ELN connectors, DOZN export, and team'}
+              Custom integrations, ELN connectors, DOZN export, and team
               dashboards for R&amp;D teams and sustainability officers.
             </p>
           </div>
@@ -961,14 +961,14 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
               background:C.forest, color:C.cream,
               fontFamily:MONO, fontWeight:700, fontSize:'0.85rem',
               letterSpacing:'0.06em', padding:'1.1rem 2rem',
-              textDecoration:'none', textAlign:'center',
-            }}>ANALYZE A PROTOCOL — FREE</Link>
+              textDecoration:'none', textAlign:'center', whiteSpace:'nowrap',
+            }}>ANALYZE A PROTOCOL →</Link>
             <a href="mailto:hello@greenchemistry.ai?subject=Enterprise Demo Request" className="contact-cta-link" style={{
               background:'transparent', color:C.forest,
               border:`2px solid ${C.forest}`,
               fontFamily:MONO, fontWeight:700, fontSize:'0.85rem',
               letterSpacing:'0.06em', padding:'1.1rem 2rem',
-              textDecoration:'none', textAlign:'center',
+              textDecoration:'none', textAlign:'center', whiteSpace:'nowrap',
             }}>REQUEST ENTERPRISE DEMO</a>
             <p style={{fontFamily:MONO, fontSize:'0.65rem', color:C.forest,
               textAlign:'center', margin:'0.5rem 0 0', opacity:0.7,
