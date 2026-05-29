@@ -61,7 +61,7 @@ export default function EvidencePage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
-          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#1B4332', borderTopColor: 'transparent' }} />
+          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#1C3822', borderTopColor: 'transparent' }} />
           <p style={{ color: '#78716C' }}>Loading evidence...</p>
         </div>
       </div>

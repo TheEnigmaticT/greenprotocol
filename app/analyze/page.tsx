@@ -117,7 +117,7 @@ export default function AnalyzePage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
-          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#1B4332', borderTopColor: 'transparent' }} />
+          <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full mx-auto" style={{ borderColor: '#1C3822', borderTopColor: 'transparent' }} />
           <p style={{ color: '#78716C' }}>Loading analysis...</p>
         </div>
       </div>
@@ -131,7 +131,7 @@ export default function AnalyzePage() {
           <Link
             href="/"
             className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
-            style={{ color: '#1B4332' }}
+            style={{ color: '#1C3822' }}
           >
             greenchemistry.ai
           </Link>
@@ -159,7 +159,7 @@ export default function AnalyzePage() {
         <Link
           href="/"
           className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
-          style={{ color: '#1B4332' }}
+          style={{ color: '#1C3822' }}
         >
           greenchemistry.ai
         </Link>
@@ -167,7 +167,7 @@ export default function AnalyzePage() {
           <Link
             href="/"
             className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
-            style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
+            style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
           >
             New Analysis
           </Link>
@@ -219,7 +219,7 @@ export default function AnalyzePage() {
       <footer className="print:hidden border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
         <p className="text-sm" style={{ color: '#78716C' }}>
           Built for{' '}
-          <span className="font-semibold" style={{ color: '#1B4332' }}>LabreNew.org</span>
+          <span className="font-semibold" style={{ color: '#1C3822' }}>LabreNew.org</span>
           {' '}&mdash; Green chemistry recommendations require experimental validation before adoption.
         </p>
       </footer>

@@ -110,7 +110,7 @@ export default async function PublicProfilePage({ params }: Props) {
         <Link
           href="/"
           className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
-          style={{ color: '#1B4332' }}
+          style={{ color: '#1C3822' }}
         >
           greenchemistry.ai
         </Link>
@@ -137,7 +137,7 @@ export default async function PublicProfilePage({ params }: Props) {
               <span className="text-2xl">{s.icon}</span>
               <p
                 className="font-[family-name:var(--font-mono)] font-semibold mt-1"
-                style={{ fontSize: '2.5rem', lineHeight: 1, color: '#1B4332' }}
+                style={{ fontSize: '2.5rem', lineHeight: 1, color: '#1C3822' }}
               >
                 {s.value}
               </p>
@@ -174,7 +174,7 @@ export default async function PublicProfilePage({ params }: Props) {
       <footer className="border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
         <p className="text-sm" style={{ color: '#78716C' }}>
           Built for{' '}
-          <span className="font-semibold" style={{ color: '#1B4332' }}>LabreNew.org</span>
+          <span className="font-semibold" style={{ color: '#1C3822' }}>LabreNew.org</span>
           {' '}&mdash; Green chemistry recommendations require experimental validation before adoption.
         </p>
       </footer>

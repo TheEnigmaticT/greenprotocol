@@ -58,7 +58,7 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#FAF8F3' }}>
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1B4332' }}>
+          <h1 className="text-3xl font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C3822' }}>
             GreenChemistry.ai
           </h1>
           <p className="mt-2 text-sm" style={{ color: '#78716C' }}>
@@ -75,7 +75,7 @@ function LoginForm() {
             required
             className="w-full px-4 py-3 rounded-lg border focus:outline-none transition-colors"
             style={{ background: '#F5F0E8', color: '#1C1917', borderColor: '#D6D0C4' }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#1C3822')}
             onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
           />
           <input
@@ -87,7 +87,7 @@ function LoginForm() {
             minLength={6}
             className="w-full px-4 py-3 rounded-lg border focus:outline-none transition-colors"
             style={{ background: '#F5F0E8', color: '#1C1917', borderColor: '#D6D0C4' }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#1C3822')}
             onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
           />
 
@@ -132,7 +132,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
-        <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full" style={{ borderColor: '#1B4332', borderTopColor: 'transparent' }} />
+        <div className="animate-spin h-8 w-8 border-2 border-t-transparent rounded-full" style={{ borderColor: '#1C3822', borderTopColor: 'transparent' }} />
       </div>
     }>
       <LoginForm />

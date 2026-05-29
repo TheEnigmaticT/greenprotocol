@@ -29,7 +29,7 @@ Next.js 15 (App Router), TypeScript, Tailwind v4, Supabase Auth, Claude Sonnet A
 
 ## Design
 - Dark mode default
-- Palette: forest green (#1B4332), amber (#F59E0B)
+- Palette: forest green (#1C3822), gold (#ECB815)
 - Fonts: IBM Plex Mono (chemicals), Libre Baskerville (headings)
 
 ## Backlog Convention

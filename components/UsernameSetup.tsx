@@ -67,7 +67,7 @@ export default function UsernameSetup({ onComplete }: { onComplete: (profile: Gp
             placeholder="Dr. Green"
             className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
             style={{ color: '#1C1917', background: '#FAF8F3', borderColor: '#D6D0C4' }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#1C3822')}
             onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
             maxLength={50}
           />

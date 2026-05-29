@@ -82,7 +82,7 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
           className="absolute inset-y-0 left-0 rounded-lg transition-all duration-700 ease-out"
           style={{
             width: `${Math.max(pct, 3)}%`,
-            background: 'linear-gradient(90deg, #1B4332, #2D6A4F)',
+            background: 'linear-gradient(90deg, #1C3822, #2D6A4F)',
           }}
         />
         <div className="absolute inset-0 flex items-center justify-center px-4">
@@ -223,7 +223,7 @@ export default function ProtocolInput() {
             key={ex.key}
             onClick={() => { setText(EXAMPLE_PROTOCOLS[ex.key]); setError(null) }}
             className="px-3 py-1.5 text-sm rounded-lg border transition-colors cursor-pointer font-[family-name:var(--font-mono)]"
-            style={{ color: '#1B4332', borderColor: '#D6D0C4' }}
+            style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
             onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C2D36')}
             onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
           >
@@ -239,7 +239,7 @@ export default function ProtocolInput() {
         rows={12}
         className="w-full px-4 py-3 rounded-lg border focus:outline-none transition-colors resize-y font-[family-name:var(--font-mono)] text-sm leading-relaxed"
         style={{ background: '#F5F0E8', color: '#1C1917', borderColor: '#D6D0C4' }}
-        onFocus={(e) => (e.currentTarget.style.borderColor = '#1B4332')}
+        onFocus={(e) => (e.currentTarget.style.borderColor = '#1C3822')}
         onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
         disabled={loading}
       />

@@ -2,7 +2,7 @@
 
 import PrincipleTag from './PrincipleTag'
 import QuickWins from './QuickWins'
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { AnalysisResult, Recommendation, Evidence } from '@/lib/types'
 import Link from 'next/link'
 import WasteScoreCard from './WasteScoreCard'
@@ -33,9 +33,26 @@ function ConfidenceBadge({ level }: { level: string }) {
   )
 }
 
-function EvidenceView({ evidence }: { evidence: Evidence }) {
+function EvidenceView({ evidence, principleNumbers, analysisId }: {
+  evidence: Evidence
+  principleNumbers: number[]
+  analysisId?: string
+}) {
   return (
     <div className="mt-4 pt-4 border-t border-[#D6D0C4] space-y-4">
+      {principleNumbers.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {principleNumbers.map(n => (
+            analysisId ? (
+              <Link key={n} href={`/analyze/${analysisId}/evidence#p${n}`}>
+                <PrincipleTag number={n} />
+              </Link>
+            ) : (
+              <PrincipleTag key={n} number={n} />
+            )
+          ))}
+        </div>
+      )}
       {evidence.why_flagged.length > 0 && (
         <div>
           <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#7C2D36' }}>
@@ -143,23 +160,6 @@ function RecommendationCard({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1">
-        {rec.principleNumbers.map((n) => (
-          analysisId ? (
-            <Link key={n} href={`/analyze/${analysisId}/evidence#p${n}`}>
-              <PrincipleTag number={n} />
-            </Link>
-          ) : (
-            <PrincipleTag key={n} number={n} />
-          )
-        ))}
-        {rec.primaryBenefit && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#D1FAE5', color: '#065F46' }}>
-            {rec.primaryBenefit}
-          </span>
-        )}
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Original */}
         <div className="p-3 rounded" style={{ background: '#FEF2F2' }}>
@@ -194,24 +194,60 @@ function RecommendationCard({
       </div>
 
       {showEvidence && rec.evidence && (
-        <EvidenceView evidence={rec.evidence} />
+        <EvidenceView
+          evidence={rec.evidence}
+          principleNumbers={rec.principleNumbers}
+          analysisId={analysisId}
+        />
       )}
     </div>
   )
 }
 
-export default function AnalysisResults({ 
-  analysis, 
-  originalProtocol, 
+type FilterMode = 'all' | 'high' | 'medium' | 'low' | 'unreviewed'
+const SEVERITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 }
+
+export default function AnalysisResults({
+  analysis,
+  originalProtocol,
   onUpdateAnalysis,
   analysisId,
-}: { 
-  analysis: AnalysisResult; 
-  originalProtocol: string; 
+}: {
+  analysis: AnalysisResult;
+  originalProtocol: string;
   onUpdateAnalysis?: (updated: AnalysisResult) => void;
   analysisId?: string;
 }) {
   const [viewMode, setViewMode] = useState<'full' | 'quick'>('full')
+
+  const [filterMode, setFilterMode] = useState<FilterMode>('all')
+
+  const filteredRecs = useMemo(() => {
+    return analysis.recommendations
+      .map((rec, i) => ({ rec, originalIndex: i }))
+      .sort((a, b) => (SEVERITY_RANK[a.rec.severity] ?? 3) - (SEVERITY_RANK[b.rec.severity] ?? 3))
+      .filter(({ rec }) => {
+        if (filterMode === 'all') return true
+        if (filterMode === 'unreviewed') return !rec.isAccepted
+        return rec.severity === filterMode
+      })
+  }, [analysis.recommendations, filterMode])
+
+  const recCounts = useMemo(() => ({
+    high:           analysis.recommendations.filter(r => r.severity === 'high').length,
+    highUnaccepted: analysis.recommendations.filter(r => r.severity === 'high' && !r.isAccepted).length,
+    medium:         analysis.recommendations.filter(r => r.severity === 'medium').length,
+    low:            analysis.recommendations.filter(r => r.severity === 'low').length,
+    unreviewed:     analysis.recommendations.filter(r => !r.isAccepted).length,
+  }), [analysis.recommendations])
+
+  const handleAcceptAllHigh = useCallback(() => {
+    if (!onUpdateAnalysis) return
+    const updated = analysis.recommendations.map(rec =>
+      rec.severity === 'high' ? { ...rec, isAccepted: true } : rec
+    )
+    onUpdateAnalysis({ ...analysis, recommendations: updated })
+  }, [analysis, onUpdateAnalysis])
 
   const toggleRecommendation = (index: number) => {
     if (!onUpdateAnalysis) return
@@ -314,27 +350,69 @@ export default function AnalysisResults({
           {/* Recommendations */}
           {analysis.recommendations.length > 0 ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-semibold" style={{ color: '#1C1917' }}>
-                  Recommendations ({analysis.recommendations.length})
-                </h3>
-                {analysis.recommendations.filter(r => r.isAccepted).length > 0 && (
-                  <span
-                    className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                    style={{ background: '#DCFCE7', color: '#16a34a' }}
+              <div className="space-y-3">
+                {/* Filter tabs */}
+                <div className="flex flex-wrap items-center gap-1">
+                  {([
+                    ['all',        `All (${analysis.recommendations.length})`],
+                    ['high',       `HIGH (${recCounts.high})`],
+                    ['medium',     `MEDIUM (${recCounts.medium})`],
+                    ['low',        `LOW (${recCounts.low})`],
+                    ['unreviewed', `Unreviewed (${recCounts.unreviewed})`],
+                  ] as const).map(([id, label]) => (
+                    <button
+                      key={id}
+                      onClick={() => setFilterMode(id)}
+                      className="text-xs font-bold uppercase tracking-wider transition-colors"
+                      style={{
+                        padding: '0.3rem 0.75rem',
+                        borderRadius: '4px',
+                        border: filterMode === id
+                          ? '1px solid #1C3822'
+                          : '1px solid #D6D0C4',
+                        background: filterMode === id ? '#1C3822' : 'transparent',
+                        color: filterMode === id ? '#F6F3EB' : '#78716C',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Bulk accept */}
+                {recCounts.highUnaccepted > 0 && onUpdateAnalysis && (
+                  <button
+                    onClick={handleAcceptAllHigh}
+                    className="text-xs font-bold uppercase tracking-wider transition-opacity hover:opacity-80"
+                    style={{
+                      padding: '0.35rem 0.875rem',
+                      border: '1px solid #DC2626',
+                      borderRadius: '4px',
+                      color: '#DC2626',
+                      fontFamily: 'var(--font-mono)',
+                      background: 'transparent',
+                      letterSpacing: '0.06em',
+                    }}
                   >
-                    {analysis.recommendations.filter(r => r.isAccepted).length} accepted
-                  </span>
+                    Accept all HIGH severity ({recCounts.highUnaccepted})
+                  </button>
                 )}
               </div>
-              {analysis.recommendations.map((rec, i) => (
-                <RecommendationCard 
-                  key={i} 
-                  rec={rec} 
-                  onToggleAccept={() => toggleRecommendation(i)}
-                  analysisId={analysisId}
-                />
-              ))}
+              {filteredRecs.length === 0 ? (
+                <div className="py-8 text-center" style={{ color: '#A8A29E', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                  No recommendations match this filter.
+                </div>
+              ) : (
+                filteredRecs.map(({ rec, originalIndex }) => (
+                  <RecommendationCard
+                    key={originalIndex}
+                    rec={rec}
+                    onToggleAccept={() => toggleRecommendation(originalIndex)}
+                    analysisId={analysisId}
+                  />
+                ))
+              )}
             </div>
           ) : (
             <div className="p-6 rounded-lg text-center" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
@@ -346,106 +424,98 @@ export default function AnalysisResults({
         </>
       )}
 
-      {/* Overall assessment */}
-      <div
-        className="p-4 rounded-lg border"
-        style={{ background: '#F5F0E8', borderColor: '#D6D0C4' }}
-      >
-        <h3 className="text-sm font-semibold mb-2" style={{ color: '#7C2D36' }}>Overall Assessment</h3>
-        <p className="text-sm mb-2" style={{ color: '#1C1917' }}>
-          <strong>Most impactful change:</strong> {analysis.overallAssessment.mostImpactfulChange}
-        </p>
-        {analysis.overallAssessment.processComplexity && (
-          <div className="mb-4 p-3 rounded bg-white/50 border border-[#D6D0C4]">
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#1C1917' }}>Process Complexity</h4>
-              <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
-                analysis.overallAssessment.processComplexity.level === 'low' ? 'bg-green-100 text-green-700' :
-                analysis.overallAssessment.processComplexity.level === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                'bg-red-100 text-red-700'
-              }`}>
-                {analysis.overallAssessment.processComplexity.level} (Score: {analysis.overallAssessment.processComplexity.score}/10)
-              </span>
+      {(analysis.overallAssessment.processComplexity || analysis.analysisMetadata) && (
+        <div className="border-t pt-6" style={{ borderColor: '#D6D0C4' }}>
+          {analysis.overallAssessment.processComplexity && (
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#1C1917', fontFamily: 'var(--font-mono)', letterSpacing: '0.15em' }}>
+                  Process Complexity
+                </h4>
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded font-bold uppercase"
+                  style={{
+                    background: analysis.overallAssessment.processComplexity.level === 'low' ? '#F0FDF4' :
+                      analysis.overallAssessment.processComplexity.level === 'medium' ? '#FEF3C7' : '#FEF2F2',
+                    color: analysis.overallAssessment.processComplexity.level === 'low' ? '#16a34a' :
+                      analysis.overallAssessment.processComplexity.level === 'medium' ? '#D97706' : '#DC2626',
+                  }}
+                >
+                  {analysis.overallAssessment.processComplexity.level} (Score: {analysis.overallAssessment.processComplexity.score}/10)
+                </span>
+              </div>
+              <div className="grid grid-cols-5 gap-2 text-center">
+                {([
+                  ['Steps',         analysis.overallAssessment.processComplexity.metrics.step_count],
+                  ['Transfers',     analysis.overallAssessment.processComplexity.metrics.transfer_count],
+                  ['Vessels',       analysis.overallAssessment.processComplexity.metrics.vessel_count],
+                  ['Preps',         analysis.overallAssessment.processComplexity.metrics.prep_count],
+                  ['Purifications', analysis.overallAssessment.processComplexity.metrics.purification_count],
+                ] as const).map(([label, value]) => (
+                  <div key={label} className="p-1">
+                    <div className="text-lg font-bold" style={{ color: '#1C1917' }}>{value}</div>
+                    <div className="text-[9px] uppercase tracking-wide" style={{ color: '#A8A29E', fontFamily: 'var(--font-mono)' }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] italic" style={{ color: '#A8A29E' }}>
+                Transfer loss, vessel count, and purification burden are proxies for waste and operator risk.
+              </p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
-              <div className="p-1">
-                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.step_count}</div>
-                <div className="text-[9px] uppercase text-stone-500">Steps</div>
-              </div>
-              <div className="p-1">
-                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.transfer_count}</div>
-                <div className="text-[9px] uppercase text-stone-500">Transfers</div>
-              </div>
-              <div className="p-1">
-                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.vessel_count}</div>
-                <div className="text-[9px] uppercase text-stone-500">Vessels</div>
-              </div>
-              <div className="p-1">
-                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.prep_count}</div>
-                <div className="text-[9px] uppercase text-stone-500">Preps</div>
-              </div>
-              <div className="p-1">
-                <div className="text-lg font-bold">{analysis.overallAssessment.processComplexity.metrics.purification_count}</div>
-                <div className="text-[9px] uppercase text-stone-500">Purifications</div>
-              </div>
-            </div>
-            <p className="mt-2 text-[10px] text-stone-500 italic">
-              Complexity metrics serve as proxies for waste (transfer loss), failure risk, and operator burden.
-            </p>
-          </div>
-        )}
-        {analysis.overallAssessment.greenPrinciplesViolated.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {analysis.overallAssessment.greenPrinciplesViolated.map((n) => (
-              <PrincipleTag key={n} number={n} />
-            ))}
-          </div>
-        )}
-        <p className="text-xs italic" style={{ color: '#78716C' }}>
-          {analysis.overallAssessment.disclaimer}
-        </p>
+          )}
 
-        {/* v0.6: Citation affordance */}
-        {analysis.analysisMetadata && (
-          <div className="mt-3 pt-2 border-t border-[#D6D0C4]">
-            <div className="flex items-center justify-between">
+          {analysis.analysisMetadata && (
+            <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: '#D6D0C4' }}>
               <span className="text-[10px]" style={{ color: '#A8A29E' }}>
                 {buildCitationString(analysis.analysisMetadata)}
               </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const text = buildCitationString(analysis.analysisMetadata!)
-                    navigator.clipboard.writeText(text).catch(() => {})
-                  }}
-                  className="text-[10px] px-2 py-0.5 rounded border border-[#D6D0C4] hover:bg-white transition-colors font-bold uppercase tracking-tight"
-                  style={{ color: '#78716C' }}
-                >
-                  Cite
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  const text = buildCitationString(analysis.analysisMetadata!)
+                  navigator.clipboard.writeText(text).catch(() => {})
+                }}
+                className="text-[10px] px-2 py-0.5 rounded border hover:bg-white transition-colors font-bold uppercase tracking-tight"
+                style={{ color: '#78716C', borderColor: '#D6D0C4', fontFamily: 'var(--font-mono)' }}
+              >
+                Cite
+              </button>
             </div>
+          )}
 
-            {analysisId && (
-              <div className="mt-4 rounded-lg border border-zinc-700/60 bg-zinc-900/50 p-4 flex items-start gap-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-zinc-200">Evidence Atlas</p>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    Full citations, calculation trails, and confidence tiers for every recommendation.
-                    Share this URL to reference this analysis.
-                  </p>
-                </div>
-                <a
-                  href={`/analyze/${analysisId}/evidence`}
-                  className="shrink-0 px-3 py-1.5 rounded-md text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors"
-                >
-                  View →
-                </a>
+          {analysisId && analysis.analysisMetadata && (
+            <div className="mt-3 p-3 flex items-center justify-between gap-3" style={{
+              background: '#F6F3EB',
+              border: '1px solid #2D4A3A',
+              borderRadius: '6px',
+            }}>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: '#1C3822', fontFamily: 'var(--font-mono)' }}>Evidence Atlas</p>
+                <p className="text-xs mt-0.5" style={{ color: '#78716C' }}>
+                  Full citations, calculation trails, and confidence tiers for every recommendation.
+                </p>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+              <a
+                href={`/analyze/${analysisId}/evidence`}
+                aria-label="View Evidence Atlas for this analysis"
+                className="shrink-0 hover:opacity-80 transition-opacity"
+                style={{
+                  padding: '0.375rem 0.875rem',
+                  background: '#1C3822',
+                  color: '#F6F3EB',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  fontSize: '0.7rem',
+                  letterSpacing: '0.06em',
+                  borderRadius: '4px',
+                  textDecoration: 'none',
+                }}
+              >
+                VIEW →
+              </a>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

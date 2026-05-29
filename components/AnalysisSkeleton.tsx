@@ -35,7 +35,7 @@ export default function AnalysisSkeleton() {
       {/* Message */}
       <div className="text-center py-8">
         <div className="inline-flex items-center gap-3">
-          <div className="animate-spin h-5 w-5 border-2 border-t-transparent rounded-full" style={{ borderColor: '#1B4332', borderTopColor: 'transparent' }} />
+          <div className="animate-spin h-5 w-5 border-2 border-t-transparent rounded-full" style={{ borderColor: '#1C3822', borderTopColor: 'transparent' }} />
           <p className="text-lg" style={{ color: '#78716C' }}>
             Analyzing your protocol against the 12 Principles of Green Chemistry...
           </p>
