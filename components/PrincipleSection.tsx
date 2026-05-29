@@ -2,7 +2,6 @@
 
 import { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical } from '@/lib/types'
 import { buildRecommendationCitationString } from '@/lib/citation'
-import PrincipleTag from './PrincipleTag'
 
 const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
   A: { bg: '#DCFCE7', text: '#166534' },
@@ -12,16 +11,68 @@ const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
   F: { bg: '#FEE2E2', text: '#991B1B' },
 }
 
+// Maps internal source IDs to citable, human-readable names
+export const SOURCE_LABELS: Record<string, string> = {
+  unit_converter:       'GC.ai calculation engine',
+  ACS_GCI_benchmarks:   'ACS GCI benchmarks',
+  rdkit:                'RDKit cheminformatics',
+  pubchem:              'PubChem (NCBI)',
+  pubchem_pug_view:     'PubChem PUG-View API',
+  chem21:               'CHEM21 Solvent Guide',
+  ghs:                  'GHS hazard classification',
+  literature:           'Scientific literature',
+  ai_assessment:        'AI assessment',
+  rxn_insight:          'RXN-Insight reaction classifier',
+  baran_ideality:       'Baran ideality metric',
+}
+
+export function humanSource(id: string): string {
+  return SOURCE_LABELS[id] ?? id
+}
+
+const CONFIDENCE_INFO: Record<string, { label: string; description: string }> = {
+  calculated: {
+    label: 'calculated',
+    description: 'Derived from molecular data using deterministic formulas (RDKit, PubChem, CHEM21).',
+  },
+  benchmark: {
+    label: 'benchmark',
+    description: 'Estimated from ACS GCI industry benchmark data for this reaction class.',
+  },
+  estimated: {
+    label: 'AI-estimated',
+    description: 'AI-assessed score — no deterministic formula available for this principle in this protocol.',
+  },
+  partial: {
+    label: 'partial data',
+    description: 'Calculated with incomplete input data; one or more chemicals could not be fully resolved.',
+  },
+  unavailable: {
+    label: 'unavailable',
+    description: 'Score could not be computed — required data was missing or unresolvable.',
+  },
+}
+
 function ScoreBadge({ score, maxScore, confidence }: { score: number; maxScore: number; confidence: string }) {
   const pct = maxScore > 0 ? score / maxScore : 0
   const color = pct <= 0.3 ? '#166534' : pct <= 0.6 ? '#92400E' : '#991B1B'
+  const info = CONFIDENCE_INFO[confidence]
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-lg font-bold" style={{ color }}>{score}</span>
-      <span className="text-xs" style={{ color: '#78716C' }}>/ {maxScore}</span>
-      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: '#F0EBE1', color: '#78716C' }}>
-        {confidence}
-      </span>
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <span className="text-2xl font-bold" style={{ color }}>{score}</span>
+        <span className="text-sm" style={{ color: '#78716C' }}>/ {maxScore}</span>
+        <span
+          className="text-[10px] px-1.5 py-0.5 rounded cursor-help"
+          style={{ background: '#F0EBE1', color: '#78716C', fontFamily: 'var(--font-mono)' }}
+          title={info?.description}
+        >
+          {info?.label ?? confidence}
+        </span>
+      </div>
+      {info && (
+        <p className="text-[10px] italic" style={{ color: '#A8A29E' }}>{info.description}</p>
+      )}
     </div>
   )
 }
@@ -132,9 +183,14 @@ export default function PrincipleSection({
 
   return (
     <section id={anchorId} className="scroll-mt-20">
-      {/* Section header */}
+      {/* Section header — number pill + name, no duplication */}
       <div className="flex items-center gap-3 mb-4">
-        <PrincipleTag number={principleNumber} />
+        <span
+          className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded"
+          style={{ background: '#ECB815', color: '#1C3822', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}
+        >
+          P{principleNumber}
+        </span>
         <h2 className="text-lg font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C1917' }}>
           {principleName}
         </h2>
@@ -145,8 +201,8 @@ export default function PrincipleSection({
         <div className="mb-4 p-3 rounded-lg" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
           <ScoreBadge score={score.score} maxScore={score.max_score} confidence={score.confidence} />
           {score.data_sources.length > 0 && (
-            <p className="text-[10px] mt-1" style={{ color: '#A8A29E' }}>
-              Sources: {score.data_sources.join(', ')}
+            <p className="text-[10px] mt-2" style={{ color: '#A8A29E' }}>
+              Sources: {score.data_sources.map(humanSource).join(' · ')}
             </p>
           )}
         </div>
@@ -253,32 +309,6 @@ export default function PrincipleSection({
       {/* Principle-specific detail data (from deterministic scores) */}
       {score && Object.keys(score.details).length > 0 && principleNumber !== 1 && (
         <DetailBlock details={score.details} />
-      )}
-
-      {/* Flagged chemicals */}
-      {score && score.chemicals_flagged.length > 0 && (
-        <div className="mb-4">
-          <h4 className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#7C2D36' }}>
-            Flagged Chemicals
-          </h4>
-          <div className="flex flex-wrap gap-1">
-            {score.chemicals_flagged.map((chem) => {
-              const enriched = enrichedChemicals?.find(
-                (e) => e.name.toLowerCase() === chem.toLowerCase()
-              )
-              return (
-                <span
-                  key={chem}
-                  className="text-xs px-2 py-0.5 rounded border"
-                  style={{ background: '#FEF2F2', borderColor: '#FECACA', color: '#991B1B' }}
-                  title={enriched?.ghs_hazards?.map((h) => `${h.code}: ${h.description}`).join(', ')}
-                >
-                  {chem}
-                </span>
-              )
-            })}
-          </div>
-        </div>
       )}
 
       {/* Recommendations */}

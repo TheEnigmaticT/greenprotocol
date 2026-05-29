@@ -5,8 +5,11 @@ import Link from 'next/link'
 import { AnalysisResult } from '@/lib/types'
 import { buildCitationString, buildBibtexCitation } from '@/lib/citation'
 import EvidenceSidebar, { SidebarSection } from './EvidenceSidebar'
-import PrincipleSection from './PrincipleSection'
+import PrincipleSection, { humanSource } from './PrincipleSection'
 import UserMenu from './UserMenu'
+
+// Internal data_source values that are pipeline artifacts, not citable sources
+const INTERNAL_SOURCE_VALUES = new Set(['cache', 'not_found', 'error', 'unknown', 'none', ''])
 
 const PRINCIPLE_NAMES: Record<number, string> = {
   1: 'Prevention',
@@ -52,8 +55,9 @@ function getActivePrinciples(analysis: AnalysisResult): number[] {
   // If we have waste analysis, make sure P1 is included
   if (analysis.wasteAnalysis) active.add(1)
 
-  // Skip P4 (Designing Safer Chemicals) unless explicitly scored
-  // (it's product design, not protocol analysis)
+  // P4 (Designing Safer Chemicals) is product/molecular design scope — out of range
+  // for protocol analysis. We never make recommendations here; exclude always.
+  active.delete(4)
 
   return Array.from(active).sort((a, b) => a - b)
 }
@@ -75,30 +79,38 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  // Build deduplicated flagged chemicals map: chemical → [principle numbers]
+  const flaggedChemicalsMap = new Map<string, number[]>()
+  if (analysis.deterministicScores) {
+    for (const score of analysis.deterministicScores.scores) {
+      for (const chem of score.chemicals_flagged) {
+        if (!flaggedChemicalsMap.has(chem)) flaggedChemicalsMap.set(chem, [])
+        flaggedChemicalsMap.get(chem)!.push(score.principle_number)
+      }
+    }
+  }
+  const flaggedChemicals = Array.from(flaggedChemicalsMap.entries()).sort(([a], [b]) => a.localeCompare(b))
+
   // Build sidebar sections
-  const sidebarSections: SidebarSection[] = [
+  const sidebarSections: SidebarSection[] = []
+
+  if (flaggedChemicals.length > 0) {
+    sidebarSections.push({ id: 'chemicals', label: 'Chemicals of Concern', hasRecommendations: false })
+  }
+
+  sidebarSections.push(
     ...activePrinciples.map((pn) => ({
       id: `p${pn}`,
       label: `P${pn}: ${PRINCIPLE_NAMES[pn] || `Principle ${pn}`}`,
       hasRecommendations: analysis.recommendations.some((r) => r.principleNumbers.includes(pn)),
-    })),
-  ]
+    }))
+  )
 
-  // Add process complexity if present
   if (analysis.overallAssessment.processComplexity) {
-    sidebarSections.push({
-      id: 'process',
-      label: 'Process Complexity',
-      hasRecommendations: false,
-    })
+    sidebarSections.push({ id: 'process', label: 'Process Complexity', hasRecommendations: false })
   }
 
-  // Always add sources section
-  sidebarSections.push({
-    id: 'sources',
-    label: 'Data Sources & Methodology',
-    hasRecommendations: false,
-  })
+  sidebarSections.push({ id: 'sources', label: 'Data Sources & Methodology', hasRecommendations: false })
 
   return (
     <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
@@ -189,6 +201,67 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
               </div>
             </div>
           )}
+        </div>
+
+        {/* Chemicals of Concern — deduplicated across all principles */}
+        {flaggedChemicals.length > 0 && (
+          <section id="chemicals" className="scroll-mt-20 mb-12">
+            <h2 className="text-lg font-bold font-[family-name:var(--font-serif)] mb-1" style={{ color: '#1C1917' }}>
+              Chemicals of Concern
+            </h2>
+            <p className="text-xs mb-4" style={{ color: '#78716C' }}>
+              Each chemical flagged in this protocol, listed once. The principles column shows which scoring dimensions flagged it.
+            </p>
+            <div className="rounded-lg overflow-hidden" style={{ border: '1px solid #E7E5E4' }}>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: '#F0EBE1' }}>
+                    <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>Chemical</th>
+                    <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>Flagged in</th>
+                    <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>GHS Hazards</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {flaggedChemicals.map(([chem, principles], i) => {
+                    const enriched = analysis.enrichedChemicals?.find(
+                      (e) => e.name.toLowerCase() === chem.toLowerCase()
+                    )
+                    return (
+                      <tr key={chem} style={{ background: i % 2 === 0 ? '#FAFAF8' : '#F6F3EB', borderTop: '1px solid #E7E5E4' }}>
+                        <td className="px-3 py-2 font-semibold font-[family-name:var(--font-mono)]" style={{ color: '#991B1B' }}>
+                          {chem}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap gap-1">
+                            {principles.map(pn => (
+                              <a key={pn} href={`#p${pn}`} className="hover:opacity-70 transition-opacity"
+                                style={{ background: '#ECB815', color: '#1C3822', padding: '0.05rem 0.4rem', borderRadius: '3px', fontSize: '0.6rem', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                P{pn}
+                              </a>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2" style={{ color: '#57534E' }}>
+                          {enriched?.ghs_hazards && enriched.ghs_hazards.length > 0
+                            ? enriched.ghs_hazards.slice(0, 3).map(h => h.code).join(', ')
+                            : <span style={{ color: '#A8A29E' }}>—</span>
+                          }
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* P4 scope note */}
+        <div className="mb-8 p-3 rounded" style={{ background: '#F6F3EB', border: '1px solid #D6D0C4' }}>
+          <p className="text-xs italic" style={{ color: '#78716C' }}>
+            <strong>Principle 4 (Designing Safer Chemicals)</strong> is not scored in this analysis.
+            P4 concerns molecular design — synthesizing products that are inherently less toxic — which is outside the scope of protocol optimization. GreenChemistry.ai analyzes how a synthesis is performed, not what it produces.
+          </p>
         </div>
 
         {/* Principle sections */}
@@ -292,8 +365,15 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                     Chemical Data
                   </h4>
                   <p className="text-xs" style={{ color: '#57534E' }}>
-                    {analysis.enrichedChemicals.length} chemicals enriched via{' '}
-                    {[...new Set(analysis.enrichedChemicals.map((c) => c.data_source).filter(Boolean))].join(', ')}
+                    {analysis.enrichedChemicals.length} chemicals resolved.
+                    {(() => {
+                      const sources = [...new Set(
+                        analysis.enrichedChemicals
+                          .map((c) => c.data_source)
+                          .filter((s): s is string => !!s && !INTERNAL_SOURCE_VALUES.has(s))
+                      )].map(humanSource)
+                      return sources.length > 0 ? ` Data from: ${sources.join(', ')}.` : ''
+                    })()}
                   </p>
                 </div>
               )}
