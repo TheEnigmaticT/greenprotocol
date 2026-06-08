@@ -39,6 +39,21 @@ export default function EvidenceSidebar({
     return () => observer.disconnect()
   }, [sections])
 
+  // Keyboard navigation handler
+  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      const nextIndex = (index + 1) % sections.length
+      const nextEl = document.getElementById(`nav-${sections[nextIndex].id}`)
+      nextEl?.focus()
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      const prevIndex = (index - 1 + sections.length) % sections.length
+      const prevEl = document.getElementById(`nav-${sections[prevIndex].id}`)
+      prevEl?.focus()
+    }
+  }
+
   return (
     <>
       {/* Mobile toggle */}
@@ -91,12 +106,15 @@ export default function EvidenceSidebar({
           </div>
 
           <ul className="space-y-0.5">
-            {sections.map((section) => {
+            {sections.map((section, index) => {
               const isActive = activeId === section.id
               return (
                 <li key={section.id}>
                   <a
+                    id={`nav-${section.id}`}
                     href={`#${section.id}`}
+                    onKeyDown={(e) => handleKeyDown(e, index)}
+                    aria-current={isActive ? 'location' : undefined}
                     onClick={() => {
                       // On mobile, close sidebar after clicking
                       if (window.innerWidth < 1024) setCollapsed(true)
@@ -104,7 +122,7 @@ export default function EvidenceSidebar({
                     className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
                       isActive
                         ? 'bg-green-50 font-semibold'
-                        : 'hover:bg-stone-50'
+                        : 'hover:bg-stone-50 focus:bg-stone-100 focus:outline-none'
                     }`}
                     style={{ color: isActive ? '#166534' : '#57534E' }}
                   >

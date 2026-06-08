@@ -431,9 +431,12 @@ export default function PrincipleSection({
                 {(rec.evidenceTier ?? 'inferred') === 'inferred' && rec.alternative.rationale && (
                   <div className="mt-3 p-3 rounded" style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
                     <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#92400E', fontFamily: 'var(--font-mono)' }}>
-                      Model reasoning
+                      Model-inferred (no literature citation)
                     </p>
-                    <p className="text-xs" style={{ color: '#78350F' }}>{rec.alternative.rationale}</p>
+                    <p className="text-xs mb-1" style={{ color: '#78350F' }}>{rec.alternative.rationale}</p>
+                    <p className="text-[9px] italic" style={{ color: '#92400E' }}>
+                      Treat as a starting hypothesis; verify against primary literature before adoption.
+                    </p>
                   </div>
                 )}
               </div>
