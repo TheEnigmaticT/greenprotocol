@@ -16,6 +16,7 @@ from converter import convert
 from yield_extractor import extract_yield_and_type
 import cache as chem_cache
 from synonyms import resolve_synonym
+from cas_lookup import get_cas
 from contextlib import asynccontextmanager
 import asyncio
 
@@ -134,10 +135,17 @@ async def score_protocol(request: ScoringRequest):
 
     # Compliance-context evidence layer (RCRA). Not a scoring input; kept as a
     # distinct block so score-driving hazard data stays separate from regulatory
-    # annotations.
+    # annotations. CAS (from the seeded common-chemical set) enables
+    # authoritative CAS-keyed matching where available.
+    cas_map = {
+        chem.name: cas
+        for chem in request.chemicals
+        if (cas := get_cas(resolve_synonym(chem.name)) or get_cas(chem.name))
+    }
     waste["regulatoryContext"] = compute_regulatory_context(
         chemicals=request.chemicals,
         hcodes_map=hcodes_map,
+        cas_map=cas_map,
     )
 
     # Roll-up score and letter grade (lower is greener)

@@ -121,9 +121,11 @@ def _norm(s: str) -> str:
     return "".join(ch for ch in s.lower().strip() if ch.isalnum())
 
 
-# Build a normalized-synonym -> entry index once at import time.
+# Build indexes once at import time: by normalized synonym, and by CAS.
 _NAME_INDEX: dict[str, dict] = {}
+_CAS_INDEX: dict[str, dict] = {}
 for _e in _ENTRIES:
+    _CAS_INDEX[_e["cas"]] = _e
     for _syn in _e["synonyms"]:
         _NAME_INDEX.setdefault(_norm(_syn), _e)
 
@@ -222,7 +224,12 @@ def compute_regulatory_context(
 
     for chem in chemicals:
         signals: list[dict] = []
-        entry = _NAME_INDEX.get(_norm(chem.name))
+        # Prefer CAS match (authoritative) when a CAS is known; fall back to
+        # name/synonym matching.
+        cas = cas_map.get(chem.name)
+        entry = _CAS_INDEX.get(cas) if cas else None
+        if entry is None:
+            entry = _NAME_INDEX.get(_norm(chem.name))
         if entry:
             for sig in (_listed_signal(entry), _tox_char_signal(entry)):
                 if sig:
@@ -238,7 +245,7 @@ def compute_regulatory_context(
 
         out_chemicals.append({
             "chemical": chem.name,
-            "cas": (entry or {}).get("cas") or cas_map.get(chem.name),
+            "cas": (entry or {}).get("cas") or cas,
             "signals": signals,
         })
 

@@ -5,6 +5,7 @@ from parser import parse_quantity
 from chem21 import get_vetted_evidence
 from ghs import lookup_hcodes_with_details
 from pubchem import lookup_chemical
+from cas_lookup import get_cas
 import cache
 
 try:
@@ -151,7 +152,7 @@ def _build_response(
 
     return ConvertResponse(
         chemical_name=resolved_name,
-        cas=None,  # TODO: extract CAS from PubChem PUG-View
+        cas=get_cas(resolved_name) or get_cas(original_name),
         smiles=smiles,
         molecular_formula=chem_data.get("molecular_formula"),
         molecular_weight=round(mw, 4) if mw else None,
