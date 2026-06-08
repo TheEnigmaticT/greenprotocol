@@ -16,13 +16,24 @@ from converter import convert
 from yield_extractor import extract_yield_and_type
 import cache as chem_cache
 from synonyms import resolve_synonym
+from contextlib import asynccontextmanager
 import asyncio
 
-app = FastAPI(title="GC.ai Chemistry Service")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the seeded PubChem cache (name -> cid, hcodes, smiles, MW, density)
+    # for the common-chemical set so scoring has hazard data without a live
+    # PubChem round-trip per chemical.
+    chem_cache.init_cache()
+    print(f"[startup] chemical cache loaded: {chem_cache.size()} entries")
+    yield
+
+
+app = FastAPI(title="GC.ai Chemistry Service", lifespan=lifespan)
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "cache_size": chem_cache.size()}
 
 
 @app.post("/batch", response_model=BatchResponse)
@@ -45,6 +56,29 @@ async def batch_convert(request: BatchRequest):
     return BatchResponse(results=converted)
 
 
+def _hcodes_from_cache(chem_name: str) -> list[str]:
+    """Resolve GHS H-codes for a chemical from the cache, supporting all shapes.
+
+    - Live-converted records carry rich {"ghs_hazards": [{code, ...}]}.
+    - The name record may carry a flat {"hcodes": [...]}.
+    - Otherwise the name record holds a `cid` and the hazards live under a
+      separate "ghs_<cid>" record (how the seeded cache and ghs.py store them).
+    """
+    rec = chem_cache.get(resolve_synonym(chem_name)) or chem_cache.get(chem_name)
+    if not rec:
+        return []
+    if rec.get("ghs_hazards"):
+        return [h["code"] for h in rec["ghs_hazards"] if "code" in h]
+    if rec.get("hcodes"):
+        return [c for c in rec["hcodes"] if isinstance(c, str)]
+    cid = rec.get("cid")
+    if cid is not None:
+        ghs = chem_cache.get(f"ghs_{cid}")
+        if ghs and ghs.get("hcodes"):
+            return [c for c in ghs["hcodes"] if isinstance(c, str)]
+    return []
+
+
 @app.post("/score", response_model=ScoringResponse)
 async def score_protocol(request: ScoringRequest):
     """Score a protocol based on Green Chemistry principles."""
@@ -55,14 +89,7 @@ async def score_protocol(request: ScoringRequest):
     # Falls back to [] for chemicals not yet converted, so P3 degrades gracefully.
     hcodes_map: dict[str, list[str]] = {}
     for chem in request.chemicals:
-        resolved = resolve_synonym(chem.name)
-        cached = chem_cache.get(resolved) or chem_cache.get(chem.name)
-        if cached and cached.get("ghs_hazards"):
-            hcodes_map[chem.name] = [
-                h["code"] for h in cached["ghs_hazards"] if "code" in h
-            ]
-        else:
-            hcodes_map[chem.name] = []
+        hcodes_map[chem.name] = _hcodes_from_cache(chem.name)
 
     # Extract yield and reaction type for P1 PMI calculation.
     yield_info: dict = {}
