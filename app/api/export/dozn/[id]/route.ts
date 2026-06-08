@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { GCAI_VERSION } from '@/lib/version';
 
 export async function GET(
   request: Request,
@@ -25,6 +26,8 @@ export async function GET(
   const doznData = {
     protocol_name: analysis.protocol_name || 'Protocol Analysis',
     date: new Date().toISOString().split('T')[0],
+    // Citability: stamp the build that generated the export.
+    software_version: `GreenChemistry.ai v${GCAI_VERSION}`,
     steps: analysis.steps || [],
     chemicals: analysis.chemicals || [],
     // This is where we'd add the logic to populate the spreadsheet

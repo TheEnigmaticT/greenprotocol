@@ -92,22 +92,24 @@ def _process_burden_penalty(
 
 # ── Primary driver logic ─────────────────────────────────────────
 
-def _identify_primary_driver(
+def _worst_category(
     solvent_penalty: float,
     hazard_penalty: float,
     liquid_penalty: float,
     process_penalty: float,
-    buckets: dict[str, dict],
 ) -> str:
-    """Pick the single most impactful waste driver."""
+    """Pick the single most impactful waste-driver category."""
     penalties = {
         "solvent": solvent_penalty,
         "hazard": hazard_penalty,
         "liquid": liquid_penalty,
         "process": process_penalty,
     }
-    worst = max(penalties, key=penalties.get)  # type: ignore[arg-type]
+    return max(penalties, key=penalties.get)  # type: ignore[arg-type]
 
+
+def _identify_primary_driver(worst: str, buckets: dict[str, dict]) -> str:
+    """One-sentence explanation of the dominant waste driver."""
     if worst == "hazard":
         if buckets["cmr"]["count"] > 0:
             chems = ", ".join(buckets["cmr"]["chemicals"][:3])
@@ -120,6 +122,20 @@ def _identify_primary_driver(
         return "Large liquid throughput increases handling and disposal burden."
     else:
         return "Complex purification/cleanup steps generate significant waste."
+
+
+def _best_next_action(worst: str, buckets: dict[str, dict]) -> str:
+    """The single highest-leverage next action for the dominant driver."""
+    if worst == "hazard":
+        if buckets["cmr"]["count"] > 0:
+            return "Substitute or eliminate the CMR-classified chemical(s) to cut hazardous waste."
+        return "Replace the highest-toxicity reagent with a safer alternative (see P3/P5)."
+    elif worst == "solvent":
+        return "Reduce solvent charge or switch to a greener solvent to cut waste volume (see P5)."
+    elif worst == "liquid":
+        return "Consolidate wash/extraction steps to lower liquid handling and disposal burden."
+    else:
+        return "Telescope or one-pot the purification-heavy steps to reduce cleanup waste."
 
 
 # ── Main entry point ─────────────────────────────────────────────
@@ -168,7 +184,9 @@ def compute_waste_analysis(
 
     waste_score = round(min(sp + hp + lp + pp, 10.0), 1)
     grade = _grade(waste_score)
-    driver = _identify_primary_driver(sp, hp, lp, pp, buckets)
+    worst = _worst_category(sp, hp, lp, pp)
+    driver = _identify_primary_driver(worst, buckets)
+    next_action = _best_next_action(worst, buckets)
 
     # Determine confidence
     has_quantities = any(safe_kg(c) > 0 for c in chemicals)
@@ -194,7 +212,7 @@ def compute_waste_analysis(
             "wasteImpactScore": waste_score,
             "grade": grade,
             "primaryDriver": driver,
-            "bestNextAction": None,
+            "bestNextAction": next_action,
             "confidence": confidence,
         },
         "directWaste": {
