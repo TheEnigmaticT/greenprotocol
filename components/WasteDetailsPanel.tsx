@@ -51,8 +51,17 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 export default function WasteDetailsPanel({ wasteAnalysis }: { wasteAnalysis: WasteAnalysis }) {
-  const { directWaste, hazardSegments, liquidBurden, processBurden, upstream, evidenceSources } =
-    wasteAnalysis
+  const {
+    directWaste,
+    hazardSegments,
+    liquidBurden,
+    processBurden,
+    upstream,
+    evidenceSources,
+    regulatoryContext,
+  } = wasteAnalysis
+  const reg = regulatoryContext
+  const hasReg = !!reg && reg.chemicals.length > 0
 
   return (
     <div className="px-4 pb-4">
@@ -112,6 +121,51 @@ export default function WasteDetailsPanel({ wasteAnalysis }: { wasteAnalysis: Wa
           <Metric label="Complexity" value={String(processBurden.workflowComplexity)} />
         </div>
       </Section>
+
+      {/* Regulatory context — US RCRA (compliance context, not scoring) */}
+      {hasReg && reg && (
+        <Section label="Regulatory context · US RCRA">
+          <ul className="space-y-2">
+            {reg.chemicals.map((c) => (
+              <li key={c.chemical} className="min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[11px] font-semibold" style={{ color: '#1C1917' }}>
+                    {c.chemical}
+                  </span>
+                  {c.cas && (
+                    <span
+                      className="text-[10px]"
+                      style={{ color: '#A8A29E', fontFamily: 'var(--font-mono)' }}
+                    >
+                      CAS {c.cas}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {c.signals.map((s) => (
+                    <span
+                      key={s.code}
+                      title={`${s.label} — ${s.basis}`}
+                      className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                      style={{ background: '#F0EBE1', color: '#78716C', fontFamily: 'var(--font-mono)' }}
+                    >
+                      {s.code}
+                      {s.regulatoryLevel ? ` · ${s.regulatoryLevel}` : ''}
+                    </span>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[10px] mt-2" style={{ color: '#A8A29E' }}>
+            {reg.chemicalsWithSignals} of {reg.chemicalsScreened} chemicals matched federal codes.
+            {!reg.coverageComplete && ' Coverage is a curated subset of common lab chemicals.'}
+          </p>
+          <p className="text-[10px] italic mt-1" style={{ color: '#A8A29E' }}>
+            {reg.disclaimer}
+          </p>
+        </Section>
+      )}
 
       {/* Evidence + upstream */}
       <Section label="Evidence">

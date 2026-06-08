@@ -255,6 +255,39 @@ export interface WasteAnalysis {
     notes: string
   }
   evidenceSources: string[]
+  regulatoryContext?: RegulatoryContext
+}
+
+// US RCRA regulatory-context evidence layer. Compliance context, NOT a scoring
+// input and not legal advice. See services/chemistry/scoring/rcra.py.
+export interface RcraSignal {
+  code: string                 // e.g. "U044", "D022", "D001"
+  type:
+    | 'listed_acute'
+    | 'listed_toxic'
+    | 'characteristic_toxicity'
+    | 'characteristic_ignitability'
+    | 'characteristic_corrosivity'
+    | 'characteristic_reactivity'
+  label: string
+  basis: string
+  regulatoryLevel?: string | null   // TCLP level, e.g. "6.0 mg/L"
+}
+
+export interface RegulatoryChemical {
+  chemical: string
+  cas?: string | null
+  signals: RcraSignal[]
+}
+
+export interface RegulatoryContext {
+  framework: string
+  disclaimer: string
+  coverageComplete: boolean
+  chemicalsScreened: number
+  chemicalsWithSignals: number
+  distinctCodes: string[]
+  chemicals: RegulatoryChemical[]
 }
 
 export interface SdsReference {

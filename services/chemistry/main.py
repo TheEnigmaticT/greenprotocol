@@ -8,6 +8,7 @@ from scoring.p6_energy_efficiency import score_p6
 from scoring.p11_realtime_analysis import score_p11
 from scoring.p12_accident_prevention import score_p12
 from scoring.waste_analysis import compute_waste_analysis
+from scoring.rcra import compute_regulatory_context
 from scoring.process_complexity import analyze_complexity
 from ghs import lookup_hcodes
 from models import BatchRequest, BatchResponse, ConvertResponse
@@ -102,6 +103,14 @@ async def score_protocol(request: ScoringRequest):
         chemicals=request.chemicals,
         hcodes_map=hcodes_map,
         process_metrics=process_metrics,
+    )
+
+    # Compliance-context evidence layer (RCRA). Not a scoring input; kept as a
+    # distinct block so score-driving hazard data stays separate from regulatory
+    # annotations.
+    waste["regulatoryContext"] = compute_regulatory_context(
+        chemicals=request.chemicals,
+        hcodes_map=hcodes_map,
     )
 
     # Roll-up score and letter grade (lower is greener)
