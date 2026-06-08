@@ -46,6 +46,10 @@ services/chemistry/cache-sync.env
 services/chemistry/*.log
 .auth/
 
+# impeccable skill working dir (critiques, design.json sidecar, live-session
+# journal) — local per-project state, not project source. Skill lives in ~/.claude.
+.impeccable/
+
 # Generated chemistry seed imports and queue outputs.
 /data/chemical-seeds/external/*
 !/data/chemical-seeds/external/.gitkeep
