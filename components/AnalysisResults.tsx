@@ -302,23 +302,13 @@ export default function AnalysisResults({
         </div>
       </div>
 
-      {/* v0.6: Waste Score Card — links to Evidence Atlas */}
+      {/* v0.6: Waste Score Card — expands in place; links to full Evidence Atlas */}
       {analysis.wasteAnalysis && (
-        <div>
-          {analysisId ? (
-            <Link href={`/analyze/${analysisId}/evidence#p1`}>
-              <WasteScoreCard
-                wasteAnalysis={analysis.wasteAnalysis}
-                gcaiVersion={analysis.analysisMetadata?.gcaiVersion}
-              />
-            </Link>
-          ) : (
-            <WasteScoreCard
-              wasteAnalysis={analysis.wasteAnalysis}
-              gcaiVersion={analysis.analysisMetadata?.gcaiVersion}
-            />
-          )}
-        </div>
+        <WasteScoreCard
+          wasteAnalysis={analysis.wasteAnalysis}
+          gcaiVersion={analysis.analysisMetadata?.gcaiVersion}
+          analysisId={analysisId}
+        />
       )}
 
       {viewMode === 'quick' ? (

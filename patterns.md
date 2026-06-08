@@ -25,3 +25,11 @@
 - Sections that combine display typography, stats, and CTA blocks should not rely solely on generic column-collapse rules.
 - Give the stat card / CTA column its own named wrapper and mobile-specific styles for width, padding, and internal layout.
 - Current examples: `.stack-facts-col`, `.stack-energy-chip`, `.stack-energy-row`, `.contact-cta-col`, and `.contact-cta-link`.
+
+## Cockpit card with inline expander (summary + drill-down)
+- "Cockpit" report cards (e.g. `WasteScoreCard`) show one top-line takeaway by default and reveal detail on demand in place, instead of forcing navigation to a separate page.
+- The summary row is a real `<button>` with `aria-expanded` and `aria-controls={panelId}` (use React `useId()`); the detail panel renders below with `id={panelId}` only when expanded. Never nest a `<Link>` or other interactive element inside that toggle button — keep secondary links (e.g. "Full Evidence Atlas →") in a sibling region outside the button.
+- Active/expanded state is signalled by the border color flipping to the brand green `#16a34a` and a `▾` chevron that rotates 180° (`aria-hidden`).
+- Detail panels (`WasteDetailsPanel`) group metrics under small uppercase mono section labels (`var(--font-mono)`, `#78716C`) separated by `border-t` dividers (`#E7E5E4`). Numeric values use the mono font; labels use `#57534E`.
+- Metric grids use Tailwind responsive classes (`grid-cols-3 sm:grid-cols-5`) with `min-w-0` + `truncate` on values — no inline `gridTemplateColumns`.
+- Keep categorical badges (e.g. hazard segments) to a single restrained neutral style (`#F0EBE1` / `#78716C`) rather than one color per category, to avoid visual color overload.
