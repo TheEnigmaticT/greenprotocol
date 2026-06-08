@@ -6,6 +6,7 @@ import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
 import { searchLiterature } from '@/lib/vector-search'
+import { buildSdsReferences } from '@/lib/sds'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
 
@@ -676,6 +677,8 @@ export async function analyzeProtocol(
           why_flagged,
           why_replacement,
           citations: mergedCitations,
+          // SDS links are supporting context only; scoring stays on GHS/PubChem.
+          sdsReferences: buildSdsReferences(rec.original.chemical),
         }
       }
     }

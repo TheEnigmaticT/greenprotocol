@@ -409,7 +409,7 @@ export default function PrincipleSection({
                 )}
 
                 {/* Evidence */}
-                {rec.evidence && (
+                {rec.evidence && (rec.evidence.citations.length > 0 || (rec.evidence.sdsReferences?.length ?? 0) > 0) && (
                   <div className="mt-2 pt-2 border-t border-[#E7E5E4]">
                     {rec.evidence.citations.length > 0 && (
                       <div className="space-y-0.5">
@@ -423,6 +423,23 @@ export default function PrincipleSection({
                             )}
                           </p>
                         ))}
+                      </div>
+                    )}
+                    {rec.evidence.sdsReferences && rec.evidence.sdsReferences.length > 0 && (
+                      <div className="mt-1.5">
+                        <p className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: '#78716C', fontFamily: 'var(--font-mono)' }}>
+                          Safety data sheets — {rec.original.chemical}
+                        </p>
+                        <div className="flex flex-wrap gap-3">
+                          {rec.evidence.sdsReferences.map((s, si) => (
+                            <a key={si} href={s.url} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold text-[#16a34a] hover:underline">
+                              {s.supplier} ↗
+                            </a>
+                          ))}
+                        </div>
+                        <p className="text-[9px] italic mt-0.5" style={{ color: '#A8A29E' }}>
+                          Handling / disposal context only; hazard scoring uses GHS/PubChem data.
+                        </p>
                       </div>
                     )}
                   </div>
