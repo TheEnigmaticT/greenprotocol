@@ -5,6 +5,8 @@ from scoring.p2_atom_economy import score_p2
 from scoring.p3_less_hazardous import score_p3
 from scoring.p5_safer_solvents import score_p5
 from scoring.p6_energy_efficiency import score_p6
+from scoring.p11_realtime_analysis import score_p11
+from scoring.p12_accident_prevention import score_p12
 from scoring.waste_analysis import compute_waste_analysis
 from scoring.process_complexity import analyze_complexity
 from ghs import lookup_hcodes
@@ -90,6 +92,8 @@ async def score_protocol(request: ScoringRequest):
     p3 = score_p3(chemicals=request.chemicals, hcodes_map=hcodes_map)
     p5 = score_p5(chemicals=request.chemicals)
     p6 = score_p6(steps=request.steps)
+    p11 = await score_p11(steps=request.steps, protocol_text=request.protocol_text)
+    p12 = score_p12(chemicals=request.chemicals, hcodes_map=hcodes_map)
 
     # Process complexity for waste analysis
     process_metrics = analyze_complexity(request.steps) if request.steps else None
@@ -101,7 +105,7 @@ async def score_protocol(request: ScoringRequest):
     )
 
     # Roll-up score and letter grade (lower is greener)
-    all_scores = [p1, p2, p3, p5, p6]
+    all_scores = [p1, p2, p3, p5, p6, p11, p12]
     available = [s for s in all_scores if s.score >= 0]
     total_score = round(sum(s.score for s in available), 2)
     max_possible = float(len(available) * 10)
