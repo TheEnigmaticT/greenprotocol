@@ -7,6 +7,13 @@ AI-powered green chemistry protocol optimizer for LabreNew.org.
 - `npm run build` — production build
 - `npm run lint` — ESLint
 
+## Branches & Deploy
+- **`main`** — integration/source of truth. All local work + Lovable's external pushes land here. Push freely: `git push origin main`.
+- **`production`** — the deploy branch. Vercel (project `greenchemistryai`) deploys to greenchemistry.ai **only** from `production`. Code on `main` is NOT live until promoted.
+- **Promote to production:** `git push origin main:production` (fast-forward `production` to `main`'s tip → triggers Vercel autodeploy). Then verify: `vercel ls greenchemistryai --prod`.
+- Keep `main` == `origin/main` == `origin/production` after each deploy. Do **not** keep a local `production` branch — it goes stale and is a footgun; deploy by pushing `main:production`, not by checking production out.
+- Note: `git fetch` updates `origin/*` tracking refs but never moves local branch pointers — a local `production` will silently drift behind `origin/production` even on a single machine.
+
 ## Stack
 Next.js 15 (App Router), TypeScript, Tailwind v4, Supabase Auth, Claude Sonnet API
 
