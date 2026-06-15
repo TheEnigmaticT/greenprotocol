@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { Suspense, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 function LoginForm() {
   const [email, setEmail] = useState('')
@@ -10,7 +10,6 @@ function LoginForm() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
 
@@ -50,7 +49,10 @@ function LoginForm() {
         return
       }
 
-      router.push('/analyze')
+      // Hard navigation (not router.push) so the server re-reads the freshly
+      // set session cookie and we bypass the stale, pre-auth prefetch of
+      // /analyze that the client router cached on page load.
+      window.location.assign('/analyze')
     } catch {
       setError('Something went wrong. Check your connection and try again.')
     } finally {
