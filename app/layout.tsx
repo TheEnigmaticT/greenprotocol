@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { IBM_Plex_Mono, Libre_Baskerville } from "next/font/google";
 import "./globals.css";
 
@@ -39,6 +40,12 @@ export default function RootLayout({
       <body
         className={`${ibmPlexMono.variable} ${libreBaskerville.variable} antialiased`}
       >
+        <Script
+          src="https://umami.crowdtamers.com/script.js"
+          data-website-id="3f9a4801-a675-4fb5-9e4a-319cfd139265"
+          data-domains="greenchemistry.ai,www.greenchemistry.ai"
+          strategy="afterInteractive"
+        />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded focus:text-sm focus:font-bold"
