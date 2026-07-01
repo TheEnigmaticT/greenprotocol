@@ -41,6 +41,7 @@ yarn-error.log*
 next-env.d.ts
 __pycache__/
 .claude/worktrees/
+.worktrees/
 .env*.local
 services/chemistry/cache-sync.env
 services/chemistry/*.log
