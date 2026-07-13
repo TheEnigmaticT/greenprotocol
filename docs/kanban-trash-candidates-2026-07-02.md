@@ -1,0 +1,1400 @@
+# GreenChemistry.ai archived non-survivor set — 2026-07-02
+
+- This file records the tasks intentionally removed from the survivor rebuild.
+- Survivor set retained in `BACKLOG.md`: 89 tasks
+- Non-survivor tasks archived on board: 1392 tasks
+
+## Archived task IDs
+
+- `t_8dad4505` — ****Design: Standardize scoring provenance taxonomy across the product** — Define and enforce a small, explicit provenance/status vocabulary for all scores, metrics, and recommendation evidence so the UI does not improvise labels inconsistently. Starting taxonomy: Declared, Calculated, Benchmark-derived, Model-inferred, and Unavailable. This is a 0.7 fit because evidence-grounded generation needs one shared language across the main results view, Evidence Atlas, exports, and re-evaluated recommendation states. [added::2026-06-11] [done-when::A single provenance taxonomy is documented in code/specs, every score/metric path maps to one allowed state, and the same labels/definitions are rendered consistently in UI, Evidence Atlas, and exported outputs] [priority::high] [needs-ui::true]** _(current status: archived, assignee: orchestrator)_
+- `t_d415fd5e` — ****Qwen: Abstract AI provider interface in Next.js pipeline** [done::2026-05-25] — Created `lib/llm.ts` with `LLMAdapter` pattern supporting Anthropic and OpenAI-compatible providers. Refactored `lib/pipeline.ts` to use this abstraction, enabling local model support via `LLM_BASE_URL` and `LLM_MODEL`. [added::2026-03-21] [priority::high] [done-when::All three pipeline phases (parse, evaluate, assemble) can run against a local OpenAI-compatible endpoint configured via env vars, with Anthropic as the default fallback when no base URL is set]** _(current status: archived, assignee: default)_
+- `t_9c4bdd4c` — ****Qwen: Test streaming SSE** — Root is waiting on the canonical SSE child bundle after repeated decomposition churn. Treat `t_bcf00f28 + t_3db8bb97 → t_0cca5b54` as the active path; if that path discovers materially new scope, open a fresh triage card instead of decomposing this root again. [added::2026-03-21] [priority::medium] [blocked-by::Canonical SSE child bundle must first be rewritten/rerouted into bounded execution leaves, then either produce browser-visible SSE evidence or a precise blocker report before the downstream review pass can run] [done-when::One canonical child path produces a browser-visible local-model SSE validation result or a precise blocker report, and any materially new scope has been split into a fresh triage card]** _(current status: archived, assignee: orchestrator)_
+- `t_ec995d57` — **Add admin UI for editing principle weights** _(current status: archived, assignee: orchestrator)_
+- `t_a83a2f1b` — **Add anchor targets and mapping for Atlas-supported recommendations** _(current status: archived, assignee: worker-gemma)_
+- `t_6a29300a` — **Add aria-current to the active sidebar item** _(current status: archived, assignee: default)_
+- `t_7ecd7491` — **Add backend tests for SSE heartbeat and progress events** _(current status: archived, assignee: orchestrator)_
+- `t_e086f422` — **Add before/after comparison visualization states** _(current status: archived, assignee: orchestrator)_
+- `t_02f8b032` — **Add citation formatting and bibliography export validation** _(current status: archived, assignee: orchestrator)_
+- `t_b12b1fa1` — **Add citation generation and end-to-end validation** _(current status: archived, assignee: worker-gemma)_
+- `t_b4cf41a0` — **Add conditional 'Copy link' action to New Analysis confirm dialog** _(current status: archived, assignee: orchestrator)_
+- `t_d5e3f4d1` — **Add conditional Copy link action to clear confirmation dialog** _(current status: archived, assignee: orchestrator)_
+- `t_78bdac23` — **Add conditional Copy link action to New Analysis confirm dialog** _(current status: archived, assignee: worker-gemma)_
+- `t_3cab1bb4` — **Add conditional copy-link action to New Analysis dialog** _(current status: archived, assignee: orchestrator)_
+- `t_1cb40600` — **Add Copy link action to clear-analysis confirmation dialog** _(current status: archived, assignee: worker-gemma)_
+- `t_384a031a` — **Add Copy link action to clear-analysis confirmation dialog** _(current status: archived, assignee: worker-gemma)_
+- `t_7d03da7c` — **Add Copy link action to clear-analysis confirmation dialog** _(current status: archived, assignee: worker-gemma)_
+- `t_9cbc125c` — **Add Copy link action to clear-analysis confirmation dialog** _(current status: archived, assignee: worker-gemma)_
+- `t_106cc3c9` — **Add Copy link action to New Analysis confirmation dialog** _(current status: archived, assignee: orchestrator)_
+- `t_f97fd02e` — **Add copy-link action to New Analysis confirmation dialog** _(current status: archived, assignee: orchestrator)_
+- `t_82d1b6fd` — **Add enterprise UI/input for lifecycle context selection** _(current status: archived, assignee: orchestrator)_
+- `t_a24bd448` — **Add matching anchor targets in Evidence Atlas UI** _(current status: archived, assignee: orchestrator)_
+- `t_ac9b7801` — **Add migrations for audit log tables** _(current status: archived, assignee: orchestrator)_
+- `t_f58594e3` — **Add optional inline-SVG radar chart to ScoreCard scoring UI** _(current status: archived, assignee: orchestrator)_
+- `t_39cb371b` — **Add or update tests for conditional copy-link behavior** _(current status: archived, assignee: orchestrator)_
+- `t_1d9f2d23` — **Add or update tests for confirm downgrade and flag outcomes** _(current status: archived, assignee: orchestrator)_
+- `t_5c648246` — **Add per-call trace persistence in callClaude path** _(current status: archived, assignee: orchestrator)_
+- `t_7362cec3` — **Add PMI provenance fields to analysis result view models** _(current status: archived, assignee: worker-gemma)_
+- `t_f0d3d881` — **Add Qwen local endpoint config for Ollama or vLLM** _(current status: archived, assignee: worker-gemma)_
+- `t_98954ed6` — **Add schema for analysis trace and dedup audit logging** _(current status: archived, assignee: orchestrator)_
+- `t_cacb5aa1` — **Add stable anchors to Evidence Atlas recommendation sections** _(current status: archived, assignee: orchestrator)_
+- `t_4cb450a2` — **Add stable anchors to Evidence Atlas sections** _(current status: archived, assignee: worker-gemma)_
+- `t_64c685fd` — **Add trace and dedup audit tables** _(current status: archived, assignee: worker-gemma)_
+- `t_9b5f2b44` — **Analyze board independence and LabreNew separation issues** _(current status: archived, assignee: orchestrator)_
+- `t_f6fc1966` — **Analyze board independence concerns regarding LabreNew** _(current status: archived, assignee: orchestrator)_
+- `t_3d159deb` — **Analyze board independence issues related to LabreNew** _(current status: archived, assignee: orchestrator)_
+- `t_b1020e5f` — **Analyze how decomposition and confidence changed output count** _(current status: archived, assignee: orchestrator)_
+- `t_74aafa7c` — **Analyze ownership split and board independence implications** _(current status: archived, assignee: orchestrator)_
+- `t_de93a520` — **Analyze results and document benchmark conclusions** _(current status: archived, assignee: reviewer)_
+- `t_df0d1edb` — **Analyze triazolo inconsistency and draft root-cause summary** _(current status: archived, assignee: orchestrator)_
+- `t_8261fe0d` — **Analyze whether LLM non-determinism explains the outlier** _(current status: archived, assignee: orchestrator)_
+- `t_d0a4daef` — **Apply radius standardization in Analysis page components** _(current status: archived, assignee: orchestrator)_
+- `t_5be9c55c` — **Apply standardized radius classes in Analysis page components** _(current status: archived, assignee: orchestrator)_
+- `t_520fc998` — **Assemble benchmark corpus from published validated cases** _(current status: archived, assignee: orchestrator)_
+- `t_62eb5185` — **Assemble final LOI/NDA handoff package** _(current status: archived, assignee: reviewer)_
+- `t_a89d0af7` — **Assemble implementation-ready retrieval pipeline spec** _(current status: archived, assignee: reviewer)_
+- `t_2e096128` — **Assemble initial corpus of published validated redesign papers** _(current status: archived, assignee: orchestrator)_
+- `t_d3dabf67` — **Assemble initial corpus of validated redesign benchmark cases** _(current status: archived, assignee: orchestrator)_
+- `t_e2a983d0` — **Assemble initial corpus of validated redesign papers** _(current status: archived, assignee: orchestrator)_
+- `t_92050a6e` — **Assemble known protocol validation set** _(current status: archived, assignee: worker-gemma)_
+- `t_71130c14` — **Assemble known-protocol validation set** _(current status: archived, assignee: worker-gemma)_
+- `t_040982a4` — **Assemble small DOZN validation corpus artifact (2-5 protocols)** _(current status: archived, assignee: orchestrator)_
+- `t_cd5db327` — **Assemble small literature-pair validation corpus artifact (2-5 greener benchmark pairs)** _(current status: archived, assignee: orchestrator)_
+- `t_aaa45c19` — **Assemble validation duplicate — superseded by canonical Qwen lane t_b2756420 and harness evidence card t_e0f60888** _(current status: archived, assignee: orchestrator)_
+- `t_f3a815e7` — **Assess board independence and LabreNew governance concerns** _(current status: archived, assignee: orchestrator)_
+- `t_9d741f9e` — **Assess board independence concerns related to LabreNew** _(current status: archived, assignee: orchestrator)_
+- `t_e60a9392` — **Assess board-independence concerns related to LabreNew ties** _(current status: archived, assignee: orchestrator)_
+- `t_558c9b0b` — **Assess current P11 and real-time framework against GAC concepts — duplicate/non-canonical lane; park in favor of canonical spec path t_34cd8931** _(current status: archived, assignee: orchestrator)_
+- `t_90ce8bf5` — **Assess current P11 scoring and real-time analysis touchpoints** _(current status: archived, assignee: worker-gemma)_
+- `t_02f54716` — **Assess deterministic scoring backlog coverage** _(current status: archived, assignee: worker-gemma)_
+- `t_bd35a1fd` — **Assess LabreNew-related independence and control concerns** _(current status: archived, assignee: orchestrator)_
+- `t_16dbcb48` — **Assess local serving options for Qwen on M5 Mac Studio** _(current status: archived, assignee: worker-gemma)_
+- `t_0d765b93` — **Assess local serving options for Qwen on the M5 Mac Studio** _(current status: archived, assignee: worker-gemma)_
+- `t_955c1019` — **Assess whether LLM nondeterminism explains the outlier** _(current status: archived, assignee: worker-gemma)_
+- `t_311fa8bd` — **Audit Analysis page border-radius usage** _(current status: archived, assignee: worker-gemma)_
+- `t_f093b8e1` — **Audit Analysis page border-radius usage** _(current status: archived, assignee: worker-gemma)_
+- `t_7944de76` — **Audit Analysis page radius usage and map each element to a standard** _(current status: archived, assignee: orchestrator)_
+- `t_b62a987b` — **Audit Analysis page radius usage and map elements to standards** _(current status: archived, assignee: orchestrator)_
+- `t_87f783d4` — **Audit Analysis page radius usage and map targets** _(current status: archived, assignee: orchestrator)_
+- `t_20d69daf` — **Audit current P11 scoring and real-time analysis framework** _(current status: archived, assignee: worker-gemma)_
+- `t_1ecec836` — **Audit current P11 scoring and real-time analysis framework touchpoints** _(current status: archived, assignee: worker-gemma)_
+- `t_83ac6b10` — **Audit current site and implement production-ready structure** _(current status: archived, assignee: worker-gemma)_
+- `t_1e528c7a` — **Audit current UI and define P0/P1 fix list** _(current status: archived, assignee: reviewer)_
+- `t_2892ea4c` — **Audit current UI and define P0/P1 fix list** _(current status: archived, assignee: orchestrator)_
+- `t_293fd2ac` — **Audit current UI and define P0/P1 fix list** _(current status: archived, assignee: orchestrator)_
+- `t_33a4e0ec` — **Audit current UI and define P0/P1 fix list** _(current status: archived, assignee: reviewer)_
+- `t_a8eebb46` — **Audit current UI and define P0/P1 fix list** _(current status: archived, assignee: orchestrator)_
+- `t_c3571b7b` — **Audit current UI and define P0/P1 fix list** _(current status: archived, assignee: orchestrator)_
+- `t_2f2a0611` — **Audit current UI and define P0/P1 remediation list** _(current status: archived, assignee: orchestrator)_
+- `t_fbef1661` — **Audit current UI and define P0/P1 remediation list** _(current status: archived, assignee: reviewer)_
+- `t_59dc2241` — **Audit current UI and enumerate P0/P1 issues** _(current status: archived, assignee: worker-gemma)_
+- `t_8f883ffa` — **Audit current UI and list P0/P1 remediation items** _(current status: archived, assignee: reviewer)_
+- `t_9dfdba64` — **Audit current UI and produce prioritized P0/P1 fix list** _(current status: archived, assignee: reviewer)_
+- `t_28fd16fa` — **Audit current UI issues and define P0/P1 fix list** _(current status: archived, assignee: worker-gemma)_
+- `t_eb69d450` — **Audit existing retrieval and indexing pipeline constraints** _(current status: archived, assignee: worker-gemma)_
+- `t_d73de5c9` — **Audit mobile viewport issues in demo scenario** _(current status: archived, assignee: worker-gemma)_
+- `t_e24dc92e` — **Audit mobile viewport issues in demo scenario** _(current status: archived, assignee: worker-gemma)_
+- `t_17b8daa9` — **Audit recommendation-to-Atlas mapping and anchor requirements** _(current status: archived, assignee: worker-gemma)_
+- `t_477ba3ec` — **Audit score and evidence paths needing provenance mapping** _(current status: archived, assignee: orchestrator)_
+- `t_787714c0` — **Audit SSE streaming path for local model analysis runs** _(current status: archived, assignee: worker-gemma)_
+- `t_6464a792` — **Audit trace schema duplicate — superseded by canonical audit path t_7028b7fa -> (t_88f0728f + t_c5b86ebb) -> t_5a2d93d8** _(current status: archived, assignee: orchestrator)_
+- `t_88f0728f` — **Audit trace: rewrite per-call trace leaf as a scratch-based bounded task before execution** _(current status: archived, assignee: orchestrator)_
+- `t_b3661566` — **Before/after rescoring duplicate — superseded by manifest -> live-artifact lane t_81eba547 -> t_b0b29b22 -> t_aae83242** _(current status: archived, assignee: orchestrator)_
+- `t_73e23a51` — **Build admin UI for configuring principle weights** _(current status: archived, assignee: worker-gemma)_
+- `t_a164fe50` — **Build admin UI for configuring principle weights** _(current status: archived, assignee: orchestrator)_
+- `t_ca33dc27` — **Build bibliography export for ACS, APA, and BibTeX** _(current status: archived, assignee: worker-gemma)_
+- `t_5236d120` — **Build gate: fix app/analyze/page.tsx escaped-newline parse error blocking print-cover route lane** _(current status: archived, assignee: worker-gemma)_
+- `t_e58a3936` — **Build gate: fix literature normalization nullability error blocking print-cover route lane** _(current status: archived, assignee: worker-gemma)_
+- `t_70cb1c36` — **Build gate: fix ScoreRadar ReactNode type error blocking print-cover route lane** _(current status: archived, assignee: worker-gemma)_
+- `t_f597e243` — **Build per-principle score bars with confidence states** _(current status: archived, assignee: worker-gemma)_
+- `t_ea4904dc` — **Build production-ready site structure and styling** _(current status: archived, assignee: worker-gemma)_
+- `t_a697baa8` — **Build substitution and input data matrix** _(current status: archived, assignee: orchestrator)_
+- `t_a303f420` — **Build summary scorecard and radar chart UI** _(current status: archived, assignee: worker-gemma)_
+- `t_191ba38c` — **Calculate before/after scores and principle estimates** _(current status: archived, assignee: orchestrator)_
+- `t_ba480b43` — **Choose bounded live-route integration approach for Quick Wins** _(current status: archived, assignee: orchestrator)_
+- `t_29fb0ca2` — **Choose one principle for fully cited demo path** _(current status: archived, assignee: worker-gemma)_
+- `t_641e757c` — **Citation scope duplicate — superseded by canonical one-principle citation path t_55666cdb -> t_f522acc2 -> t_92426a4d** _(current status: archived, assignee: orchestrator)_
+- `t_acf3eeb6` — **Collect literature-backed greener benchmark substitutions** _(current status: archived, assignee: worker-gemma)_
+- `t_9be8730c` — **Compare against DOZN and assess rank-order sanity** _(current status: archived, assignee: worker-gemma)_
+- `t_181f8d06` — **Compare current scores against DOZN benchmarks** _(current status: archived, assignee: worker-gemma)_
+- `t_ed033295` — **Compare model results and write benchmark report** _(current status: archived, assignee: reviewer)_
+- `t_a2b44567` — **Compare models and document benchmark conclusions** _(current status: archived, assignee: reviewer)_
+- `t_0c8918cb` — **Compare models and document benchmark verdict** _(current status: archived, assignee: reviewer)_
+- `t_d40ad6ae` — **Compare results and document benchmark conclusions** _(current status: archived, assignee: reviewer)_
+- `t_340d23c9` — **Compile candidate substitutions and input data** _(current status: archived, assignee: orchestrator)_
+- `t_ba2ce0ea` — **Confirm entity details and key engagement assumptions** _(current status: archived, assignee: orchestrator)_
+- `t_e8cdfad7` — **Consolidate and QA the deck spec into one coherent package** _(current status: archived, assignee: reviewer)_
+- `t_2534ef48` — **Consolidate deck brief and QA the story for executive use** _(current status: archived, assignee: reviewer)_
+- `t_96e992d5` — **Consolidate deck brief from narrative, demo, and roadmap** _(current status: archived, assignee: reviewer)_
+- `t_38e3ffba` — **Consolidate deck spec and review for gaps** _(current status: archived, assignee: reviewer)_
+- `t_88e4bdd2` — **Consolidate findings into backlog-ready bug update** _(current status: archived, assignee: reviewer)_
+- `t_8096dbf7` — **Consolidate integration spec and QA recommendations** _(current status: archived, assignee: reviewer)_
+- `t_fa77ffe7` — **Consolidate into a final deck specification** _(current status: archived, assignee: reviewer)_
+- `t_de7b432b` — **Consolidate into an implementation-ready article update spec** _(current status: archived, assignee: reviewer)_
+- `t_a4ec5ca6` — **Consolidate into final deck specification** _(current status: archived, assignee: reviewer)_
+- `t_6d3e73f9` — **Consolidate into final slide-by-slide deck spec** _(current status: archived, assignee: reviewer)_
+- `t_0e29e2d2` — **Consolidate into implementation-ready feature specification** _(current status: archived, assignee: orchestrator)_
+- `t_cb20b358` — **Consolidate into implementation-ready recommendation spec** _(current status: archived, assignee: reviewer)_
+- `t_b62d3037` — **Consolidate scope, scoring, and integration into build plan** _(current status: archived, assignee: reviewer)_
+- `t_f3320c4d` — **Consolidate spec, rubric, and repo plan into implementation recommendation** _(current status: archived, assignee: reviewer)_
+- `t_0ed9e026` — **Consolidate taxonomy, mapping, and rollout into final design** _(current status: archived, assignee: reviewer)_
+- `t_f0155b69` — **Consolidate templates and add final review notes** _(current status: archived, assignee: reviewer)_
+- `t_5773d076` — **Consolidate templates and review for readiness** _(current status: archived, assignee: reviewer)_
+- `t_1afb49dc` — **Create evaluation plan and test set for route precedent retrieval** _(current status: archived, assignee: reviewer)_
+- `t_073225d6` — **Create validation dataset and QA checklist** _(current status: archived, assignee: orchestrator)_
+- `t_3c10700b` — **Create validation set and QA the citation pipeline** _(current status: archived, assignee: reviewer)_
+- `t_111515a7` — **Curate initial corpus of validated redesign papers** _(current status: archived, assignee: orchestrator)_
+- `t_834379f6` — **Curate literature cases into a process-redesign benchmark corpus** _(current status: archived, assignee: orchestrator)_
+- `t_c7ae38c3` — **Curate literature-backed greener benchmark cases** _(current status: archived, assignee: worker-gemma)_
+- `t_cb1029b0` — **Curate literature-backed greener benchmark cases** _(current status: archived, assignee: worker-gemma)_
+- `t_f469f5c6` — **Curate published validated process-redesign benchmark cases** _(current status: archived, assignee: orchestrator)_
+- `t_7543e01f` — **Curate published validated redesign cases into a benchmark set** _(current status: archived, assignee: orchestrator)_
+- `t_fd6c2803` — **Data: add ACS Sustainable Chemistry & Engineering OA adapter + multi-source ingest verification** _(current status: archived, assignee: worker-gemma)_
+- `t_d2760f0e` — **Data: literature ingestion canonical path — substrate first, then source adapters** _(current status: archived, assignee: orchestrator)_
+- `t_f4094b1b` — **Define 6-month roadmap and live demo talk track** _(current status: archived, assignee: orchestrator)_
+- `t_55d7edc5` — **Define a 6-month roadmap for the deck** _(current status: archived, assignee: orchestrator)_
+- `t_b5b7e0ab` — **Define analysis-step UX and output contract** _(current status: archived, assignee: orchestrator)_
+- `t_bb50ac7b` — **Define approved full-text retrieval path for backlog papers** _(current status: archived, assignee: orchestrator)_
+- `t_e2b87844` — **Define backlog retrieval scope and paper selection** _(current status: archived, assignee: worker-gemma)_
+- `t_a063951e` — **Define backlog target set and retrieval eligibility rules** _(current status: archived, assignee: worker-gemma)_
+- `t_1cf8d602` — **Define before/after substitution scenarios and required inputs** _(current status: archived, assignee: worker-gemma)_
+- `t_06b0a030` — **Define benchmark criteria and evaluation protocol** _(current status: archived, assignee: orchestrator)_
+- `t_4d6aebfe` — **Define benchmark protocol and scoring rubric** _(current status: archived, assignee: orchestrator)_
+- `t_a530c2a7` — **Define benchmark protocol and scoring rubric** _(current status: archived, assignee: reviewer)_
+- `t_ae9f94de` — **Define benchmark protocol and scoring rubric** _(current status: archived, assignee: worker-gemma)_
+- `t_20656742` — **Define benchmark rubric and execution protocol** _(current status: archived, assignee: orchestrator)_
+- `t_7cabb227` — **Define benchmark rubric and test matrix** _(current status: archived, assignee: orchestrator)_
+- `t_fe210061` — **Define benchmark schema and evaluation protocol** _(current status: archived, assignee: orchestrator)_
+- `t_15975697` — **Define benchmark schema and inclusion criteria** _(current status: archived, assignee: orchestrator)_
+- `t_6431f1ff` — **Define benchmark schema and inclusion rules for redesign cases** _(current status: archived, assignee: orchestrator)_
+- `t_c22b068c` — **Define benchmark spec for validated process-redesign cases** _(current status: archived, assignee: orchestrator)_
+- `t_f0ffffeb` — **Define bounded PMI provenance contract changes** _(current status: archived, assignee: orchestrator)_
+- `t_7c1eecfc` — **Define business assumptions for LOI and NDA templates** _(current status: archived, assignee: orchestrator)_
+- `t_a99fa7b8` — **Define canonical provenance taxonomy and decision rules** _(current status: archived, assignee: orchestrator)_
+- `t_ce8f2113` — **Define canonical provenance taxonomy and decision rules** _(current status: archived, assignee: orchestrator)_
+- `t_e28c9f51` — **Define canonical provenance taxonomy and decision rules** _(current status: archived, assignee: orchestrator)_
+- `t_1611a92b` — **Define canonical provenance taxonomy and semantics** _(current status: archived, assignee: worker-gemma)_
+- `t_8ab52de5` — **Define canonical score provenance taxonomy** _(current status: archived, assignee: worker-gemma)_
+- `t_aebe58c9` — **Define canonical scoring provenance taxonomy** _(current status: archived, assignee: orchestrator)_
+- `t_da02a22b` — **Define canonical scoring provenance taxonomy** _(current status: archived, assignee: worker-gemma)_
+- `t_0e144cce` — **Define citation display behavior for a single principle evaluation** _(current status: archived, assignee: worker-gemma)_
+- `t_9b7f08d4` — **Define citation display contract for principle evaluation UI** _(current status: archived, assignee: worker-gemma)_
+- `t_f7d151ac` — **Define cited-principle demo scope and citation contract** _(current status: archived, assignee: worker-gemma)_
+- `t_72a13682` — **Define compliant retrieval approach for backlog full texts** _(current status: archived, assignee: orchestrator)_
+- `t_feafeda5` — **Define deep-link contract for recommendations and Atlas sections** _(current status: archived, assignee: orchestrator)_
+- `t_2e1378ac` — **Define deployment and end-of-life context taxonomy** _(current status: archived, assignee: worker-gemma)_
+- `t_fb89b1e1` — **Define deployment and end-of-life context taxonomy** _(current status: archived, assignee: worker-gemma)_
+- `t_f7bf15a2` — **Define deployment and end-of-life scoring contexts** _(current status: archived, assignee: worker-gemma)_
+- `t_93223bb8` — **Define deployment/disposal context taxonomy and boundaries** _(current status: archived, assignee: orchestrator)_
+- `t_3a0009c9` — **Define deployment/disposal context taxonomy and requirements** _(current status: archived, assignee: orchestrator)_
+- `t_25243bb1` — **Define deterministic scoring backlog follow-up for triazolo** _(current status: archived, assignee: worker-gemma)_
+- `t_fe0a18e6` — **Define deterministic scoring backlog work for this class of bug** _(current status: archived, assignee: worker-gemma)_
+- `t_82f430c3` — **Define deterministic scoring mitigation for this failure mode** _(current status: archived, assignee: worker-gemma)_
+- `t_07e5791c` — **Define disposition against deterministic scoring backlog** _(current status: archived, assignee: orchestrator)_
+- `t_1aa50db3` — **Define enterprise context-profile product requirements** _(current status: archived, assignee: orchestrator)_
+- `t_32b600e1` — **Define enterprise website requirements and page copy** _(current status: archived, assignee: orchestrator)_
+- `t_9954022f` — **Define enterprise website requirements and page outline** _(current status: archived, assignee: worker-gemma)_
+- `t_a9f94634` — **Define enterprise website requirements and page plan** _(current status: archived, assignee: worker-gemma)_
+- `t_572301e0` — **Define first-pass mechanochemistry recommendation scope** _(current status: archived, assignee: orchestrator)_
+- `t_36165d8f` — **Define homepage demo selection criteria** _(current status: archived, assignee: orchestrator)_
+- `t_7b5c8550` — **Define homepage demo selection criteria** _(current status: archived, assignee: orchestrator)_
+- `t_1cff3f2a` — **Define mitigation plan tied to deterministic scoring backlog** _(current status: archived, assignee: orchestrator)_
+- `t_dfa0ee28` — **Define MVP scope for mechanochemistry recommendation layer** _(current status: archived, assignee: orchestrator)_
+- `t_3a10fc9e` — **Define PMI display contract and provenance states** _(current status: archived, assignee: worker-gemma)_
+- `t_c107cd9c` — **Define PMI display contract and provenance states** _(current status: archived, assignee: worker-gemma)_
+- `t_4ff008d2` — **Define PMI display contract and QA cases** _(current status: archived, assignee: orchestrator)_
+- `t_0dca997e` — **Define PMI display contract for results and Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_fda514b9` — **Define PMI display spec and provenance states** _(current status: archived, assignee: orchestrator)_
+- `t_1df9f151` — **Define PMI display states and data contract** _(current status: archived, assignee: orchestrator)_
+- `t_916128b0` — **Define PMI provenance contract and UI acceptance states** _(current status: archived, assignee: orchestrator)_
+- `t_145cabf1` — **Define PMI provenance display contract for results and atlas** _(current status: archived, assignee: orchestrator)_
+- `t_cbee3053` — **Define process-redesign benchmark protocol** _(current status: archived, assignee: orchestrator)_
+- `t_128b1a0c` — **Define product scope for context-specific EOL scoring** _(current status: archived, assignee: orchestrator)_
+- `t_85160de3` — **Define product scope for mechanochemistry recommendations** _(current status: archived, assignee: orchestrator)_
+- `t_93713a7b` — **Define provenance confidence model and UI behavior** _(current status: archived, assignee: worker-gemma)_
+- `t_5a8d0edd` — **Define provenance indicator behavior for scoring outputs** _(current status: archived, assignee: worker-gemma)_
+- `t_b1afc0f1` — **Define provenance indicator rules for scoring outputs** _(current status: archived, assignee: worker-gemma)_
+- `t_18ca6585` — **Define provenance indicator UX for scoring outputs** _(current status: archived, assignee: orchestrator)_
+- `t_6922bcda` — **Define provenance indicator UX for scoring outputs** _(current status: archived, assignee: orchestrator)_
+- `t_cccf84e4` — **Define provenance indicator UX for scoring outputs** _(current status: archived, assignee: orchestrator)_
+- `t_967d2cce` — **Define provenance states and display rules for scoring inputs** _(current status: archived, assignee: worker-gemma)_
+- `t_14bda241` — **Define provenance states and UI display rules** _(current status: archived, assignee: worker-gemma)_
+- `t_9328d964` — **Define provenance taxonomy and decision rules** _(current status: archived, assignee: worker-gemma)_
+- `t_92a27530` — **Define provenance taxonomy semantics and decision rules** _(current status: archived, assignee: orchestrator)_
+- `t_e0ad35f0` — **Define Quick Wins summary content and interaction spec** _(current status: archived, assignee: orchestrator)_
+- `t_9d910a24` — **Define Quick Wins summary spec for Millipore Sigma UI** _(current status: archived, assignee: worker-gemma)_
+- `t_60ee114a` — **Define Quick Wins summary spec for Millipore Sigma view** _(current status: archived, assignee: orchestrator)_
+- `t_c0acc552` — **Define recommendation-to-Atlas anchor mapping** _(current status: archived, assignee: worker-gemma)_
+- `t_8d1e9251` — **Define retrieval spec for route-optimization literature** _(current status: archived, assignee: orchestrator)_
+- `t_8db247e1` — **Define route-level precedent retrieval scope and schema** _(current status: archived, assignee: orchestrator)_
+- `t_09da31fa` — **Define route-precedent retrieval product spec** _(current status: archived, assignee: orchestrator)_
+- `t_431b3faf` — **Define route-precedent retrieval scope and query strategy** _(current status: archived, assignee: orchestrator)_
+- `t_54713861` — **Define route-precedent retrieval scope and success criteria** _(current status: archived, assignee: orchestrator)_
+- `t_d5fb490e` — **Define route-precedent retrieval targets and query strategy** _(current status: archived, assignee: worker-gemma)_
+- `t_2862b4c9` — **Define Sci-Hub backlog retrieval plan and target paper set** _(current status: archived, assignee: worker-gemma)_
+- `t_394cfee2` — **Define scope for mechanochemistry recommendation candidates** _(current status: archived, assignee: orchestrator)_
+- `t_ce36aa27` — **Define scope for mechanochemistry recommendation layer** _(current status: archived, assignee: orchestrator)_
+- `t_8a09890d` — **Define scoring inputs, formulas, and substitution assumptions** _(current status: archived, assignee: orchestrator)_
+- `t_ea27337a` — **Define scoring method and output format** _(current status: archived, assignee: orchestrator)_
+- `t_b803c1a2` — **Define scoring rerun spec for before/after prediction** _(current status: archived, assignee: orchestrator)_
+- `t_d5ad5309` — **Define scoring scope and required comparison outputs** _(current status: archived, assignee: orchestrator)_
+- `t_fe7e7eec` — **Define scoring UI contract and interaction spec** _(current status: archived, assignee: worker-gemma)_
+- `t_21c1317b` — **Define scoring UI data contract and interaction states** _(current status: archived, assignee: worker-gemma)_
+- `t_a46a788c` — **Define short-term mitigations for recommendation count instability** _(current status: archived, assignee: worker-gemma)_
+- `t_5ec5fb5b` — **Define source coverage and ingestion schema** _(current status: archived, assignee: worker-gemma)_
+- `t_7949e8d8` — **Define substitution scenarios and required scoring inputs** _(current status: archived, assignee: worker-gemma)_
+- `t_947ba02b` — **Define substitution scenarios and required scoring inputs** _(current status: archived, assignee: worker-gemma)_
+- `t_1e8a3f85` — **Define substitution scenarios and scoring inputs** _(current status: archived, assignee: orchestrator)_
+- `t_8073a7cf` — **Define substitution scenarios and scoring inputs** _(current status: archived, assignee: worker-gemma)_
+- `t_e50d6ae7` — **Define substitution scoring method and output format** _(current status: archived, assignee: orchestrator)_
+- `t_16b6e4d2` — **Define target backlog papers and retrieval requirements** _(current status: archived, assignee: orchestrator)_
+- `t_3dc02320` — **Define target backlog set and retrieval workflow** _(current status: archived, assignee: orchestrator)_
+- `t_81a333fb` — **Define target sources and ingestion requirements** _(current status: archived, assignee: default)_
+- `t_6b0c5fd5` — **Define target sources and OA acquisition rules** _(current status: archived, assignee: worker-gemma)_
+- `t_2415a690` — **Define the 6-month roadmap content for the deck** _(current status: archived, assignee: orchestrator)_
+- `t_fc73a3ba` — **Define the canonical scoring provenance taxonomy** _(current status: archived, assignee: worker-gemma)_
+- `t_e2ad6fa0` — **Define the next-6-month roadmap content for the deck** _(current status: archived, assignee: orchestrator)_
+- `t_1ae062a5` — **Define the next-6-month roadmap slide content** _(current status: archived, assignee: orchestrator)_
+- `t_25cf7a57` — **Define the next-6-month roadmap story** _(current status: archived, assignee: orchestrator)_
+- `t_cd3387a1` — **Define the provenance taxonomy and decision rules** _(current status: archived, assignee: orchestrator)_
+- `t_bb680909` — **Define transparency analysis UX and output contract** _(current status: archived, assignee: worker-gemma)_
+- `t_207594a4` — **Define UI spec for assumed-chemistry review screen** _(current status: archived, assignee: orchestrator)_
+- `t_c17823c6` — **Define UX and data contract for assumed-chemistry review** _(current status: archived, assignee: orchestrator)_
+- `t_556188e8` — **Define UX and output contract for reaction-step transparency** _(current status: archived, assignee: worker-gemma)_
+- `t_cf02fc2e` — **Define UX and output contract for reaction-step transparency** _(current status: archived, assignee: worker-gemma)_
+- `t_a66ef137` — **Define validation benchmark protocol set** _(current status: archived, assignee: worker-gemma)_
+- `t_df4a8233` — **Define validation benchmark set and comparison template** _(current status: archived, assignee: worker-gemma)_
+- `t_cb012537` — **Define weighted scoring model and admin configuration rules** _(current status: archived, assignee: worker-gemma)_
+- `t_db50a46f` — **Define weighted scoring rules and admin requirements** _(current status: archived, assignee: worker-gemma)_
+- `t_af74c9c2` — **Design admin panel UX and configuration data model** _(current status: archived, assignee: worker-gemma)_
+- `t_5f2c659b` — **Design admin panel UX for configuring weighted grading** _(current status: archived, assignee: worker-gemma)_
+- `t_0c5faffa` — **Design and add trace logging tables and migration** _(current status: archived, assignee: worker-gemma)_
+- `t_9adc6f34` — **Design audit schema for trace and dedup logging** _(current status: archived, assignee: worker-gemma)_
+- `t_ab6ee094` — **Design citation and metadata normalization schema** _(current status: archived, assignee: orchestrator)_
+- `t_a967eedd` — **Design citation output and normalization requirements** _(current status: archived, assignee: orchestrator)_
+- `t_f4999251` — **Design citation output requirements and QA rules** _(current status: archived, assignee: worker-gemma)_
+- `t_2971aedc` — **Design context-aware degradation scoring framework** _(current status: archived, assignee: orchestrator)_
+- `t_a1f80df4` — **Design context-specific scoring profile model** _(current status: archived, assignee: worker-gemma)_
+- `t_7640b727` — **Design evaluation cases for route-precedent retrieval** _(current status: archived, assignee: reviewer)_
+- `t_3f08f688` — **Design evaluation set and acceptance tests for precedent surfacing** _(current status: archived, assignee: orchestrator)_
+- `t_495245fc` — **Design evidence extraction and ranking criteria** _(current status: archived, assignee: orchestrator)_
+- `t_a9fe1d81` — **Design Green Chemistry scoring rubric for mechanochemistry options** _(current status: archived, assignee: orchestrator)_
+- `t_26dfc229` — **Design literature retrieval and ranking approach** _(current status: archived, assignee: orchestrator)_
+- `t_5f4e7d72` — **Design literature retrieval strategy for route-optimization precedents** _(current status: archived, assignee: worker-gemma)_
+- `t_b5798963` — **Design literature search and evidence protocol** _(current status: archived, assignee: orchestrator)_
+- `t_3673bf67` — **Design literature triage for mechanochemical analog discovery** _(current status: archived, assignee: orchestrator)_
+- `t_8c27b401` — **Design literature-search and candidate evidence framework** _(current status: archived, assignee: orchestrator)_
+- `t_2bad9ede` — **Design mechanochemistry scoring mapping into Green Chemistry** _(current status: archived, assignee: orchestrator)_
+- `t_eb658e70` — **Design mechanochemistry scoring within Green Chemistry framework** _(current status: archived, assignee: orchestrator)_
+- `t_01fdff80` — **Design P11 scoring updates from GAC principles** _(current status: archived, assignee: orchestrator)_
+- `t_e638ac6c` — **Design ranking and extraction schema for procedural precedents** _(current status: archived, assignee: worker-gemma)_
+- `t_5b8f9c7c` — **Design real-time analysis framework updates** _(current status: archived, assignee: orchestrator)_
+- `t_c07e09ad` — **Design real-time analysis framework updates from GAC review** _(current status: archived, assignee: worker-gemma)_
+- `t_2b5c14b9` — **Design real-time analysis framework updates from the GAC review** _(current status: archived, assignee: worker-gemma)_
+- `t_b06c113a` — **Design retrieval and ranking strategy for literature precedents** _(current status: archived, assignee: orchestrator)_
+- `t_e27ca390` — **Design scoring and evidence mapping for mechanochemistry** _(current status: archived, assignee: orchestrator)_
+- `t_8c1b0d08` — **Design scoring logic for deployment and disposal contexts** _(current status: archived, assignee: orchestrator)_
+- `t_51f490be` — **Design scoring model behavior by deployment/disposal context** _(current status: archived, assignee: orchestrator)_
+- `t_ed4365c2` — **Design scoring rubric for mechanochemistry alternatives** _(current status: archived, assignee: orchestrator)_
+- `t_0936e2d2` — **Design scoring semantics for context-specific profiles** _(current status: archived, assignee: orchestrator)_
+- `t_bdcdcbd8` — **Design scoring-profile behavior and user-facing product spec** _(current status: archived, assignee: worker-gemma)_
+- `t_a54bf78f` — **Design scoring-profile behavior for context-specific end of life** _(current status: archived, assignee: orchestrator)_
+- `t_7bcafced` — **Design the live demo storyline and talk track** _(current status: archived, assignee: orchestrator)_
+- `t_9dfc3b07` — **Design trace and dedup audit schema** _(current status: archived, assignee: orchestrator)_
+- `t_3f75ba21` — **Design trace and dedup log persistence schema** _(current status: archived, assignee: worker-gemma)_
+- `t_9b581805` — **Design trace and dedup log schema** _(current status: archived, assignee: orchestrator)_
+- `t_96a39b81` — **Diagnose local Next.js 500 blocking Evidence Atlas manual review** _(current status: archived, assignee: orchestrator)_
+- `t_0e607fd5` — **Diagnose missing demo reaction results on home page** _(current status: archived, assignee: orchestrator)_
+- `t_9e32458c` — **Diagnose why homepage demo reaction results are incomplete** _(current status: archived, assignee: worker-gemma)_
+- `t_a0056159` — **Document inconsistency incident and likely root cause** _(current status: archived, assignee: worker-gemma)_
+- `t_6557a43e` — **Document model choice and one-command startup steps** _(current status: archived, assignee: worker-gemma)_
+- `t_b65adeaa` — **Document model choice and startup instructions** _(current status: archived, assignee: worker-gemma)_
+- `t_b5342662` — **Document model choice, hardware fit, and startup commands** _(current status: archived, assignee: worker-gemma)_
+- `t_c68d700c` — **Document Qwen model selection and startup instructions** _(current status: archived, assignee: worker-gemma)_
+- `t_c36b1d76` — **Document the inconsistency incident and likely root cause** _(current status: archived, assignee: orchestrator)_
+- `t_64916cdd` — **Draft AI estimate of likely principles impacted by substitutions** _(current status: archived, assignee: worker-gemma)_
+- `t_00560154` — **Draft AI estimated principles and before/after summary** _(current status: archived, assignee: worker-gemma)_
+- `t_23d6bb8f` — **Draft backend provenance implementation decision brief** _(current status: archived, assignee: orchestrator)_
+- `t_045ed987` — **Draft backlog-ready GAC integration implementation spec from the canonical mapping proposal** _(current status: archived, assignee: orchestrator)_
+- `t_117233e6` — **Draft backlog/closure note tied to deterministic scoring work** _(current status: archived, assignee: orchestrator)_
+- `t_cf2880d4` — **Draft bug-note resolution and backlog linkage** _(current status: archived, assignee: reviewer)_
+- `t_492717a1` — **Draft canonical scoring provenance taxonomy spec** _(current status: archived, assignee: orchestrator)_
+- `t_bb720408` — **Draft concrete bug write-up and next-step proposal** _(current status: archived, assignee: reviewer)_
+- `t_3a6be2a7` — **Draft core deck narrative and slide arc** _(current status: archived, assignee: orchestrator)_
+- `t_c38a54ba` — **Draft deck narrative and audience-specific messaging** _(current status: archived, assignee: orchestrator)_
+- `t_e6fc53dc` — **Draft end-to-end product spec for protocol-to-precedent workflow** _(current status: archived, assignee: worker-gemma)_
+- `t_da220f62` — **Draft enforcement guidance for UI and implementation** _(current status: archived, assignee: reviewer)_
+- `t_a5019e74` — **Draft enforcement rules and UI labeling guidelines** _(current status: archived, assignee: worker-gemma)_
+- `t_4d5161f6` — **Draft final integration spec for backlog implementation** _(current status: archived, assignee: reviewer)_
+- `t_f1d7b062` — **Draft implementation-ready product and technical spec** _(current status: archived, assignee: orchestrator)_
+- `t_8677b8c7` — **Draft integrated P11 and real-time framework update** _(current status: archived, assignee: worker-gemma)_
+- `t_34cd8931` — **Draft integration spec for adding 2025 GAC guidance to P11** _(current status: archived, assignee: orchestrator)_
+- `t_0bd44c8a` — **Draft LOI template for CST engagement** _(current status: archived, assignee: orchestrator)_
+- `t_68e47d91` — **Draft LOI template for CST engagement** _(current status: archived, assignee: orchestrator)_
+- `t_d39b0dcd` — **Draft LOI template for CST engagement under greenchemistry.ai LLC** _(current status: archived, assignee: orchestrator)_
+- `t_37cf0f23` — **Draft LOI template for greenchemistry.ai LLC** _(current status: archived, assignee: orchestrator)_
+- `t_4c63757f` — **Draft LOI template for greenchemistry.ai LLC** _(current status: archived, assignee: orchestrator)_
+- `t_1e3bcc0d` — **Draft LOI template for greenchemistry.ai LLC and CST** _(current status: archived, assignee: orchestrator)_
+- `t_fae2a98d` — **Draft LOI template for greenchemistry.ai LLC and CST** _(current status: archived, assignee: orchestrator)_
+- `t_158c6e5d` — **Draft LOI template for greenchemistry.ai LLC and CST engagement** _(current status: archived, assignee: orchestrator)_
+- `t_5fd15da4` — **Draft mutual NDA template for CST discussions** _(current status: archived, assignee: orchestrator)_
+- `t_a3a76d38` — **Draft mutual NDA template for CST discussions** _(current status: archived, assignee: orchestrator)_
+- `t_5b6ad349` — **Draft mutual NDA template for greenchemistry.ai LLC** _(current status: archived, assignee: orchestrator)_
+- `t_7afa76c9` — **Draft mutual NDA template for greenchemistry.ai LLC** _(current status: archived, assignee: orchestrator)_
+- `t_bd913528` — **Draft mutual NDA template for greenchemistry.ai LLC** _(current status: archived, assignee: orchestrator)_
+- `t_c8d39051` — **Draft mutual NDA template for greenchemistry.ai LLC** _(current status: archived, assignee: orchestrator)_
+- `t_f007901a` — **Draft mutual NDA template for greenchemistry.ai LLC** _(current status: archived, assignee: orchestrator)_
+- `t_c8aabbd8` — **Draft NDA template for greenchemistry.ai LLC** _(current status: archived, assignee: orchestrator)_
+- `t_852e2168` — **Draft pitch narrative and slide arc** _(current status: archived, assignee: orchestrator)_
+- `t_354c04a3` — **Draft product spec for enterprise context selection** _(current status: archived, assignee: orchestrator)_
+- `t_c85ed06b` — **Draft production-ready website copy for key pages** _(current status: archived, assignee: worker-gemma)_
+- `t_b0019c5e` — **Draft scoped spec for mechanochemistry recommendation layer** _(current status: archived, assignee: orchestrator)_
+- `t_6b503ef5` — **Draft slide narrative and messaging spine** _(current status: archived, assignee: orchestrator)_
+- `t_e8ed7ed7` — **Draft slide narrative for Millipore Sigma pitch deck** _(current status: archived, assignee: orchestrator)_
+- `t_3e109ec0` — **Draft slide-by-slide narrative for the April 2 pitch deck** _(current status: archived, assignee: orchestrator)_
+- `t_a8dac9aa` — **Draft slide-by-slide story for the April 2 pitch deck** _(current status: archived, assignee: orchestrator)_
+- `t_7c4c35a6` — **Draft the presentation narrative and slide storyline** _(current status: archived, assignee: orchestrator)_
+- `t_693e2c03` — **Estimate AI-based principle impacts from substitutions** _(current status: archived, assignee: worker-gemma)_
+- `t_90b721a5` — **Estimate principles with AI for substituted chemicals** _(current status: archived, assignee: worker-gemma)_
+- `t_ca586624` — **Evaluate candidates against the demo rubric** _(current status: archived, assignee: orchestrator)_
+- `t_95f343ef` — **Evaluate GC.ai on the redesign benchmark and summarize results** _(current status: archived, assignee: reviewer)_
+- `t_0a8e86d9` — **Evaluate GC.ai ranking on the curated redesign benchmark** _(current status: archived, assignee: orchestrator)_
+- `t_9f8a2511` — **Evaluate GC.ai ranking on the redesign benchmark** _(current status: archived, assignee: orchestrator)_
+- `t_4e9ecd70` — **Execute before/after scoring run for substituted chemicals** _(current status: archived, assignee: orchestrator)_
+- `t_2ca5ab84` — **Expose Evidence Atlas deep links in active recommendation flows** _(current status: archived, assignee: worker-gemma)_
+- `t_704ce9ad` — **Extract actionable GAC principles from the 2025 review** _(current status: archived, assignee: orchestrator)_
+- `t_272a20ba` — **Extract GAC principles and evaluative criteria from the 2025 review** _(current status: archived, assignee: orchestrator)_
+- `t_691353c2` — **Extract GAC principles and scoring concepts from the 2025 review** _(current status: archived, assignee: worker-gemma)_
+- `t_7f2c0f69` — **Extract GAC principles and scoring criteria from the 2025 review** _(current status: archived, assignee: worker-gemma)_
+- `t_32c1c228` — **Extract GAC principles and scoring cues from the 2025 review** _(current status: archived, assignee: worker-gemma)_
+- `t_6c1a649b` — **Extract GAC principles and scoring-relevant claims from source** _(current status: archived, assignee: worker-gemma)_
+- `t_b2756420` — **Fix evaluate and assemble Qwen schema compatibility** _(current status: archived, assignee: worker-gemma)_
+- `t_8cb8a932` — **Fix Evidence Atlas PMI provenance badge labels for benchmark/inferred states — duplicate/superseded by canonical scoring provenance lane t_89ae0ce1 -> t_63f75e45 -> t_a6c88881** _(current status: archived, assignee: orchestrator)_
+- `t_ecd6920f` — **Fix mobile usability of accept-all and reject-all actions** _(current status: archived, assignee: worker-gemma)_
+- `t_aafeffdf` — **Fix parse-phase Qwen structured output compatibility** _(current status: archived, assignee: worker-gemma)_
+- `t_50b0709b` — **Fix provenance review follow-up defects on scoring surfaces** _(current status: archived, assignee: orchestrator)_
+- `t_aae478c5` — **Fix Qwen structured output compatibility across all phases** _(current status: archived, assignee: worker-gemma)_
+- `t_cd5fba66` — **Fix schema gaps and verify 5 clean end-to-end runs** _(current status: archived, assignee: worker-gemma)_
+- `t_b7270178` — **Fix scoring UI review blockers: radar mounting, honest projected comparison, and detail/provenance semantics** _(current status: archived, assignee: worker-gemma)_
+- `t_dbac77c0` — **GAC article extraction duplicate — superseded by canonical path t_272a20ba -> t_34cd8931 -> t_4617697c** _(current status: archived, assignee: orchestrator)_
+- `t_a4523c2f` — **Gather artifacts and compare the three triazolo runs** _(current status: archived, assignee: orchestrator)_
+- `t_1f9b6c89` — **Implement 44px touch-target sizing pass across app chrome and decision controls** _(current status: archived, assignee: orchestrator)_
+- `t_c2c05bfa` — **Implement accessibility and interaction fixes in UI** _(current status: archived, assignee: orchestrator)_
+- `t_bdb93f9b` — **Implement accessibility and interaction P1 fixes from UI audit** _(current status: archived, assignee: worker-gemma)_
+- `t_ba4dc3b0` — **Implement admin UI for 12-principle weighting config** _(current status: archived, assignee: orchestrator)_
+- `t_d92b1467` — **Implement admin UI for editing principle weights** _(current status: archived, assignee: orchestrator)_
+- `t_d4a6324d` — **Implement admin UI for use-case-weighted scoring** _(current status: archived, assignee: worker-gemma)_
+- `t_5a9b1cc0` — **Implement admin weighting UI in the enterprise settings surface** _(current status: archived, assignee: orchestrator)_
+- `t_20b27603` — **Implement Analysis page radius normalization in concrete results components** _(current status: archived, assignee: worker-gemma)_
+- `t_762fb715` — **Implement analysis section for assumed reaction steps** _(current status: archived, assignee: orchestrator)_
+- `t_43d3cb1c` — **Implement analysis section in recommendation flow** _(current status: archived, assignee: orchestrator)_
+- `t_e6da1ed2` — **Implement Analysis view toggle as bottom-border tabs** _(current status: archived, assignee: orchestrator)_
+- `t_9520b342` — **Implement Analysis view toggle as filter-style tabs** _(current status: archived, assignee: orchestrator)_
+- `t_71226ebb` — **Implement Analysis view toggle as tab-style control** _(current status: archived, assignee: orchestrator)_
+- `t_e2d55cc0` — **Implement and verify local Qwen endpoint on Mac Studio** _(current status: archived, assignee: orchestrator)_
+- `t_d6c99427` — **Implement Arrow and Enter keyboard navigation in sidebar** _(current status: archived, assignee: worker-gemma)_
+- `t_c4944857` — **Implement assumed-chemistry review screen in frontend flow** _(current status: archived, assignee: orchestrator)_
+- `t_265d1abc` — **Implement assumed-chemistry review screen UI** _(current status: archived, assignee: orchestrator)_
+- `t_9e8e07bc` — **Implement assumed-chemistry review screen UI** _(current status: archived, assignee: orchestrator)_
+- `t_1481c3ab` — **Implement assumed-chemistry section in recommendation flow** _(current status: archived, assignee: orchestrator)_
+- `t_d1f29400` — **Implement Atlas deep links in recommendation UI** _(current status: archived, assignee: orchestrator)_
+- `t_81128408` — **Implement Atlas section anchors and recommendation deep links** _(current status: archived, assignee: orchestrator)_
+- `t_0624da1d` — **Implement audit-score improvements in frontend** _(current status: archived, assignee: worker-gemma)_
+- `t_0a39df61` — **Implement backend support for org weight config and grade calc** _(current status: archived, assignee: orchestrator)_
+- `t_3c80e58b` — **Implement backend support for weighted principle grading** _(current status: archived, assignee: worker-gemma)_
+- `t_213c4cf4` — **Implement backlog full-text retrieval path from Sci-Hub** _(current status: archived, assignee: worker-gemma)_
+- `t_89be6f18` — **Implement before/after comparison visualization** _(current status: archived, assignee: worker-gemma)_
+- `t_c423f5a5` — **Implement before/after comparison visualization** _(current status: archived, assignee: orchestrator)_
+- `t_2e86dfff` — **Implement before/after scoring comparison visualization** _(current status: archived, assignee: worker-gemma)_
+- `t_753115fa` — **Implement bounded Playwright auth coverage for current email flows** _(current status: archived, assignee: orchestrator)_
+- `t_bf996baa` — **Implement bounded PMID→DOI→Sci-Hub retrieval + persisted normalized text for validation PMIDs** _(current status: archived, assignee: worker-gemma)_
+- `t_63f75e45` — **Implement canonical provenance badges on scoring surfaces** _(current status: archived, assignee: orchestrator)_
+- `t_f2f40dc0` — **Implement canonical provenance mapping in scoring modules** _(current status: archived, assignee: orchestrator)_
+- `t_a96f97bf` — **Implement chemistry review screen in the UI flow** _(current status: archived, assignee: orchestrator)_
+- `t_f522acc2` — **Implement citation rendering for chosen principle UI** _(current status: archived, assignee: orchestrator)_
+- `t_57e9522f` — **Implement citation UI for the selected principle in the demo** _(current status: archived, assignee: worker-gemma)_
+- `t_2e6a6726` — **Implement citations UI for one principle evaluation** _(current status: archived, assignee: orchestrator)_
+- `t_48057c87` — **Implement citations UI for one principle evaluation** _(current status: archived, assignee: worker-gemma)_
+- `t_6cb06029` — **Implement citations UI for selected principle** _(current status: archived, assignee: worker-gemma)_
+- `t_622cca1a` — **Implement citations UI for the chosen principle** _(current status: archived, assignee: worker-gemma)_
+- `t_e7e22bc0` — **Implement citations UI for the selected principle evaluation** _(current status: archived, assignee: worker-gemma)_
+- `t_9e9031f7` — **Implement collapsed breakdown state for P1 waste section** _(current status: archived, assignee: worker-gemma)_
+- `t_7006fd16` — **Implement collapsed breakdown toggle in P1 waste section** _(current status: archived, assignee: orchestrator)_
+- `t_7c80faa2` — **Implement collapsed breakdown toggle in P1 waste section** _(current status: archived, assignee: orchestrator)_
+- `t_d8ea6a3f` — **Implement collapsed P1 waste breakdown UI** _(current status: archived, assignee: worker-gemma)_
+- `t_dd6a4617` — **Implement confidence and before/after comparison UI** _(current status: archived, assignee: worker-gemma)_
+- `t_1dd6cd97` — **Implement confidence/provenance indicators in scoring UI** _(current status: archived, assignee: worker-gemma)_
+- `t_8c3d0d87` — **Implement confidence/provenance indicators in scoring UI** _(current status: archived, assignee: worker-gemma)_
+- `t_fec57594` — **Implement confidence/provenance indicators in scoring UI** _(current status: archived, assignee: orchestrator)_
+- `t_f9606a12` — **Implement confidence/provenance indicators on scoring outputs** _(current status: archived, assignee: worker-gemma)_
+- `t_5d2caa3f` — **Implement context model and scoring logic changes** _(current status: archived, assignee: orchestrator)_
+- `t_f19e1951` — **Implement context-specific scoring in enterprise flow** _(current status: archived, assignee: orchestrator)_
+- `t_f85af335` — **Implement Copy link action in clear-analysis confirmation dialog** _(current status: archived, assignee: orchestrator)_
+- `t_b1d45839` — **Implement Copy link action in New Analysis confirmation dialog** _(current status: archived, assignee: orchestrator)_
+- `t_78da8365` — **Implement copy-link action in analysis clear dialog** _(current status: archived, assignee: orchestrator)_
+- `t_ebc522d9` — **Implement copy-link action in Analysis clear dialog** _(current status: archived, assignee: orchestrator)_
+- `t_2161272e` — **Implement copy-link option in New Analysis clear confirmation** _(current status: archived, assignee: worker-gemma)_
+- `t_e4c57680` — **Implement copy-link option in New Analysis clear dialog** _(current status: archived, assignee: orchestrator)_
+- `t_bcc41288` — **Implement copy-link option in New Analysis confirmation dialog** _(current status: archived, assignee: orchestrator)_
+- `t_ba0ee4a3` — **Implement DB migration for trace and dedup log tables** _(current status: archived, assignee: orchestrator)_
+- `t_2994c473` — **Implement DB migrations for trace and dedup log tables** _(current status: archived, assignee: orchestrator)_
+- `t_a1225e6f` — **Implement decomposition analysis rendering before recommendations** _(current status: archived, assignee: orchestrator)_
+- `t_8627eec4` — **Implement decomposition display before recommendations** _(current status: archived, assignee: orchestrator)_
+- `t_5074d83a` — **Implement decomposition generation and output wiring** _(current status: archived, assignee: orchestrator)_
+- `t_6e6660b8` — **Implement decomposition payload and pre-recommendation rendering** _(current status: archived, assignee: orchestrator)_
+- `t_a41e6374` — **Implement deep links in recommendation cards** _(current status: archived, assignee: orchestrator)_
+- `t_ef63118b` — **Implement deep links in recommendation cards** _(current status: archived, assignee: orchestrator)_
+- `t_5181c906` — **Implement deep-link support on recommendation cards** _(current status: archived, assignee: worker-gemma)_
+- `t_ff60cfcd` — **Implement enterprise scoring context selection and profile logic** _(current status: archived, assignee: orchestrator)_
+- `t_338030bf` — **Implement Evidence Atlas deep links in recommendation cards** _(current status: archived, assignee: orchestrator)_
+- `t_5bfe3f50` — **Implement first batch of P0/P1 UI fixes in identified files** _(current status: archived, assignee: orchestrator)_
+- `t_aa8b2527` — **Implement first bundle of P0/P1 UI fixes** _(current status: archived, assignee: orchestrator)_
+- `t_8d7d360f` — **Implement full-text retrieval path for selected backlog papers** _(current status: archived, assignee: worker-gemma)_
+- `t_0f5108d3` — **Implement GC.ai GitHub Actions CI path + deployment-target writeup** _(current status: archived, assignee: worker-gemma)_
+- `t_02250307` — **Implement highest-priority interaction and usability fixes** _(current status: archived, assignee: orchestrator)_
+- `t_4702beb9` — **Implement highest-priority interaction and UX fixes — blocked pending narrow follow-up spec t_b4c662da** _(current status: archived, assignee: orchestrator)_
+- `t_58a072e4` — **Implement highest-priority landing page UI fixes** _(current status: archived, assignee: orchestrator)_
+- `t_cf4051b1` — **Implement highest-priority secondary UI fixes** _(current status: archived, assignee: orchestrator)_
+- `t_bbe7cb9e` — **Implement highest-priority UI fixes in identified components** _(current status: archived, assignee: orchestrator)_
+- `t_c5911691` — **Implement highest-priority visual and layout fixes** _(current status: archived, assignee: orchestrator)_
+- `t_296e7956` — **Implement home page fix for complete demo reaction output** _(current status: archived, assignee: worker-gemma)_
+- `t_48bb96c3` — **Implement homepage demo with full scorecard → protocol → impact → scale-up flow** _(current status: archived, assignee: worker-gemma)_
+- `t_a3cc00ae` — **Implement homepage fix for complete demo reaction results** _(current status: archived, assignee: worker-gemma)_
+- `t_4cf7cf19` — **Implement inferred reaction-step analysis in recommendation flow** _(current status: archived, assignee: worker-gemma)_
+- `t_89dfe3c5` — **Implement landing-page hierarchy and responsive layout fixes from UI audit** _(current status: archived, assignee: worker-gemma)_
+- `t_fb2cac00` — **Implement literature ingestion pipeline for target sources** _(current status: archived, assignee: orchestrator)_
+- `t_38268250` — **Implement literature_precedents upsert helper for landed literature substrate** _(current status: archived, assignee: worker-gemma)_
+- `t_207fbc90` — **Implement local Qwen endpoint config for Ollama or vLLM** _(current status: archived, assignee: worker-gemma)_
+- `t_710431ad` — **Implement local Qwen endpoint configuration** _(current status: archived, assignee: worker-gemma)_
+- `t_55d2e43f` — **Implement mechanochemistry candidate support in codebase** _(current status: archived, assignee: orchestrator)_
+- `t_8c215370` — **Implement mechanochemistry evaluation layer in recommendations code** _(current status: archived, assignee: orchestrator)_
+- `t_1aa918b4` — **Implement mobile responsive fixes in demo flow UI** _(current status: archived, assignee: orchestrator)_
+- `t_9de313d2` — **Implement mobile responsive layout for demo scenario** _(current status: archived, assignee: worker-gemma)_
+- `t_80fd6a48` — **Implement mobile-responsive demo layout fixes** _(current status: archived, assignee: orchestrator)_
+- `t_cdff21c7` — **Implement mobile-responsive demo UI adjustments** _(current status: archived, assignee: orchestrator)_
+- `t_338d3a15` — **Implement mobile-responsive fixes in demo UI components** _(current status: archived, assignee: orchestrator)_
+- `t_0f7c2414` — **Implement numeric PMI and provenance in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_5fda80ea` — **Implement numeric PMI and provenance in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_92609094` — **Implement numeric PMI and provenance in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_59fee864` — **Implement numeric PMI and provenance in results UI** _(current status: archived, assignee: orchestrator)_
+- `t_db677678` — **Implement numeric PMI and provenance in results UI** _(current status: archived, assignee: orchestrator)_
+- `t_dd0ad5f8` — **Implement numeric PMI and provenance in results UI** _(current status: archived, assignee: orchestrator)_
+- `t_50fdbaaa` — **Implement OA literature ingestion pipeline** _(current status: archived, assignee: orchestrator)_
+- `t_554c6a88` — **Implement OA literature ingestion pipeline** _(current status: archived, assignee: worker-gemma)_
+- `t_e7e13743` — **Implement P0 UI fixes from audit** _(current status: archived, assignee: worker-gemma)_
+- `t_94f34b39` — **Implement P0/P1 UI fixes in targeted files** _(current status: archived, assignee: orchestrator)_
+- `t_4ba5dd31` — **Implement P1 UI fixes from audit** _(current status: archived, assignee: worker-gemma)_
+- `t_b3c1065c` — **Implement P1 waste breakdown collapse toggle** _(current status: archived, assignee: worker-gemma)_
+- `t_d28441ac` — **Implement P1 waste breakdown toggle in atlas UI** _(current status: archived, assignee: worker-gemma)_
+- `t_28f78c08` — **Implement P1 waste breakdown toggle in Evidence Atlas UI** _(current status: archived, assignee: orchestrator)_
+- `t_55bb94a5` — **Implement P1 waste breakdown toggle in Evidence Atlas UI** _(current status: archived, assignee: worker-gemma)_
+- `t_7ca046c0` — **Implement P1 waste breakdown toggle in Evidence Atlas UI** _(current status: archived, assignee: worker-gemma)_
+- `t_825544b9` — **Implement P1 waste breakdown toggle in Evidence Atlas UI** _(current status: archived, assignee: worker-gemma)_
+- `t_83fcdced` — **Implement P1 waste breakdown toggle in Evidence Atlas UI** _(current status: archived, assignee: worker-gemma)_
+- `t_ac28432c` — **Implement P1 waste breakdown toggle in Evidence Atlas UI** _(current status: archived, assignee: worker-gemma)_
+- `t_e46a1e84` — **Implement P1 waste breakdown toggle in Evidence Atlas UI** _(current status: archived, assignee: orchestrator)_
+- `t_a7426e87` — **Implement P1 waste section breakdown toggle** _(current status: archived, assignee: worker-gemma)_
+- `t_b621d5d5` — **Implement P1 waste section default collapsed breakdown UI** _(current status: archived, assignee: worker-gemma)_
+- `t_ca201316` — **Implement P1 waste section density reduction UI** _(current status: archived, assignee: worker-gemma)_
+- `t_62d6ef0a` — **Implement pass-2 evidence re-evaluation in engine** _(current status: archived, assignee: orchestrator)_
+- `t_a47b1b47` — **Implement pass-2 evidence re-evaluation in engine pipeline** _(current status: archived, assignee: orchestrator)_
+- `t_4b7d0abc` — **Implement pass-2 re-evaluation in engine pipeline** _(current status: archived, assignee: orchestrator)_
+- `t_5a73ab85` — **Implement pass-2 retrieval re-evaluation in engine** _(current status: archived, assignee: orchestrator)_
+- `t_ccc3271c` — **Implement pass-2 retrieval re-evaluation in engine** _(current status: archived, assignee: orchestrator)_
+- `t_00f43ccb` — **Implement per-principle bars and confidence badges** _(current status: archived, assignee: orchestrator)_
+- `t_cb081af6` — **Implement per-principle bars and confidence indicators** _(current status: archived, assignee: orchestrator)_
+- `t_058e633e` — **Implement per-principle bars and summary scorecard UI** _(current status: archived, assignee: worker-gemma)_
+- `t_487843ea` — **Implement per-principle bars and summary scorecard UI** _(current status: archived, assignee: worker-gemma)_
+- `t_5074e937` — **Implement per-principle score bars and confidence indicators** _(current status: archived, assignee: worker-gemma)_
+- `t_e5aca379` — **Implement per-recommendation Atlas anchor links in UI** _(current status: archived, assignee: orchestrator)_
+- `t_67f69c67` — **Implement per-recommendation Atlas deep links in UI** _(current status: archived, assignee: worker-gemma)_
+- `t_83ea3622` — **Implement per-recommendation Atlas deep links in UI** _(current status: archived, assignee: worker-gemma)_
+- `t_997b0206` — **Implement per-recommendation Atlas deep links in UI** _(current status: archived, assignee: orchestrator)_
+- `t_f1200a57` — **Implement per-recommendation Atlas deep links in UI** _(current status: archived, assignee: orchestrator)_
+- `t_f48180f3` — **Implement pilot full-text import and extraction flow** _(current status: archived, assignee: orchestrator)_
+- `t_b001e82f` — **Implement pilot full-text retrieval and ingestion path** _(current status: archived, assignee: orchestrator)_
+- `t_fc346604` — **Implement PMI and provenance display in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_946f1154` — **Implement PMI and provenance display in results UI** _(current status: archived, assignee: worker-gemma)_
+- `t_2cf9620b` — **Implement PMI and provenance in analysis results UI** _(current status: archived, assignee: worker-gemma)_
+- `t_ecb93552` — **Implement PMI and provenance in Evidence Atlas** _(current status: archived, assignee: worker-gemma)_
+- `t_f1d0c496` — **Implement PMI and provenance in Evidence Atlas** _(current status: archived, assignee: worker-gemma)_
+- `t_df9b9c6d` — **Implement PMI display in analysis results UI** _(current status: archived, assignee: orchestrator)_
+- `t_e45e9c8b` — **Implement PMI display in analysis results UI** _(current status: archived, assignee: worker-gemma)_
+- `t_ffdd9f43` — **Implement PMI display in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_8a23104b` — **Implement PMI display in Evidence Atlas views** _(current status: archived, assignee: orchestrator)_
+- `t_f818baba` — **Implement PMI display in Evidence Atlas views** _(current status: archived, assignee: orchestrator)_
+- `t_c963a076` — **Implement PMI display in results and Evidence Atlas UI** _(current status: archived, assignee: orchestrator)_
+- `t_e7d23ed3` — **Implement PMI display in results and Evidence Atlas UI** _(current status: archived, assignee: orchestrator)_
+- `t_1f59f680` — **Implement PMI display in results UI** _(current status: archived, assignee: orchestrator)_
+- `t_020ea914` — **Implement PMI display in results UI components** _(current status: archived, assignee: orchestrator)_
+- `t_c01f8d45` — **Implement PMI display in results UI components** _(current status: archived, assignee: orchestrator)_
+- `t_b6bafe87` — **Implement PMI numeric display in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_49d0b805` — **Implement PMI numeric display in results UI** _(current status: archived, assignee: orchestrator)_
+- `t_2c37158a` — **Implement PMI provenance in Evidence Atlas UI** _(current status: archived, assignee: orchestrator)_
+- `t_41af907e` — **Implement PMI provenance in Evidence Atlas UI** _(current status: archived, assignee: orchestrator)_
+- `t_3d293a4f` — **Implement PMI provenance in Evidence Atlas views** _(current status: archived, assignee: worker-gemma)_
+- `t_3b44f056` — **Implement PMI provenance in results UI** _(current status: archived, assignee: orchestrator)_
+- `t_48b5b0fc` — **Implement PMI provenance in scoring output** _(current status: archived, assignee: orchestrator)_
+- `t_28193321` — **Implement PMI value and provenance in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_9b8dab94` — **Implement PMI value and provenance in results UI** _(current status: archived, assignee: orchestrator)_
+- `t_08ea5e26` — **Implement PMI with provenance in analysis results UI** _(current status: archived, assignee: worker-gemma)_
+- `t_60c3fcf5` — **Implement PMI/provenance display in analysis results UI** _(current status: archived, assignee: orchestrator)_
+- `t_998a1acc` — **Implement PMI/provenance display in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_5ee9e687` — **Implement PMI/provenance display in Evidence Atlas UI** _(current status: archived, assignee: orchestrator)_
+- `t_bd663302` — **Implement PMI/provenance display in results UI** _(current status: archived, assignee: orchestrator)_
+- `t_8cb75fe4` — **Implement PMI/provenance UI in results and Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_fa3f8195` — **Implement PMID-linked indexing/search for retrieved validation-set PubMed full text** _(current status: archived, assignee: orchestrator)_
+- `t_fe1048f5` — **Implement pre-recommendation chemistry analysis display** _(current status: archived, assignee: orchestrator)_
+- `t_17208212` — **Implement pre-recommendation reaction analysis output** _(current status: archived, assignee: orchestrator)_
+- `t_7b478978` — **Implement pre-recommendation reaction-step analysis output** _(current status: archived, assignee: worker-gemma)_
+- `t_7b927530` — **Implement pre-scoring chemistry review UI in frontend flow** _(current status: archived, assignee: orchestrator)_
+- `t_26310485` — **Implement precedent retrieval in the literature ranking modules** _(current status: archived, assignee: orchestrator)_
+- `t_c2e2351d` — **Implement prioritized UI fixes from audit** _(current status: archived, assignee: worker-gemma)_
+- `t_faf027a0` — **Implement prioritized UI fixes from audit brief** _(current status: archived, assignee: worker-gemma)_
+- `t_39ada059` — **Implement prioritized UI fixes in identified app files** _(current status: archived, assignee: orchestrator)_
+- `t_acca591f` — **Implement provenance bars in scoring result UI** _(current status: archived, assignee: orchestrator)_
+- `t_9d41f69e` — **Implement provenance bars in scoring UI components** _(current status: archived, assignee: orchestrator)_
+- `t_02f9ad66` — **Implement provenance bars on scoring result UI** _(current status: archived, assignee: worker-gemma)_
+- `t_ac26a70b` — **Implement provenance bars on scoring result UI** _(current status: archived, assignee: worker-gemma)_
+- `t_ce6fd075` — **Implement provenance indicator in scoring UI components** _(current status: archived, assignee: orchestrator)_
+- `t_73944dfa` — **Implement provenance indicators in scoring output UI** _(current status: archived, assignee: orchestrator)_
+- `t_c726496b` — **Implement provenance indicators in scoring output UI** _(current status: archived, assignee: orchestrator)_
+- `t_d31fa715` — **Implement provenance indicators in scoring output UI** _(current status: archived, assignee: orchestrator)_
+- `t_6d04cddc` — **Implement provenance indicators in scoring result UI** _(current status: archived, assignee: orchestrator)_
+- `t_8dcc9b77` — **Implement provenance indicators in scoring UI** _(current status: archived, assignee: orchestrator)_
+- `t_67ef61ac` — **Implement provenance indicators in scoring UI components** _(current status: archived, assignee: orchestrator)_
+- `t_68f25ec7` — **Implement provenance indicators in scoring UI components** _(current status: archived, assignee: orchestrator)_
+- `t_6f8bfbfc` — **Implement provenance indicators in scoring UI components** _(current status: archived, assignee: orchestrator)_
+- `t_ca6316e5` — **Implement provenance indicators in scoring UI components** _(current status: archived, assignee: orchestrator)_
+- `t_d5f26870` — **Implement provenance indicators in scoring UI components** _(current status: archived, assignee: orchestrator)_
+- `t_e5cbe1f5` — **Implement provenance indicators in scoring UI components** _(current status: archived, assignee: orchestrator)_
+- `t_89ae0ce1` — **Implement provenance/confidence indicators in scoring UI** _(current status: archived, assignee: orchestrator)_
+- `t_f1a8dc6e` — **Implement Quick Wins reachability and purchasing-framing fixes** _(current status: archived, assignee: orchestrator)_
+- `t_8e7a97fd` — **Implement Quick Wins summary UI for Millipore Sigma** _(current status: archived, assignee: worker-gemma)_
+- `t_d6b68fca` — **Implement Quick Wins summary UI for Millipore Sigma** _(current status: archived, assignee: worker-gemma)_
+- `t_38bf3f41` — **Implement radar chart and before/after comparison view** _(current status: archived, assignee: worker-gemma)_
+- `t_63073ffc` — **Implement radar chart and before/after comparison view** _(current status: archived, assignee: worker-gemma)_
+- `t_55f499d6` — **Implement radar chart for aggregate scoring display** _(current status: archived, assignee: worker-gemma)_
+- `t_50ae3961` — **Implement reaction-decomposition analysis stage** _(current status: archived, assignee: worker-gemma)_
+- `t_0a3628e7` — **Implement reaction-step analysis block before recommendations** _(current status: archived, assignee: orchestrator)_
+- `t_ee44a798` — **Implement reaction-step decomposition in pipeline output** _(current status: archived, assignee: worker-gemma)_
+- `t_7ba7a19d` — **Implement recommendation deep links in Atlas UI** _(current status: archived, assignee: orchestrator)_
+- `t_99b2bdf7` — **Implement recommendation deep links in Atlas UI** _(current status: archived, assignee: worker-gemma)_
+- `t_f2954df3` — **Implement recommendation deep links in Atlas-related UI** _(current status: archived, assignee: orchestrator)_
+- `t_cc50842c` — **Implement recommendation deep links in the UI** _(current status: archived, assignee: orchestrator)_
+- `t_843137c3` — **Implement recommendation deep links into Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_8d50bb1a` — **Implement recommendation-to-Atlas anchor links in UI** _(current status: archived, assignee: worker-gemma)_
+- `t_2f7591d7` — **Implement responsive fixes for demo mobile viewport** _(current status: archived, assignee: orchestrator)_
+- `t_58dc61c2` — **Implement responsive fixes in identified UI components** _(current status: archived, assignee: orchestrator)_
+- `t_76e87673` — **Implement responsive fixes in identified UI files** _(current status: archived, assignee: orchestrator)_
+- `t_143f2c02` — **Implement responsive layout fixes for progress and results** _(current status: archived, assignee: worker-gemma)_
+- `t_280db4a7` — **Implement responsive layout fixes in affected demo UI files** _(current status: archived, assignee: orchestrator)_
+- `t_096149ee` — **Implement responsive layout for mobile demo viewport** _(current status: archived, assignee: worker-gemma)_
+- `t_937f3e3e` — **Implement responsive mobile layout improvements** _(current status: archived, assignee: worker-gemma)_
+- `t_cbc7a5aa` — **Implement retrieval and ingestion for selected backlog papers** _(current status: archived, assignee: orchestrator)_
+- `t_2c2f281e` — **Implement retrieval and ingestion path for selected backlog papers** _(current status: archived, assignee: orchestrator)_
+- `t_2058fa8e` — **Implement retrieval path in identified ingestion modules** _(current status: archived, assignee: orchestrator)_
+- `t_a45a5a50` — **Implement retrieval/import path in the relevant ingestion modules** _(current status: archived, assignee: orchestrator)_
+- `t_2728fba4` — **Implement review screen in the pre-scoring UI flow** _(current status: archived, assignee: orchestrator)_
+- `t_3df4064a` — **Implement review screen UI in frontend flow** _(current status: archived, assignee: orchestrator)_
+- `t_b0c9adc6` — **Implement review screen UI in identified frontend modules** _(current status: archived, assignee: orchestrator)_
+- `t_93b00f95` — **Implement route-optimization retrieval and ranking** _(current status: archived, assignee: orchestrator)_
+- `t_e3f664a3` — **Implement route-optimization retrieval pipeline** _(current status: archived, assignee: orchestrator)_
+- `t_aa5e7d6d` — **Implement route-precedent retrieval in retrieval modules** _(current status: archived, assignee: orchestrator)_
+- `t_67f48e77` — **Implement route-precedent retrieval in the retrieval module** _(current status: archived, assignee: orchestrator)_
+- `t_2d4d3d02` — **Implement route-precedent retrieval in the retrieval modules** _(current status: archived, assignee: orchestrator)_
+- `t_acb56a0e` — **Implement Sci-Hub full-text retrieval path for backlog papers** _(current status: archived, assignee: worker-gemma)_
+- `t_1607ae67` — **Implement Sci-Hub retrieval path for backlog papers** _(current status: archived, assignee: worker-gemma)_
+- `t_75134588` — **Implement Sci-Hub retrieval path for selected backlog papers** _(current status: archived, assignee: orchestrator)_
+- `t_53a6ddde` — **Implement scoped mechanochemistry evaluation hook** _(current status: archived, assignee: orchestrator)_
+- `t_3861b7af` — **Implement score bars and confidence indicators in scoring UI** _(current status: archived, assignee: orchestrator)_
+- `t_2de90270` — **Implement score bars and confidence UI in scoring view** _(current status: archived, assignee: orchestrator)_
+- `t_30877fd8` — **Implement score bars, scorecard, and confidence indicators** _(current status: archived, assignee: worker-gemma)_
+- `t_1f078636` — **Implement score provenance indicators in scoring UI** _(current status: archived, assignee: orchestrator)_
+- `t_f6e35704` — **Implement scoring UI components and wiring** _(current status: archived, assignee: orchestrator)_
+- `t_b7a3bd5c` — **Implement scoring UI components in frontend** _(current status: archived, assignee: orchestrator)_
+- `t_feff0406` — **Implement scoring UI components in target frontend files** _(current status: archived, assignee: orchestrator)_
+- `t_c128530b` — **Implement scoring UI components in target frontend module** _(current status: archived, assignee: orchestrator)_
+- `t_5053fcc1` — **Implement scoring UI components in the identified frontend files** _(current status: archived, assignee: orchestrator)_
+- `t_4bcff0e4` — **Implement second batch of P0/P1 UI fixes in identified files** _(current status: archived, assignee: orchestrator)_
+- `t_1c5bba2e` — **Implement second bundle of P0/P1 UI fixes** _(current status: archived, assignee: orchestrator)_
+- `t_ea335ae1` — **Implement second-pass retrieval re-evaluation in engine** _(current status: archived, assignee: orchestrator)_
+- `t_233e4e89` — **Implement second-pass retrieval re-evaluation in engine modules** _(current status: archived, assignee: orchestrator)_
+- `t_e122016e` — **Implement selected backlog full-text ingestion path** _(current status: archived, assignee: orchestrator)_
+- `t_321053a1` — **Implement source ingesters and normalized citation output** _(current status: archived, assignee: worker-gemma)_
+- `t_b1a4c56b` — **Implement source ingesters for target OA literature** _(current status: archived, assignee: worker-gemma)_
+- `t_c4db72b1` — **Implement source ingestion and normalization pipeline** _(current status: archived, assignee: orchestrator)_
+- `t_f5b63a24` — **Implement SSE heartbeat and progress events for local model runs** _(current status: archived, assignee: worker-gemma)_
+- `t_8b9fe0c4` — **Implement stable Atlas anchors for evidence sections** _(current status: archived, assignee: worker-gemma)_
+- `t_f79e003d` — **Implement stable Atlas section anchors** _(current status: archived, assignee: worker-gemma)_
+- `t_a2192608` — **Implement stripped-down Quick Wins summary UI** _(current status: archived, assignee: orchestrator)_
+- `t_c248bb13` — **Implement stripped-down Quick Wins summary view** _(current status: archived, assignee: orchestrator)_
+- `t_1af1d36f` — **Implement summary chart and before/after comparison UI** _(current status: archived, assignee: orchestrator)_
+- `t_1486a5f0` — **Implement summary scorecard and radar chart** _(current status: archived, assignee: worker-gemma)_
+- `t_a2bfe56e` — **Implement summary scorecard and radar chart UI** _(current status: archived, assignee: orchestrator)_
+- `t_d5113378` — **Implement tab-style analysis view toggle on Analysis page** _(current status: archived, assignee: orchestrator)_
+- `t_df8aa68c` — **Implement the website upgrade from stub to launch-ready site** _(current status: archived, assignee: worker-gemma)_
+- `t_ef21bcfb` — **Implement trace and dedup logging in pipeline code** _(current status: archived, assignee: orchestrator)_
+- `t_03c873e7` — **Implement trace logging in callClaude and analysis pipeline** _(current status: archived, assignee: orchestrator)_
+- `t_f8f8f2be` — **Implement trace persistence in pipeline modules** _(current status: archived, assignee: orchestrator)_
+- `t_3237641e` — **Implement two-pass re-evaluation in engine modules** _(current status: archived, assignee: orchestrator)_
+- `t_5e0420df` — **Implement UI fixes for layout, styling, and interaction issues** _(current status: archived, assignee: worker-gemma)_
+- `t_e49090b6` — **Implement visual hierarchy and layout fixes in UI** _(current status: archived, assignee: orchestrator)_
+- `t_9e4a98d9` — **Implement weighted score and final grade calculation logic** _(current status: archived, assignee: orchestrator)_
+- `t_2d4a2791` — **Implement weighted scoring admin config and grade logic** _(current status: archived, assignee: orchestrator)_
+- `t_05bc7298` — **Implement weighted scoring admin configuration flow** _(current status: archived, assignee: worker-gemma)_
+- `t_8f257675` — **Implement weighted scoring admin feature** _(current status: archived, assignee: orchestrator)_
+- `t_75d19222` — **Implement weighted scoring config in admin and domain logic** _(current status: archived, assignee: orchestrator)_
+- `t_478477d9` — **Implement weighted scoring logic in app scoring modules** _(current status: archived, assignee: orchestrator)_
+- `t_221c0919` — **Implement weighted scoring model and persistence** _(current status: archived, assignee: worker-gemma)_
+- `t_5c97ac17` — **Implement weighted scoring model in backend/domain code** _(current status: archived, assignee: orchestrator)_
+- `t_204bc0b4` — **Index extracted full text for search alongside PubMed records** _(current status: archived, assignee: worker-gemma)_
+- `t_724f8239` — **Index extracted full-text content with PubMed-linked records** _(current status: archived, assignee: worker-gemma)_
+- `t_c55394a0` — **Ingestion pipeline duplicate/quarantine — superseded by canonical literature lane t_d2760f0e -> t_38268250 -> t_fd6c2803** _(current status: archived, assignee: orchestrator)_
+- `t_67070a95` — **Inspect Analysis page toggle and matching filter tab implementation** _(current status: archived, assignee: orchestrator)_
+- `t_a0b3e1cc` — **Inspect code touchpoints for recommendation-layer integration** _(current status: archived, assignee: orchestrator)_
+- `t_75fc3bf6` — **Inspect current LLM routing and config entry points** _(current status: archived, assignee: worker-gemma)_
+- `t_45151db6` — **Inspect current recommendation and Atlas link architecture** _(current status: archived, assignee: worker-gemma)_
+- `t_fc951bdf` — **Inspect demo reaction flow and define missing homepage outputs** _(current status: archived, assignee: orchestrator)_
+- `t_a0a40346` — **Inspect existing recommendation and Atlas link plumbing** _(current status: archived, assignee: orchestrator)_
+- `t_1dd35a73` — **Inspect frontend scoring view and identify target files** _(current status: archived, assignee: orchestrator)_
+- `t_e1320ca8` — **Inspect live score provenance contract paths** _(current status: archived, assignee: orchestrator)_
+- `t_38faa67f` — **Inspect local LLM integration points and existing config patterns** _(current status: archived, assignee: worker-gemma)_
+- `t_c7f4f6ce` — **Inspect New Analysis clear dialog and identify edit points** _(current status: archived, assignee: orchestrator)_
+- `t_f7ca8319` — **Inspect P1 mass and yield provenance contract gaps** _(current status: archived, assignee: orchestrator)_
+- `t_8e77858e` — **Inspect recommendation-generation path for variance sources** _(current status: archived, assignee: orchestrator)_
+- `t_a6d089bc` — **Inspect repo and map retrieval integration points** _(current status: archived, assignee: worker-gemma)_
+- `t_b15dee26` — **Inspect repo to map integration points for mechanochemistry layer** _(current status: archived, assignee: orchestrator)_
+- `t_d270a53d` — **Inspect runtime partial-state semantics and alternatives** _(current status: archived, assignee: orchestrator)_
+- `t_a9864721` — **Inspect SSE event flow for local-model analysis path** _(current status: archived, assignee: worker-gemma)_
+- `t_a92cd608` — **Inspect SSE streaming path and define test targets** _(current status: archived, assignee: orchestrator)_
+- `t_85ee9e8c` — **Instrument callClaude and pipeline dedup persistence** _(current status: archived, assignee: orchestrator)_
+- `t_7c7d524d` — **Instrument callClaude to persist per-call trace records** _(current status: archived, assignee: worker-gemma)_
+- `t_7008bae5` — **Instrument callClaude to persist per-call trace rows** _(current status: archived, assignee: worker-gemma)_
+- `t_fa3e515a` — **Instrument callClaude to persist per-call trace rows** _(current status: archived, assignee: orchestrator)_
+- `t_76b628c5` — **Instrument callClaude to persist per-call traces** _(current status: archived, assignee: worker-gemma)_
+- `t_030db5db` — **Instrument callClaude to write per-call trace records** _(current status: archived, assignee: worker-gemma)_
+- `t_529aa41c` — **Instrument LLM and dedup pipeline to persist logs** _(current status: archived, assignee: orchestrator)_
+- `t_be287350` — **Instrument LLM call helper to persist per-call traces** _(current status: archived, assignee: worker-gemma)_
+- `t_bc2961be` — **Instrument/trim parse-phase Qwen request so the triazolo harness returns a payload** _(current status: archived, assignee: orchestrator)_
+- `t_ee9a5aad` — **Integrate retrieved full text into searchable extraction pipeline** _(current status: archived, assignee: worker-gemma)_
+- `t_ffdf2012` — **Integrate scoring UI and verify end-to-end behavior** _(current status: archived, assignee: reviewer)_
+- `t_2e6e62ae` — **Integrate scoring UI into target screen and verify behavior** _(current status: archived, assignee: reviewer)_
+- `t_a8ba198b` — **Integrate scoring visuals into page and verify UX consistency** _(current status: archived, assignee: reviewer)_
+- `t_19c385d2` — **Integrate weighted final-grade calculation into scoring** _(current status: archived, assignee: orchestrator)_
+- `t_5e4e02ad` — **Inventory current score and evidence provenance paths** _(current status: archived, assignee: orchestrator)_
+- `t_27351725` — **Inventory product score paths and current provenance labels** _(current status: archived, assignee: orchestrator)_
+- `t_9a2e5191` — **Inventory product score paths and map them to taxonomy states** _(current status: archived, assignee: orchestrator)_
+- `t_e389bc8f` — **Inventory score and evidence provenance touchpoints** _(current status: archived, assignee: worker-gemma)_
+- `t_d73e78f0` — **Inventory score paths and current labels across product** _(current status: archived, assignee: orchestrator)_
+- `t_3d6bf763` — **Inventory score paths and map each to a taxonomy state** _(current status: archived, assignee: orchestrator)_
+- `t_34b55c81` — **Inventory score paths and map each to provenance states** _(current status: archived, assignee: orchestrator)_
+- `t_421cbe91` — **Inventory score paths and map each to taxonomy state** _(current status: archived, assignee: orchestrator)_
+- `t_3dd80909` — **Inventory score paths and map each to taxonomy states** _(current status: archived, assignee: orchestrator)_
+- `t_4a3d07ea` — **Inventory score paths and map each to taxonomy states** _(current status: archived, assignee: worker-gemma)_
+- `t_03b107e7` — **Inventory score paths and map them to taxonomy states** _(current status: archived, assignee: orchestrator)_
+- `t_0d561489` — **Isolate whether failure is stale local state or env/config drift** _(current status: archived, assignee: orchestrator)_
+- `t_67e37314` — **Legacy Qwen cross-phase schema-fix bundle duplicate — superseded by canonical leaves t_aafeffdf + t_b2756420** _(current status: archived, assignee: orchestrator)_
+- `t_347601a8` — **Locate flow entry points and target files for the review screen** _(current status: archived, assignee: orchestrator)_
+- `t_5a38dae4` — **Locate frontend flow and integration points for review screen** _(current status: archived, assignee: orchestrator)_
+- `t_3f6b8f2b` — **Locate frontend scoring surfaces and integration points** _(current status: archived, assignee: orchestrator)_
+- `t_22f8aa60` — **Locate relevant admin, scoring, and persistence code paths** _(current status: archived, assignee: orchestrator)_
+- `t_0dadf1b6` — **Log pre-dedup recommendations and merge map** _(current status: archived, assignee: worker-gemma)_
+- `t_69d877e7` — **Log pre-dedup recommendations and merge map** _(current status: archived, assignee: worker-gemma)_
+- `t_8441f1d6` — **Log pre-dedup recommendations and merge map** _(current status: archived, assignee: worker-gemma)_
+- `t_ad657f9a` — **Log pre-dedup recommendations and merge map** _(current status: archived, assignee: orchestrator)_
+- `t_c5b86ebb` — **Log pre-dedup recommendations and merge map** _(current status: archived, assignee: orchestrator)_
+- `t_fd7c7854` — **Log pre-dedup recommendations and merge map** _(current status: archived, assignee: orchestrator)_
+- `t_7aa6a06a` — **Map all score and evidence paths to taxonomy states** _(current status: archived, assignee: worker-gemma)_
+- `t_7722a910` — **Map contexts to scoring rules and explainability outputs** _(current status: archived, assignee: worker-gemma)_
+- `t_d7309cd7` — **Map current score paths to provenance states** _(current status: archived, assignee: worker-gemma)_
+- `t_f4d1e2e6` — **Map engine integration points for recommendation and retrieval flow** _(current status: archived, assignee: orchestrator)_
+- `t_c41f4b3f` — **Map GAC concepts onto P11 scoring model** _(current status: archived, assignee: worker-gemma)_
+- `t_dfc88e15` — **Map GAC principles onto P11 scoring dimensions** _(current status: archived, assignee: worker-gemma)_
+- `t_21b9ef75` — **Map GAC review concepts onto P11 and real-time framework** _(current status: archived, assignee: worker-gemma)_
+- `t_01d6dad2` — **Map GAC review insights onto P11 and propose updates** _(current status: archived, assignee: worker-gemma)_
+- `t_e777ad46` — **Map LLC formation and later C Corp conversion path** _(current status: archived, assignee: orchestrator)_
+- `t_7b7bf190` — **Map mechanochemistry factors into green scoring rubric** _(current status: archived, assignee: orchestrator)_
+- `t_23c00d79` — **Map paths to taxonomy and write enforcement guidelines** _(current status: archived, assignee: orchestrator)_
+- `t_00ecbb00` — **Map product score paths to the canonical taxonomy** _(current status: archived, assignee: worker-gemma)_
+- `t_218d1160` — **Map recommendation cards to Evidence Atlas anchor targets** _(current status: archived, assignee: orchestrator)_
+- `t_ada4eb14` — **Map retrieval and indexing path for backlog full-text ingestion** _(current status: archived, assignee: orchestrator)_
+- `t_1ad1c0b0` — **Map retrieval constraints and define the supported full-text path** _(current status: archived, assignee: orchestrator)_
+- `t_de82c620` — **Map score paths to taxonomy and draft enforcement standard** _(current status: archived, assignee: orchestrator)_
+- `t_7cd3d57b` — **Map UI spec and type follow-up from backend contract** _(current status: archived, assignee: orchestrator)_
+- `t_3654e921` — **Narrow ingestion slice: reconcile literature schema + normalization** _(current status: archived, assignee: orchestrator)_
+- `t_da69f535` — **Normalize remaining legacy semantic hex colors in Evidence Atlas touched components** _(current status: archived, assignee: worker-gemma)_
+- `t_77d833f6` — **P11/framework touchpoint audit duplicate — superseded by completed audit t_1ecec836** _(current status: archived, assignee: orchestrator)_
+- `t_715b0381` — **Persist dedup inputs and merge map to gpc_dedup_log** _(current status: archived, assignee: worker-gemma)_
+- `t_c9d2d993` — **Persist pre-dedup recommendations and merge map** _(current status: archived, assignee: orchestrator)_
+- `t_ee0cdee3` — **Persist pre-dedup recommendations and merge map** _(current status: archived, assignee: worker-gemma)_
+- `t_8a29c23a` — **Plan implementation impacts across model, API, and UX** _(current status: archived, assignee: orchestrator)_
+- `t_92281354` — **Polish dialog UX and fallback behavior for link copying** _(current status: archived, assignee: worker-gemma)_
+- `t_3a5d1eb0` — **Prepare baseline and substituted scoring inputs** _(current status: archived, assignee: orchestrator)_
+- `t_00a938b5` — **Prepare canonical before/after scoring input matrix from existing spec + manifest** _(current status: archived, assignee: orchestrator)_
+- `t_b0b29b22` — **Prepare case manifest for before/after live rescoring** _(current status: archived, assignee: orchestrator)_
+- `t_4b9326b5` — **Prepare customer proof and logo usage plan** _(current status: archived, assignee: worker-gemma)_
+- `t_a76d4e97` — **Prepare customer proof and logo usage plan** _(current status: archived, assignee: worker-gemma)_
+- `t_22ad3578` — **Prepare trust assets, legal copy, and launch checklist** _(current status: archived, assignee: worker-gemma)_
+- `t_7fe13199` — **Print cover: canonicalize accepted-impact helper** _(current status: archived, assignee: orchestrator)_
+- `t_cce90030` — **Print cover: clean route integration leaf after parser-gate repair** _(current status: archived, assignee: orchestrator)_
+- `t_772cadc0` — **Print cover: wire cover sheet into both analyze routes + tests** _(current status: archived, assignee: orchestrator)_
+- `t_2ceb8b5c` — **Produce final bug summary and next-step recommendation** _(current status: archived, assignee: reviewer)_
+- `t_052919f8` — **Propose a 6-month roadmap aligned to the pitch** _(current status: archived, assignee: orchestrator)_
+- `t_4bc4ae07` — **Propose a 6-month roadmap for the pitch** _(current status: archived, assignee: orchestrator)_
+- `t_c9abe932` — **Propose enforcement and rollout plan for provenance labels** _(current status: archived, assignee: orchestrator)_
+- `t_906fac66` — **Propose Green Chemistry scoring integration** _(current status: archived, assignee: orchestrator)_
+- `t_edcba876` — **Propose mitigation and closure criteria tied to deterministic scoring** _(current status: archived, assignee: orchestrator)_
+- `t_1295f640` — **QA deep-link behavior across recommendation cards** _(current status: archived, assignee: reviewer)_
+- `t_0cca5b54` — **QA full local-model SSE run in browser** _(current status: archived, assignee: reviewer)_
+- `t_d722e056` — **QA mobile viewport behavior for demo scenario** _(current status: archived, assignee: reviewer)_
+- `t_fc77c5a5` — **QA New Analysis dialog for saved and unsaved analysis states** _(current status: archived, assignee: reviewer)_
+- `t_7510007c` — **QA PMI provenance behavior across results and atlas** _(current status: archived, assignee: reviewer)_
+- `t_4a135e0e` — **QA responsive behavior for mobile demo flow** _(current status: archived, assignee: reviewer)_
+- `t_812296db` — **QA the mobile demo workflow at narrow widths** _(current status: archived, assignee: reviewer)_
+- `t_42f5ab49` — **Quick Wins follow-up: make live route reachable and fix purchasing-focused framing** _(current status: archived, assignee: orchestrator)_
+- `t_23add192` — **Qwen benchmark duplicate — superseded by canonical path t_9345b0f0 + t_ab472d9c -> t_d40ad6ae** _(current status: archived, assignee: orchestrator)_
+- `t_a30815d7` — **Re-audit UI and confirm score improvement** _(current status: archived, assignee: reviewer)_
+- `t_144953ab` — **Re-audit updated UI and confirm score reaches 17+** _(current status: archived, assignee: reviewer)_
+- `t_89bb4b1c` — **Re-review UI and confirm score improvement** _(current status: archived, assignee: reviewer)_
+- `t_ed48d2d0` — **Re-review UI and score outcome against done-when** _(current status: archived, assignee: reviewer)_
+- `t_f9a5ab4b` — **Re-run all phases and verify 5 clean consecutive passes** _(current status: archived, assignee: reviewer)_
+- `t_c9bd7ab7` — **Re-run audit and verify score improvement** _(current status: archived, assignee: reviewer)_
+- `t_9a8bc8ca` — **Re-run formulas for before/after chemical substitutions** _(current status: archived, assignee: worker-gemma)_
+- `t_3402988c` — **Re-run scoring formulas for baseline and substituted chemicals** _(current status: archived, assignee: worker-gemma)_
+- `t_5b5aaff0` — **Re-run scoring formulas for before and substituted cases** _(current status: archived, assignee: worker-gemma)_
+- `t_49066741` — **Re-run scoring formulas with alternative chemicals substituted** _(current status: archived, assignee: worker-gemma)_
+- `t_75682b7d` — **Re-run scoring with labeled AI-estimated inputs** _(current status: archived, assignee: orchestrator)_
+- `t_ea8f779f` — **Re-run UI audit and verify score improvement** _(current status: archived, assignee: reviewer)_
+- `t_21cd782a` — **Re-run UI audit and verify score target** _(current status: archived, assignee: reviewer)_
+- `t_148e6397` — **Re-run UI review and confirm audit score target** _(current status: archived, assignee: reviewer)_
+- `t_9d8afcad` — **Re-run UI review and verify score improvement** _(current status: archived, assignee: reviewer)_
+- `t_a6182edc` — **Re-run UI review and verify score target** _(current status: archived, assignee: reviewer)_
+- `t_d68b301a` — **Recommend enforcement and rollout plan for provenance standard** _(current status: archived, assignee: orchestrator)_
+- `t_ac31e8fb` — **Recommend enforcement approach and handoff implementation plan** _(current status: archived, assignee: orchestrator)_
+- `t_a929b49f` — **Reconcile local Qwen adapter path vs claimed done card** _(current status: archived, assignee: orchestrator)_
+- `t_4f5d92ff` — **Reconstruct the three triazolo runs and compare outputs** _(current status: archived, assignee: worker-gemma)_
+- `t_3d3f1349` — **Refactor analysis view toggle into filter-style tabs** _(current status: archived, assignee: worker-gemma)_
+- `t_a5a8da23` — **Refactor Analysis view toggle to match filter tab styling** _(current status: archived, assignee: orchestrator)_
+- `t_d0912e96` — **Refactor Analysis view toggle to match filter tab styling** _(current status: archived, assignee: orchestrator)_
+- `t_da0f3fe2` — **Refactor Analysis view toggle to match filter tab styling** _(current status: archived, assignee: orchestrator)_
+- `t_13137a7f` — **Refactor EvidenceAtlas and PrincipleSection to brand tokens** _(current status: archived, assignee: worker-gemma)_
+- `t_f818d75a` — **Refine backlog item linking bug to deterministic scoring work** _(current status: archived, assignee: reviewer)_
+- `t_20938fb6` — **Refine dialog copy for save/share-before-clear guidance** _(current status: archived, assignee: worker-gemma)_
+- `t_61ed6692` — **Remediate Evidence Atlas PMI provenance label mismatch for benchmark/inferred states** _(current status: archived, assignee: orchestrator)_
+- `t_3abdfcec` — **Remediate provenance UI review findings** _(current status: archived, assignee: default)_
+- `t_b2034b86` — **Render assumed chemistry before recommendations** _(current status: archived, assignee: worker-gemma)_
+- `t_3b41644a` — **Render numeric PMI and provenance in analysis results UI** _(current status: archived, assignee: orchestrator)_
+- `t_0abdea0b` — **Render numeric PMI and provenance in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_db40492b` — **Replace analysis view pill with filter-style tab toggle** _(current status: archived, assignee: worker-gemma)_
+- `t_eb55533a` — **Replace Analysis view pill with tab-style toggle** _(current status: archived, assignee: orchestrator)_
+- `t_c9e4e201` — **Replace dark zinc card styles in analyze page** _(current status: archived, assignee: worker-gemma)_
+- `t_8253ec2c` — **Replace residual semantic color classes in atlas components** _(current status: archived, assignee: worker-gemma)_
+- `t_da1be9dc` — **Replace residual semantic color classes in atlas components** _(current status: archived, assignee: worker-gemma)_
+- `t_4c0b577b` — **Replace residual Tailwind semantic colors in atlas components** _(current status: archived, assignee: worker-gemma)_
+- `t_6536c14f` — **Replace zinc card styling in Evidence Atlas route** _(current status: archived, assignee: worker-gemma)_
+- `t_2481d470` — **Replace zinc styling in analyze route Evidence Atlas card** _(current status: archived, assignee: worker-gemma)_
+- `t_7fa0e7f9` — **Replace zinc styling in Evidence Atlas route card** _(current status: archived, assignee: worker-gemma)_
+- `t_f3199d42` — **Reproduce and document the triazolo inconsistency** _(current status: archived, assignee: worker-gemma)_
+- `t_c6c2677a` — **Reproduce and document the triazolo recommendation variance** _(current status: archived, assignee: worker-gemma)_
+- `t_514a9ca1` — **Reproduce and document the triazolo run inconsistency** _(current status: archived, assignee: orchestrator)_
+- `t_bb234197` — **Reproduce and document triazolo recommendation variance** _(current status: archived, assignee: worker-gemma)_
+- `t_db1b3ec8` — **Reproduce benchmark-only PMI crash and define safe behavior** _(current status: archived, assignee: orchestrator)_
+- `t_eafb15a5` — **Reproduce local Next.js 500 and capture baseline evidence** _(current status: archived, assignee: orchestrator)_
+- `t_10eef470` — **Reproduce Qwen schema failures across all pipeline phases** _(current status: archived, assignee: orchestrator)_
+- `t_310f3ba2` — **Reproduce Qwen schema issues in parse, evaluate, and assemble** _(current status: archived, assignee: worker-gemma)_
+- `t_fe941a12` — **Research B Corp certification and benefit-corp path** _(current status: archived, assignee: orchestrator)_
+- `t_8f2b7038` — **Research B Corp certification and governance requirements** _(current status: archived, assignee: orchestrator)_
+- `t_cdb34474` — **Research B Corp certification requirements and conversion path** _(current status: archived, assignee: orchestrator)_
+- `t_9d5653b2` — **Research B Corp certification requirements and governance effects** _(current status: archived, assignee: orchestrator)_
+- `t_4917b046` — **Research B Corp certification requirements and governance expectations** _(current status: archived, assignee: orchestrator)_
+- `t_6789bebe` — **Research B Corp certification requirements for entity and governance** _(current status: archived, assignee: orchestrator)_
+- `t_3cc185ad` — **Research B Corp certification requirements for entity/governance** _(current status: archived, assignee: orchestrator)_
+- `t_4d15f27d` — **Research B Corp certification vs benefit corporation status** _(current status: archived, assignee: orchestrator)_
+- `t_e91ebff0` — **Research candidate demo reactions for homepage** _(current status: archived, assignee: orchestrator)_
+- `t_13dd3f75` — **Research candidate moderate-complexity reactions** _(current status: archived, assignee: orchestrator)_
+- `t_2b0068c0` — **Research entity formation and conversion path options** _(current status: archived, assignee: orchestrator)_
+- `t_5b109a9f` — **Research entity formation sequence and ownership implications** _(current status: archived, assignee: orchestrator)_
+- `t_d9583cd3` — **Research entity setup path from LLC to C Corp and beyond** _(current status: archived, assignee: orchestrator)_
+- `t_6e409505` — **Research LLC formation and LLC-to-C-Corp conversion path** _(current status: archived, assignee: orchestrator)_
+- `t_cc71ccc8` — **Research LLC now -> C Corp later path and 51/49 implications** _(current status: archived, assignee: orchestrator)_
+- `t_42aaa95f` — **Research LLC-now to C-Corp-later conversion path** _(current status: archived, assignee: orchestrator)_
+- `t_c7c209a3` — **Research LLC-to-C-Corp sequencing and 51/49 governance implications** _(current status: archived, assignee: orchestrator)_
+- `t_487f9e0d` — **Restore and complete bounded Playwright auth coverage for current email flows** _(current status: archived, assignee: orchestrator)_
+- `t_64ee2103` — **Retrieval duplicate/quarantine — legacy Sci-Hub implementation leaf superseded by compliant retrieval lane** _(current status: archived, assignee: orchestrator)_
+- `t_54dea303` — **Retrieval indexing duplicate — superseded by compliant retrieval lane t_bb50ac7b -> t_f64aebdd -> t_7884c8b9 -> t_14bab2f9** _(current status: archived, assignee: orchestrator)_
+- `t_f52fdc0e` — **Retrieval planning duplicate/quarantine — legacy Sci-Hub root superseded by approved retrieval lane** _(current status: archived, assignee: orchestrator)_
+- `t_f64aebdd` — **Retrieve and store full text for selected backlog sample** _(current status: archived, assignee: orchestrator)_
+- `t_6d154fb5` — **Review affected Evidence Atlas UI for token consistency** _(current status: archived, assignee: reviewer)_
+- `t_1760f697` — **Review analysis and define closure recommendation** _(current status: archived, assignee: reviewer)_
+- `t_f525864a` — **Review Analysis page radius compliance and flag any misses** _(current status: archived, assignee: reviewer)_
+- `t_5beb0a9b` — **Review Analysis page radius standardization changes** _(current status: archived, assignee: reviewer)_
+- `t_f1e612a7` — **Review Analysis page radius standardization for completeness** _(current status: archived, assignee: reviewer)_
+- `t_242b1d86` — **Review Analysis page radius standardization for compliance** _(current status: archived, assignee: reviewer)_
+- `t_4c6345c8` — **Review Analysis page radius standardization for compliance** _(current status: archived, assignee: reviewer)_
+- `t_17fb0a9a` — **Review Analysis page radius standardization for consistency** _(current status: archived, assignee: reviewer)_
+- `t_5f399548` — **Review Analysis page radius standardization for consistency** _(current status: archived, assignee: reviewer)_
+- `t_49f240d3` — **Review Analysis tab toggle for style parity and regressions** _(current status: archived, assignee: reviewer)_
+- `t_de96779e` — **Review Analysis toggle for visual consistency and regressions** _(current status: archived, assignee: reviewer)_
+- `t_520166fd` — **Review Analysis toggle styling and behavior** _(current status: archived, assignee: reviewer)_
+- `t_d1af1414` — **Review Analysis toggle styling and behavior** _(current status: archived, assignee: reviewer)_
+- `t_7cdda065` — **Review analysis toggle styling and behavior for regressions** _(current status: archived, assignee: reviewer)_
+- `t_1b977d88` — **Review Analysis toggle visual consistency and regressions** _(current status: archived, assignee: reviewer)_
+- `t_cc492882` — **Review Analysis toggle visual consistency and regressions** _(current status: archived, assignee: reviewer)_
+- `t_006dcd5e` — **Review AnalysisResults tab-toggle UI change already present in workspace** _(current status: archived, assignee: reviewer)_
+- `t_35967129` — **Review and consolidate deck spec into final outline** _(current status: archived, assignee: reviewer)_
+- `t_b46455fe` — **Review and consolidate into implementation-ready recommendation** _(current status: archived, assignee: reviewer)_
+- `t_76e4d52a` — **Review and consolidate LOI and NDA templates for handoff** _(current status: archived, assignee: reviewer)_
+- `t_104286f4` — **Review and consolidate LOI/NDA template package** _(current status: archived, assignee: reviewer)_
+- `t_d3a909a8` — **Review and consolidate LOI/NDA template package** _(current status: archived, assignee: reviewer)_
+- `t_b2d69a90` — **Review and consolidate LOI/NDA templates** _(current status: archived, assignee: reviewer)_
+- `t_955c2297` — **Review and produce final closure recommendation** _(current status: archived, assignee: reviewer)_
+- `t_b5faaa86` — **Review and summarize before/after prediction results** _(current status: archived, assignee: reviewer)_
+- `t_285ba995` — **Review and verify Atlas deep links end-to-end** _(current status: archived, assignee: reviewer)_
+- `t_40eac689` — **Review and verify complete demo reaction display on home page** _(current status: archived, assignee: reviewer)_
+- `t_c36b3a58` — **Review and verify saved-vs-unsaved clear dialog behavior** _(current status: archived, assignee: reviewer)_
+- `t_8b0797ba` — **Review Atlas deep-link coverage and behavior** _(current status: archived, assignee: reviewer)_
+- `t_c85c39dc` — **Review Atlas PMI provenance wording fix for benchmark/inferred states** _(current status: archived, assignee: reviewer)_
+- `t_1efddd0e` — **Review audit logging integration and closure criteria** _(current status: archived, assignee: reviewer)_
+- `t_4e78be64` — **Review behavior and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_db4f35a1` — **Review benchmark artifacts and evaluation for QA gaps** _(current status: archived, assignee: reviewer)_
+- `t_b1728f6c` — **Review benchmark artifacts for completeness and QA** _(current status: archived, assignee: reviewer)_
+- `t_b3ca301e` — **Review benchmark package and summarize readiness** _(current status: archived, assignee: reviewer)_
+- `t_ff9f37b1` — **Review benchmark package for completeness and decision readiness** _(current status: archived, assignee: reviewer)_
+- `t_40b17a8a` — **Review benchmark quality and summarize validation findings** _(current status: archived, assignee: reviewer)_
+- `t_a7dbf4e8` — **Review benchmark spec and corpus for consistency and QA** _(current status: archived, assignee: reviewer)_
+- `t_8c952616` — **Review both templates for consistency and handoff** _(current status: archived, assignee: reviewer)_
+- `t_58fca620` — **Review bounded Playwright auth coverage implementation for current email flows** _(current status: archived, assignee: reviewer)_
+- `t_1f70b348` — **Review calculations and summary for consistency** _(current status: archived, assignee: reviewer)_
+- `t_8f929f0f` — **Review citation behavior and demo readiness** _(current status: archived, assignee: reviewer)_
+- `t_3085dc64` — **Review cited principle flow for demo readiness** _(current status: archived, assignee: reviewer)_
+- `t_c3d5c900` — **Review cited-principle demo flow and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_8174943b` — **Review cited-principle UX and verify demo readiness** _(current status: archived, assignee: reviewer)_
+- `t_95271201` — **Review clear-dialog link behavior and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_5761071c` — **Review coherence of GAC integration proposals** _(current status: archived, assignee: reviewer)_
+- `t_f6f2c066` — **Review completed weighted-scoring feature end to end** _(current status: archived, assignee: reviewer)_
+- `t_d228e626` — **Review completion and recommend closure or follow-up** _(current status: archived, assignee: orchestrator)_
+- `t_478cf01b` — **Review consistency and edge cases across both PMI surfaces** _(current status: archived, assignee: reviewer)_
+- `t_3a634c47` — **Review consistency of PMI provenance across both surfaces** _(current status: archived, assignee: reviewer)_
+- `t_41499ff8` — **Review consolidated taxonomy package for completeness** _(current status: archived, assignee: reviewer)_
+- `t_a6198894` — **Review decomposition accuracy and recommendation ordering** _(current status: archived, assignee: reviewer)_
+- `t_1da5b1ba` — **Review deep-link behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_657e6c78` — **Review deep-link behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_b65e75c2` — **Review deep-link behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_f2f42496` — **Review deep-link behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_2daebcac` — **Review deep-link behavior and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_572c6ac2` — **Review deep-link behavior and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_64c3ea93` — **Review deep-link behavior and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_29f5077d` — **Review deep-link behavior and regression risks** _(current status: archived, assignee: reviewer)_
+- `t_d8cc6415` — **Review deep-link behavior end to end** _(current status: archived, assignee: reviewer)_
+- `t_219944ad` — **Review deep-link coverage and UX correctness** _(current status: archived, assignee: reviewer)_
+- `t_ae226d9b` — **Review delivered scoring UI for completeness** _(current status: archived, assignee: reviewer)_
+- `t_92426a4d` — **Review demo flow and confirm citation is productionable** _(current status: archived, assignee: reviewer)_
+- `t_e1dc687c` — **Review dialog behavior and edge cases for saved vs unsaved analyses** _(current status: archived, assignee: reviewer)_
+- `t_132b6009` — **Review dialog behavior and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_d56ce26d` — **Review dialog behavior for saved and unsaved analyses** _(current status: archived, assignee: reviewer)_
+- `t_9955ab99` — **Review dialog behavior for saved and unsaved analysis states** _(current status: archived, assignee: reviewer)_
+- `t_d700b63c` — **Review end-to-end behavior and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_51ffb4e7` — **Review end-to-end deep-link behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_0d369d44` — **Review end-to-end retrieval and searchable output** _(current status: archived, assignee: reviewer)_
+- `t_31bdd237` — **Review end-to-end retrieval/searchability for pilot papers** _(current status: archived, assignee: reviewer)_
+- `t_af78c7f8` — **Review end-to-end weighted grading feature** _(current status: archived, assignee: reviewer)_
+- `t_c41f5377` — **Review end-to-end weighted-grade behavior and regressions** _(current status: archived, assignee: reviewer)_
+- `t_39609f2d` — **Review end-to-end weighting and grade behavior** _(current status: archived, assignee: reviewer)_
+- `t_4213d478` — **Review evidence and confirm done-when is satisfied** _(current status: archived, assignee: reviewer)_
+- `t_8c0568a1` — **Review Evidence Atlas color cleanup for consistency** _(current status: archived, assignee: reviewer)_
+- `t_307cbfd6` — **Review feature against spec and regression risks** _(current status: archived, assignee: reviewer)_
+- `t_d0fceca0` — **Review feature behavior against transparency goal** _(current status: archived, assignee: reviewer)_
+- `t_14339002` — **Review feature behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_fb493c55` — **Review feature behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_851957bd` — **Review feature behavior and regressions** _(current status: archived, assignee: reviewer)_
+- `t_e19e049d` — **Review feature behavior and scientist-facing clarity** _(current status: archived, assignee: reviewer)_
+- `t_4feab421` — **Review feature behavior and verify ordering/completeness** _(current status: archived, assignee: reviewer)_
+- `t_b8b99ee6` — **Review feature completeness, edge cases, and regressions** _(current status: archived, assignee: reviewer)_
+- `t_f52544dc` — **Review feature correctness and UX against spec** _(current status: archived, assignee: reviewer)_
+- `t_8c1c2d8d` — **Review feature for UX clarity and completion** _(current status: archived, assignee: reviewer)_
+- `t_633d8b75` — **Review feature outputs for closure readiness** _(current status: archived, assignee: reviewer)_
+- `t_ec39aaa8` — **Review feature spec for completeness and ambiguity** _(current status: archived, assignee: reviewer)_
+- `t_13cc458c` — **Review final recommendation for clarity and fit** _(current status: archived, assignee: reviewer)_
+- `t_19d6d3b4` — **Review findings and define pass/fail for SSE streaming** _(current status: archived, assignee: reviewer)_
+- `t_ea08b351` — **Review findings and draft closure recommendation** _(current status: archived, assignee: reviewer)_
+- `t_84369600` — **Review fixes and confirm updated UI audit score** _(current status: archived, assignee: reviewer)_
+- `t_f011b8b6` — **Review fixes and re-run the UI score assessment** _(current status: archived, assignee: reviewer)_
+- `t_3988445a` — **Review fixes and re-score the UI audit** _(current status: archived, assignee: reviewer)_
+- `t_eeec17da` — **Review for alternate deterministic failure modes** _(current status: archived, assignee: reviewer)_
+- `t_6782054d` — **Review GC.ai CI/CD workflow path and manual-production gate** _(current status: archived, assignee: reviewer)_
+- `t_27dafb83` — **Review implementation across both provenance scenarios** _(current status: archived, assignee: reviewer)_
+- `t_48b3d204` — **Review implementation against provenance spec and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_8494bd83` — **Review implementation against route-level evidence goals** _(current status: archived, assignee: reviewer)_
+- `t_ee1a038d` — **Review implementation against scientist-facing requirements** _(current status: archived, assignee: reviewer)_
+- `t_e1bc6fd8` — **Review implementation against spec and core UX states** _(current status: archived, assignee: reviewer)_
+- `t_b04036bd` — **Review implementation against spec and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_b90d0414` — **Review implementation against spec and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_e0abd669` — **Review implementation against spec and flow behavior** _(current status: archived, assignee: reviewer)_
+- `t_8451c9e2` — **Review implementation against spec and flow placement** _(current status: archived, assignee: reviewer)_
+- `t_9514eeec` — **Review implementation against spec and integration expectations** _(current status: archived, assignee: reviewer)_
+- `t_4b78e56d` — **Review implementation against spec and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_234ec36a` — **Review implementation against spec and user clarity** _(current status: archived, assignee: reviewer)_
+- `t_41abf864` — **Review implementation against spec and validate key flows** _(current status: archived, assignee: reviewer)_
+- `t_4cd40d47` — **Review implementation against transparency requirements** _(current status: archived, assignee: reviewer)_
+- `t_77e49e49` — **Review implementation against UX and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_e7d9d063` — **Review implementation and decide closure readiness** _(current status: archived, assignee: reviewer)_
+- `t_79a18173` — **Review implementation and validate behavior** _(current status: archived, assignee: reviewer)_
+- `t_9a35942e` — **Review implementation and validate behavior** _(current status: archived, assignee: reviewer)_
+- `t_91ea2858` — **Review implementation and verify behavioral distinction** _(current status: archived, assignee: reviewer)_
+- `t_519e65f9` — **Review implementation and verify end-to-end trace coverage** _(current status: archived, assignee: reviewer)_
+- `t_a2a49373` — **Review implementation for completeness and forensic utility** _(current status: archived, assignee: reviewer)_
+- `t_4e33ab91` — **Review implementation for completeness and gaps** _(current status: archived, assignee: reviewer)_
+- `t_e8269041` — **Review implementation for completeness and regressions** _(current status: archived, assignee: reviewer)_
+- `t_2e654b37` — **Review implementation for correctness and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_4e33c988` — **Review implementation for correctness and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_eb783c75` — **Review implementation for correctness and separation** _(current status: archived, assignee: reviewer)_
+- `t_f2d527f3` — **Review implementation for correctness and UX fit** _(current status: archived, assignee: reviewer)_
+- `t_788c9cab` — **Review implementation for regressions and UX fit** _(current status: archived, assignee: reviewer)_
+- `t_b2c03e96` — **Review implementation for semantic correctness** _(current status: archived, assignee: reviewer)_
+- `t_b6877af7` — **Review implementation for spec compliance and closeability** _(current status: archived, assignee: reviewer)_
+- `t_1c4fbca9` — **Review implementation impact and propose build plan** _(current status: archived, assignee: reviewer)_
+- `t_0f93787f` — **Review implemented PMI UI for consistency and completeness** _(current status: archived, assignee: reviewer)_
+- `t_effc5783` — **Review implemented provenance UX for correctness and clarity** _(current status: archived, assignee: reviewer)_
+- `t_6b54b218` — **Review implemented screen against spec** _(current status: archived, assignee: reviewer)_
+- `t_dc0af8bb` — **Review incident write-up and remediation spec** _(current status: archived, assignee: reviewer)_
+- `t_9edeed97` — **Review indicator accuracy, usability, and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_a6c88881` — **Review indicator behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_4960ec3a` — **Review integrated draft for fidelity and usability** _(current status: archived, assignee: reviewer)_
+- `t_a8b10d32` — **Review integrated mechanochemistry recommendation changes** _(current status: archived, assignee: reviewer)_
+- `t_36b33cd6` — **Review integrated scoring UI for correctness and UX gaps** _(current status: archived, assignee: reviewer)_
+- `t_02745d16` — **Review integration and verify end-to-end auditability** _(current status: archived, assignee: reviewer)_
+- `t_5e513490` — **Review local Qwen config and docs against done-when** _(current status: archived, assignee: reviewer)_
+- `t_1e860f3e` — **Review merged before/after scoring and prediction output** _(current status: archived, assignee: reviewer)_
+- `t_27028dfe` — **Review mobile demo flow and log any residual issues** _(current status: archived, assignee: reviewer)_
+- `t_32467b1d` — **Review mobile demo flow for responsive regressions** _(current status: archived, assignee: reviewer)_
+- `t_bbb3d39c` — **Review mobile demo UX and validate key small-screen flows** _(current status: archived, assignee: reviewer)_
+- `t_c5784911` — **Review mobile responsive behavior and regressions** _(current status: archived, assignee: reviewer)_
+- `t_f837fcf9` — **Review mobile responsive behavior and regressions** _(current status: archived, assignee: reviewer)_
+- `t_5410bd68` — **Review mobile viewport behavior and regressions** _(current status: archived, assignee: reviewer)_
+- `t_61b0a2e9` — **Review outputs against route-level precedent goals** _(current status: archived, assignee: reviewer)_
+- `t_fa2329bb` — **Review outputs for consistency and implementation readiness** _(current status: archived, assignee: reviewer)_
+- `t_43b07bf8` — **Review P1 waste density change duplicate — superseded by canonical review path t_7c80faa2 -> t_94307c20** _(current status: archived, assignee: orchestrator)_
+- `t_16a6502f` — **Review P1 waste density change for UX and regressions** _(current status: archived, assignee: reviewer)_
+- `t_7bdfc640` — **Review P1 waste density change for UX and regressions** _(current status: archived, assignee: reviewer)_
+- `t_879d9828` — **Review P1 waste density change for UX and regressions** _(current status: archived, assignee: reviewer)_
+- `t_bee74e17` — **Review P1 waste section density change** _(current status: archived, assignee: reviewer)_
+- `t_ea834556` — **Review P1 waste section density change** _(current status: archived, assignee: reviewer)_
+- `t_df1b87a7` — **Review P1 waste section density change for behavior and UX** _(current status: archived, assignee: reviewer)_
+- `t_8b31c55a` — **Review P1 waste section density change for correctness** _(current status: archived, assignee: reviewer)_
+- `t_9f7f2008` — **Review P1 waste section density change for UX and regressions** _(current status: archived, assignee: reviewer)_
+- `t_15140408` — **Review P1 waste section UX against requested density change** _(current status: archived, assignee: reviewer)_
+- `t_c56ba84d` — **Review P1 waste section UX and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_36e3dba5` — **Review P1 waste toggle behavior and regressions** _(current status: archived, assignee: reviewer)_
+- `t_993b08ff` — **Review P1 waste toggle behavior and visual hierarchy** _(current status: archived, assignee: reviewer)_
+- `t_ccee8640` — **Review P1 waste toggle behavior and visual hierarchy** _(current status: archived, assignee: reviewer)_
+- `t_ecfae40f` — **Review P1 waste toggle behavior and visual regressions** _(current status: archived, assignee: reviewer)_
+- `t_96091607` — **Review P1 waste toggle for UX correctness and regressions** _(current status: archived, assignee: reviewer)_
+- `t_b8fcd07a` — **Review pipeline outputs against citation requirements** _(current status: archived, assignee: reviewer)_
+- `t_d0ab1604` — **Review pipeline outputs for citation quality and source fidelity** _(current status: archived, assignee: reviewer)_
+- `t_d71b0d35` — **Review PMI provenance behavior across all analysis states** _(current status: archived, assignee: reviewer)_
+- `t_15878c99` — **Review PMI provenance behavior across both UI surfaces** _(current status: archived, assignee: reviewer)_
+- `t_19bffe0e` — **Review PMI provenance behavior across representative cases** _(current status: archived, assignee: reviewer)_
+- `t_f85d3880` — **Review PMI provenance coverage and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_e87192b3` — **Review PMI provenance implementation across both surfaces** _(current status: archived, assignee: reviewer)_
+- `t_24e52abf` — **Review PMI provenance UX across results and atlas** _(current status: archived, assignee: reviewer)_
+- `t_e9be1abe` — **Review PMI provenance UX and scenario coverage** _(current status: archived, assignee: reviewer)_
+- `t_ceff9834` — **Review PMI provenance UX and verify done-when coverage** _(current status: archived, assignee: reviewer)_
+- `t_53c44faa` — **Review PMI provenance UX and verify edge cases** _(current status: archived, assignee: reviewer)_
+- `t_ae6ef9ad` — **Review PMI provenance UX consistency and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_fd4bfdd7` — **Review PMI surfacing across results and Evidence Atlas** _(current status: archived, assignee: reviewer)_
+- `t_54d164b4` — **Review PMI UI behavior across both surfaces** _(current status: archived, assignee: reviewer)_
+- `t_c1cc565b` — **Review PMI UI consistency and edge-case handling** _(current status: archived, assignee: reviewer)_
+- `t_3e7f3214` — **Review proposal set and issue implementation recommendation** _(current status: archived, assignee: reviewer)_
+- `t_9f1829e0` — **Review proposed method and define QA checks** _(current status: archived, assignee: reviewer)_
+- `t_14416b69` — **Review provenance indicator behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_bb20f736` — **Review provenance indicator behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_b7b4b164` — **Review provenance indicator UX and implementation coverage** _(current status: archived, assignee: reviewer)_
+- `t_792bfdb0` — **Review provenance UI behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_a7ace98c` — **Review provenance UI behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_57b138ae` — **Review provenance UI for clarity and correctness** _(current status: archived, assignee: reviewer)_
+- `t_c348776d` — **Review provenance UI for clarity and correctness** _(current status: archived, assignee: reviewer)_
+- `t_15128723` — **Review provenance UI for correctness and regressions** _(current status: archived, assignee: reviewer)_
+- `t_46ba14be` — **Review provenance UI for correctness and usability** _(current status: archived, assignee: reviewer)_
+- `t_557e5a3b` — **Review provenance UI for correctness and usability** _(current status: archived, assignee: reviewer)_
+- `t_6ea84acc` — **Review provenance UI for correctness and usability** _(current status: archived, assignee: reviewer)_
+- `t_c31c3eae` — **Review provenance UI for correctness and usability** _(current status: archived, assignee: reviewer)_
+- `t_a07139d0` — **Review provenance UI for correctness and UX clarity** _(current status: archived, assignee: reviewer)_
+- `t_f3ee8e4f` — **Review provenance UX and verify scenario coverage** _(current status: archived, assignee: reviewer)_
+- `t_e95c5a4d` — **Review provenance UX for correctness and non-misleading cues** _(current status: archived, assignee: reviewer)_
+- `t_2ab05cc1` — **Review provenance-bar behavior and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_5f60d965` — **Review Quick Wins live-route and copy fixes** _(current status: archived, assignee: reviewer)_
+- `t_58dcbeab` — **Review Quick Wins view for correctness and usability** _(current status: archived, assignee: reviewer)_
+- `t_15fa0a34` — **Review Quick Wins view for framing and correctness** _(current status: archived, assignee: reviewer)_
+- `t_9f98241c` — **Review Quick Wins view for requirement fidelity and UX clarity** _(current status: archived, assignee: reviewer)_
+- `t_ca9264f6` — **Review Quick Wins view for scope and UX correctness** _(current status: archived, assignee: reviewer)_
+- `t_2f17d7a0` — **Review radius standardization changes on Analysis page** _(current status: archived, assignee: reviewer)_
+- `t_a258e49c` — **Review recalculation outputs for consistency and completeness** _(current status: archived, assignee: reviewer)_
+- `t_2f0bc678` — **Review recommendation for clarity and unblock status** _(current status: archived, assignee: reviewer)_
+- `t_f49739c7` — **Review results and summarize before/after score changes** _(current status: archived, assignee: reviewer)_
+- `t_14bab2f9` — **Review retrieval and searchability results for closure** _(current status: archived, assignee: reviewer)_
+- `t_3292b37c` — **Review retrieval implementation and search integration** _(current status: archived, assignee: reviewer)_
+- `t_d2c8c0f9` — **Review retrieval path with end-to-end validation notes** _(current status: archived, assignee: reviewer)_
+- `t_1e25f378` — **Review retrieval quality and define acceptance examples** _(current status: archived, assignee: reviewer)_
+- `t_11203acb` — **Review retrieval-to-search integration for completeness** _(current status: archived, assignee: orchestrator)_
+- `t_b418bb97` — **Review retrieved examples for route-level relevance and gaps** _(current status: archived, assignee: reviewer)_
+- `t_ae98f47d` — **Review revised canonical GAC P11 integration spec for implementation readiness** _(current status: archived, assignee: reviewer)_
+- `t_eae504b3` — **Review rewritten item for clarity and actionability** _(current status: archived, assignee: reviewer)_
+- `t_28159879` — **Review saved-vs-unsaved dialog behavior and copy-link UX** _(current status: archived, assignee: reviewer)_
+- `t_d7589c52` — **Review saved-vs-unsaved dialog behavior and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_fadfd9f9` — **Review saved/unsaved New Analysis dialog behavior** _(current status: archived, assignee: reviewer)_
+- `t_afafc6fc` — **Review scoring and prediction outputs for consistency** _(current status: archived, assignee: reviewer)_
+- `t_381b2797` — **Review scoring outputs and validate assumptions** _(current status: archived, assignee: reviewer)_
+- `t_442c051a` — **Review scoring package for completeness and consistency** _(current status: archived, assignee: reviewer)_
+- `t_184b00a2` — **Review scoring results and validate consistency** _(current status: archived, assignee: reviewer)_
+- `t_b1bfbd58` — **Review scoring UI behavior and acceptance criteria** _(current status: archived, assignee: reviewer)_
+- `t_5841c9b8` — **Review scoring UI completeness and consistency** _(current status: archived, assignee: reviewer)_
+- `t_fb64b7b1` — **Review scoring UI for completeness and defects** _(current status: archived, assignee: reviewer)_
+- `t_13944da3` — **Review scoring UI for completeness and regressions** _(current status: archived, assignee: reviewer)_
+- `t_e4323e2a` — **Review scoring UI for completeness and regressions** _(current status: archived, assignee: reviewer)_
+- `t_c8830298` — **Review scoring UI for correctness and UX completeness** _(current status: archived, assignee: reviewer)_
+- `t_0cebad7f` — **Review scoring UI for correctness and UX gaps** _(current status: archived, assignee: reviewer)_
+- `t_84cf9825` — **Review scoring UI implementation against spec** _(current status: archived, assignee: reviewer)_
+- `t_44ac1add` — **Review scoring UI integration and correctness** _(current status: archived, assignee: reviewer)_
+- `t_b793b51d` — **Review site for enterprise readiness and launch gaps** _(current status: archived, assignee: reviewer)_
+- `t_f23f3645` — **Review site for launch readiness and compliance with logo policy** _(current status: archived, assignee: reviewer)_
+- `t_a78489f6` — **Review site for launch readiness and enterprise credibility** _(current status: archived, assignee: reviewer)_
+- `t_d4ed3957` — **Review spec and retrieval design for completeness** _(current status: archived, assignee: reviewer)_
+- `t_7af74310` — **Review spec for consistency, gaps, and testability** _(current status: archived, assignee: reviewer)_
+- `t_4849fcd4` — **Review spec for gaps, ambiguity, and testability** _(current status: archived, assignee: reviewer)_
+- `t_a6487429` — **Review specs for completeness and implementation readiness** _(current status: archived, assignee: reviewer)_
+- `t_3b456751` — **Review taxonomy and enforcement spec for consistency** _(current status: archived, assignee: reviewer)_
+- `t_0c689c71` — **Review taxonomy and mappings for consistency and gaps** _(current status: archived, assignee: reviewer)_
+- `t_7250f30c` — **Review taxonomy package for consistency and gaps** _(current status: archived, assignee: reviewer)_
+- `t_df761148` — **Review taxonomy package for consistency and gaps** _(current status: archived, assignee: reviewer)_
+- `t_8e34442e` — **Review taxonomy package for gaps and consistency** _(current status: archived, assignee: reviewer)_
+- `t_de544d13` — **Review taxonomy rollout for consistency and gaps** _(current status: archived, assignee: reviewer)_
+- `t_a85db003` — **Review templates for consistency and business readiness** _(current status: archived, assignee: reviewer)_
+- `t_fdb8297f` — **Review the citation implementation for demo readiness** _(current status: archived, assignee: reviewer)_
+- `t_4617697c` — **Review the integration spec for completeness and defect risk** _(current status: archived, assignee: reviewer)_
+- `t_66206d21` — **Review the new screen for correctness and UX fit** _(current status: archived, assignee: reviewer)_
+- `t_af781f3c` — **Review the proposal for coherence, gaps, and MVP readiness** _(current status: archived, assignee: reviewer)_
+- `t_c4b3bf41` — **Review the root-cause summary for rigor and closure readiness** _(current status: archived, assignee: reviewer)_
+- `t_aa6391eb` — **Review the spec for consistency and implementation readiness** _(current status: archived, assignee: reviewer)_
+- `t_2110bc57` — **Review the spec for gaps, contradictions, and implementation readiness** _(current status: archived, assignee: reviewer)_
+- `t_d8379d97` — **Review transparency feature for clarity and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_3557b38e` — **Review transparency feature for correctness and clarity** _(current status: archived, assignee: reviewer)_
+- `t_1a441dce` — **Review transparency feature for correctness and trust signaling** _(current status: archived, assignee: reviewer)_
+- `t_092c5a21` — **Review transparency feature for correctness and trustworthiness** _(current status: archived, assignee: reviewer)_
+- `t_3b04c86a` — **Review transparency feature for correctness and trustworthiness** _(current status: archived, assignee: reviewer)_
+- `t_ae9c0b4a` — **Review transparency feature for correctness and trustworthiness** _(current status: archived, assignee: reviewer)_
+- `t_06b605ee` — **Review transparency output for clarity and trustworthiness** _(current status: archived, assignee: reviewer)_
+- `t_6cb6a170` — **Review transparency step for correctness and trustworthiness** _(current status: archived, assignee: reviewer)_
+- `t_b5b0a254` — **Review UI behavior and edge cases for provenance indicators** _(current status: archived, assignee: reviewer)_
+- `t_5bdd34b6` — **Review updated Analysis toggle against requested UI behavior** _(current status: archived, assignee: reviewer)_
+- `t_e655d125` — **Review updated toggle for style consistency and regressions** _(current status: archived, assignee: reviewer)_
+- `t_5b471e28` — **Review validation findings and recommend next actions** _(current status: archived, assignee: reviewer)_
+- `t_e98923a6` — **Review validation findings and recommend next actions** _(current status: archived, assignee: reviewer)_
+- `t_2d8b5950` — **Review validation package and flag gaps** _(current status: archived, assignee: reviewer)_
+- `t_265bbedb` — **Review validation report and recommend follow-up adjustments** _(current status: archived, assignee: reviewer)_
+- `t_ef82c770` — **Review visual consistency and interaction of new toggle tabs** _(current status: archived, assignee: reviewer)_
+- `t_c5d4843e` — **Review website for enterprise readiness and release gaps** _(current status: archived, assignee: reviewer)_
+- `t_8414bad5` — **Review weighted grading feature end to end** _(current status: archived, assignee: reviewer)_
+- `t_28d07b34` — **Review weighted scoring feature against spec and edge cases** _(current status: archived, assignee: reviewer)_
+- `t_ba98bc0a` — **Review weighted scoring feature for correctness and gaps** _(current status: archived, assignee: reviewer)_
+- `t_c144fdb6` — **Review weighted scoring feature for correctness and regressions** _(current status: archived, assignee: reviewer)_
+- `t_35613515` — **Review: literature ingestion pipeline slice for RSC + ACS OA sources** _(current status: archived, assignee: reviewer)_
+- `t_6743e365` — **Revise canonical GAC P11 integration spec per review findings** _(current status: archived, assignee: orchestrator)_
+- `t_f8d7c1a4` — **Revise GAC P11 integration spec into implementation-ready final brief** _(current status: archived, assignee: orchestrator)_
+- `t_0716f29f` — **Rewrite backlog item as actionable consistency work** _(current status: archived, assignee: orchestrator)_
+- `t_9345b0f0` — **Run 5+ Claude Sonnet benchmark trials and capture outputs** _(current status: archived, assignee: orchestrator)_
+- `t_ab472d9c` — **Run 5+ Qwen benchmark trials and capture outputs** _(current status: archived, assignee: orchestrator)_
+- `t_0d20a05b` — **Run before/after rescoring with substituted chemicals** _(current status: archived, assignee: orchestrator)_
+- `t_659777d6` — **Run before/after scoring for substituted chemicals** _(current status: archived, assignee: orchestrator)_
+- `t_3693176f` — **Run benchmark on Claude Sonnet and capture results** _(current status: archived, assignee: orchestrator)_
+- `t_9ca68d29` — **Run benchmark repetitions on Claude Sonnet and log results** _(current status: archived, assignee: worker-gemma)_
+- `t_7a75ede4` — **Run benchmark repetitions on Qwen and log results** _(current status: archived, assignee: worker-gemma)_
+- `t_e2fa868a` — **Run benchmark sessions for Qwen and Claude Sonnet** _(current status: archived, assignee: orchestrator)_
+- `t_4cca8a4f` — **Run end-to-end local-model SSE test and document results** _(current status: archived, assignee: reviewer)_
+- `t_b00d6967` — **Run GC.ai evaluation on the benchmark and summarize results** _(current status: archived, assignee: orchestrator)_
+- `t_aade9c33` — **Run GC.ai on the curated benchmark and summarize results** _(current status: archived, assignee: orchestrator)_
+- `t_7a5818ef` — **Run GC.ai ranking evaluation on benchmark corpus** _(current status: archived, assignee: orchestrator)_
+- `t_95005a9b` — **Run GC.ai ranking evaluation on the benchmark set** _(current status: archived, assignee: orchestrator)_
+- `t_f88ffbf0` — **Run GC.ai ranking evaluation on the benchmark set** _(current status: archived, assignee: orchestrator)_
+- `t_aae83242` — **Run live before/after rescoring and write reviewable artifact** _(current status: archived, assignee: orchestrator)_
+- `t_f8ace081` — **Run local-model SSE streaming test and capture evidence** _(current status: archived, assignee: worker-gemma)_
+- `t_c4e1c894` — **Run parse-only Qwen structured-output validation via triazolo harness** _(current status: archived, assignee: default)_
+- `t_649e06c7` — **Run protocol 5+ times on Claude Sonnet and capture results** _(current status: archived, assignee: worker-gemma)_
+- `t_0416a52a` — **Run protocol 5+ times on Qwen and capture results** _(current status: archived, assignee: worker-gemma)_
+- `t_5802913d` — **Run scorer on benchmark protocols and capture outputs** _(current status: archived, assignee: worker-gemma)_
+- `t_6c597b1f` — **Run scorer on known protocols and compare against DOZN** _(current status: archived, assignee: worker-gemma)_
+- `t_d4697f62` — **Run scoring comparisons and summarize validation findings** _(current status: archived, assignee: reviewer)_
+- `t_d296f38d` — **Run scoring for substituted chemicals in identified module** _(current status: archived, assignee: orchestrator)_
+- `t_2b36046b` — **Run scoring on known protocols and compare to DOZN** _(current status: archived, assignee: worker-gemma)_
+- `t_2f920da1` — **Run scoring rerun in identified module and capture results** _(current status: archived, assignee: orchestrator)_
+- `t_e3d1864b` — **Run scoring validation against DOZN and benchmark pairs** _(current status: archived, assignee: worker-gemma)_
+- `t_0834034b` — **Scope mobile demo UX issues and target components** _(current status: archived, assignee: orchestrator)_
+- `t_8e013c7e` — **Score candidates and recommend top 3 reactions** _(current status: archived, assignee: orchestrator)_
+- `t_37e0d4a7` — **Scoring UI spec duplicate leaf — superseded by repo-grounded lane t_f82f3954 -> t_f58594e3 -> t_36b33cd6** _(current status: archived, assignee: orchestrator)_
+- `t_97428459` — **Scoring UI spec duplicate — superseded by repo-grounded scoring UI lane t_f82f3954 -> t_f58594e3 -> t_36b33cd6** _(current status: archived, assignee: orchestrator)_
+- `t_05f9ea66` — **Scoring: Generate scenario-keyed AI estimates for affected principles** _(current status: archived, assignee: orchestrator)_
+- `t_add7d2f5` — **Script the live demo flow and presenter talk track** _(current status: archived, assignee: orchestrator)_
+- `t_bec3dbd0` — **Script the live demo flow and presenter talk track** _(current status: archived, assignee: orchestrator)_
+- `t_5073de82` — **Select one principle and define citation display requirements** _(current status: archived, assignee: worker-gemma)_
+- `t_5ecd6857` — **Select one principle and gather its demo-ready source citations** _(current status: archived, assignee: worker-gemma)_
+- `t_cce0d6c7` — **Select validation protocol set and define comparison rubric** _(current status: archived, assignee: worker-gemma)_
+- `t_b51aadb8` — **Show numeric PMI and provenance in Evidence Atlas** _(current status: archived, assignee: worker-gemma)_
+- `t_119671de` — **Show numeric PMI and provenance in main results UI** _(current status: archived, assignee: worker-gemma)_
+- `t_d0bcff92` — **Show numeric PMI in Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_6a666ccc` — **Show numeric PMI in results UI** _(current status: archived, assignee: orchestrator)_
+- `t_6e6ba8bb` — **Source coverage/schema duplicate — superseded by canonical ingestion path t_d2760f0e -> t_38268250 -> t_fd6c2803** _(current status: archived, assignee: orchestrator)_
+- `t_fc4aea28` — **Specify admin weighting and grading behavior** _(current status: archived, assignee: orchestrator)_
+- `t_ea6e7c57` — **Specify anchor contract for recommendation-to-Atlas links** _(current status: archived, assignee: orchestrator)_
+- `t_f9bc753f` — **Specify anchor mapping for recommendation-to-Atlas deep links** _(current status: archived, assignee: orchestrator)_
+- `t_e984a7d2` — **Specify assumed-chemistry review screen UX and content** _(current status: archived, assignee: orchestrator)_
+- `t_5b74caa5` — **Specify before/after scoring method and AI-estimate rules** _(current status: archived, assignee: orchestrator)_
+- `t_81eba547` — **Specify before/after substitution scenarios and scoring inputs** _(current status: archived, assignee: orchestrator)_
+- `t_bfdfd11b` — **Specify benchmark artifact task for validation scoring** _(current status: archived, assignee: orchestrator)_
+- `t_4c71de7e` — **Specify benchmark criteria for validated process-redesign cases** _(current status: archived, assignee: orchestrator)_
+- `t_55666cdb` — **Specify citation UX and choose one principle for demo scope** _(current status: archived, assignee: orchestrator)_
+- `t_a95b3554` — **Specify citation UX for one principle evaluation** _(current status: archived, assignee: worker-gemma)_
+- `t_d256e0f7` — **Specify cleanup/revert plan for overlapping P1-2 touch-target surfaces** _(current status: archived, assignee: orchestrator)_
+- `t_4787a53b` — **Specify clear-dialog behavior for saved vs unsaved analyses** _(current status: archived, assignee: orchestrator)_
+- `t_d191d538` — **Specify context-scoring behavior and rollout contract** _(current status: archived, assignee: orchestrator)_
+- `t_6c1ef541` — **Specify context-specific scoring profile design** _(current status: archived, assignee: orchestrator)_
+- `t_5116e34e` — **Specify context-specific scoring profiles for enterprise use** _(current status: archived, assignee: orchestrator)_
+- `t_26f8150e` — **Specify deep-link target mapping for recommendation links** _(current status: archived, assignee: orchestrator)_
+- `t_806d4283` — **Specify dialog behavior for saved vs unsaved analyses** _(current status: archived, assignee: orchestrator)_
+- `t_8d488a96` — **Specify dialog behavior for saved vs unsaved analyses** _(current status: archived, assignee: orchestrator)_
+- `t_9aa67822` — **Specify dialog behavior for saved vs unsaved analyses** _(current status: archived, assignee: orchestrator)_
+- `t_636cfd10` — **Specify enforcement rules for UI and API usage** _(current status: archived, assignee: worker-gemma)_
+- `t_79ee8581` — **Specify enterprise context-scoring product behavior** _(current status: archived, assignee: orchestrator)_
+- `t_b2eab12c` — **Specify enterprise weighted-scoring admin flow** _(current status: archived, assignee: orchestrator)_
+- `t_c31213a5` — **Specify full-text retrieval/import path for backlog pilot** _(current status: archived, assignee: orchestrator)_
+- `t_9f9e992c` — **Specify Green Chemistry scoring adaptations for mechanochemistry** _(current status: archived, assignee: orchestrator)_
+- `t_44d2c65f` — **Specify mechanochemistry recommendation layer scope** _(current status: archived, assignee: orchestrator)_
+- `t_e99bd450` — **Specify mechanochemistry recommendation scope and interfaces** _(current status: archived, assignee: orchestrator)_
+- `t_8d112b13` — **Specify metadata, UI labeling, and enforcement strategy** _(current status: archived, assignee: orchestrator)_
+- `t_0cd044ba` — **Specify mobile demo viewport UX changes** _(current status: archived, assignee: orchestrator)_
+- `t_51dacf70` — **Specify mobile-responsive behavior for demo workflow UI** _(current status: archived, assignee: orchestrator)_
+- `t_b4c662da` — **Specify narrow follow-up leaves for remaining P1 interaction/accessibility fixes** _(current status: archived, assignee: orchestrator)_
+- `t_ad9a2bca` — **Specify pilot retrieval path for backlog full-text ingestion** _(current status: archived, assignee: orchestrator)_
+- `t_5a96293f` — **Specify PMI and provenance UX for results and Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_0aca2255` — **Specify PMI display and provenance contract for both UI surfaces** _(current status: archived, assignee: orchestrator)_
+- `t_79a4b713` — **Specify PMI display and provenance contract for results and Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_42be44df` — **Specify PMI display and provenance copy for v0.7 UI** _(current status: archived, assignee: orchestrator)_
+- `t_5aff5433` — **Specify PMI display states and provenance copy** _(current status: archived, assignee: orchestrator)_
+- `t_b58f02c2` — **Specify PMI display states and provenance copy** _(current status: archived, assignee: worker-gemma)_
+- `t_72ec045f` — **Specify PMI provenance contract for results and Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_c073ed00` — **Specify PMI provenance UX for results and Evidence Atlas** _(current status: archived, assignee: orchestrator)_
+- `t_0d286484` — **Specify PMI UI surfaces and provenance wording** _(current status: archived, assignee: orchestrator)_
+- `t_613c4baf` — **Specify PMI/provenance UI behavior for results and atlas** _(current status: archived, assignee: orchestrator)_
+- `t_367b026c` — **Specify pre-scoring assumed-chemistry review screen** _(current status: archived, assignee: orchestrator)_
+- `t_8279b545` — **Specify pre-scoring assumed-chemistry review screen** _(current status: archived, assignee: orchestrator)_
+- `t_50dfa69c` — **Specify pre-scoring chemistry review screen** _(current status: archived, assignee: orchestrator)_
+- `t_2e0badec` — **Specify pre-scoring chemistry review screen behavior** _(current status: archived, assignee: orchestrator)_
+- `t_c5cf9f83` — **Specify pre-scoring chemistry review screen behavior** _(current status: archived, assignee: orchestrator)_
+- `t_1c554541` — **Specify process-redesign benchmark protocol** _(current status: archived, assignee: orchestrator)_
+- `t_ed9ffa59` — **Specify provenance indicator behavior for scoring outputs** _(current status: archived, assignee: orchestrator)_
+- `t_f396406c` — **Specify provenance indicator model for scoring outputs** _(current status: archived, assignee: orchestrator)_
+- `t_a97a5c12` — **Specify provenance model and UI behavior for scoring indicators** _(current status: archived, assignee: orchestrator)_
+- `t_66508e15` — **Specify provenance model and UI rules for score confidence** _(current status: archived, assignee: orchestrator)_
+- `t_a4fdbc59` — **Specify provenance model and UI rules for scoring indicators** _(current status: archived, assignee: orchestrator)_
+- `t_c49b0f2c` — **Specify provenance states and target scoring UI surfaces** _(current status: archived, assignee: orchestrator)_
+- `t_5f21d52c` — **Specify provenance states and UI behavior for score confidence bars** _(current status: archived, assignee: orchestrator)_
+- `t_6cb1837f` — **Specify provenance states and UI behavior for score confidence bars** _(current status: archived, assignee: orchestrator)_
+- `t_3b7fcc36` — **Specify provenance states and UI behavior for scoring outputs** _(current status: archived, assignee: orchestrator)_
+- `t_9003e3a1` — **Specify provenance states and UI rules for scoring confidence bars** _(current status: archived, assignee: orchestrator)_
+- `t_c3bdf0dc` — **Specify provenance states and UI rules for scoring indicators** _(current status: archived, assignee: orchestrator)_
+- `t_46b33e3e` — **Specify provenance states and UI treatment for scoring outputs** _(current status: archived, assignee: orchestrator)_
+- `t_332a3107` — **Specify provenance UI for scoring confidence indicators** _(current status: archived, assignee: orchestrator)_
+- `t_12b5dba7` — **Specify provenance/confidence UI for scoring outputs** _(current status: archived, assignee: orchestrator)_
+- `t_98c94617` — **Specify Quick Wins summary view requirements** _(current status: archived, assignee: worker-gemma)_
+- `t_35802536` — **Specify ranking and evidence extraction for retrieved papers** _(current status: archived, assignee: worker-gemma)_
+- `t_38775fee` — **Specify ranking and evidence extraction for route precedents** _(current status: archived, assignee: orchestrator)_
+- `t_4eda315d` — **Specify reaction-decomposition transparency UX and data contract** _(current status: archived, assignee: orchestrator)_
+- `t_e6fba6ed` — **Specify reaction-step transparency feature behavior** _(current status: archived, assignee: orchestrator)_
+- `t_5499a46f` — **Specify recommendation-to-Atlas anchor contract** _(current status: archived, assignee: orchestrator)_
+- `t_f391450c` — **Specify recommendation-to-Atlas anchor mapping** _(current status: archived, assignee: orchestrator)_
+- `t_b6d616d5` — **Specify route-level precedent retrieval and extraction requirements** _(current status: archived, assignee: orchestrator)_
+- `t_483bf626` — **Specify route-level precedent retrieval and ranking behavior** _(current status: archived, assignee: orchestrator)_
+- `t_15788a40` — **Specify route-level precedent retrieval and ranking criteria** _(current status: archived, assignee: orchestrator)_
+- `t_05b6932b` — **Specify route-level precedent retrieval behavior** _(current status: archived, assignee: orchestrator)_
+- `t_75acc5d9` — **Specify route-precedent retrieval and ranking criteria** _(current status: archived, assignee: orchestrator)_
+- `t_aa821c7d` — **Specify saved-vs-unsaved dialog behavior for clear flow** _(current status: archived, assignee: orchestrator)_
+- `t_4a824350` — **Specify schema and persistence contract for trace logging** _(current status: archived, assignee: orchestrator)_
+- `t_0fbd7aca` — **Specify schemas and instrumentation contract for trace logging** _(current status: archived, assignee: orchestrator)_
+- `t_eed52c0c` — **Specify Sci-Hub retrieval flow for backlog full-text gaps** _(current status: archived, assignee: orchestrator)_
+- `t_6b5baa9e` — **Specify Sci-Hub retrieval workflow for backlog papers** _(current status: archived, assignee: orchestrator)_
+- `t_77237a95` — **Specify scoring UI behavior and data states** _(current status: archived, assignee: orchestrator)_
+- `t_262d0f43` — **Specify scoring UI states and component requirements** _(current status: archived, assignee: orchestrator)_
+- `t_91d6aa98` — **Specify scoring UI states and data contract** _(current status: archived, assignee: orchestrator)_
+- `t_e0a3b038` — **Specify scoring UI states and data contract** _(current status: archived, assignee: orchestrator)_
+- `t_f82f3954` — **Specify scoring UI states and data contracts** _(current status: archived, assignee: orchestrator)_
+- `t_dc3e4278` — **Specify scoring UI states and data mapping** _(current status: archived, assignee: orchestrator)_
+- `t_831e0b42` — **Specify scoring UI states and data mappings** _(current status: archived, assignee: orchestrator)_
+- `t_64083b3f` — **Specify scoring UI states and target components** _(current status: archived, assignee: orchestrator)_
+- `t_7c053bed` — **Specify scoring UI states, data mapping, and interaction rules** _(current status: archived, assignee: orchestrator)_
+- `t_13a873c5` — **Specify scoring-profile behavior by context** _(current status: archived, assignee: orchestrator)_
+- `t_dd287fde` — **Specify target sources and access constraints** _(current status: archived, assignee: orchestrator)_
+- `t_54dda9ee` — **Specify target sources and metadata schema** _(current status: archived, assignee: worker-gemma)_
+- `t_5620994b` — **Specify target sources and metadata schema** _(current status: archived, assignee: orchestrator)_
+- `t_f2b405d4` — **Specify the live demo flow and presenter talk track** _(current status: archived, assignee: orchestrator)_
+- `t_a02fd958` — **Specify trace and dedup logging contract** _(current status: archived, assignee: orchestrator)_
+- `t_1feeae39` — **Specify trace and dedup logging design** _(current status: archived, assignee: orchestrator)_
+- `t_d7bf1234` — **Specify trace schema and integration points** _(current status: archived, assignee: orchestrator)_
+- `t_4004bb18` — **Specify transparency analysis output and placement** _(current status: archived, assignee: orchestrator)_
+- `t_393ced0a` — **Specify transparency feature behavior and acceptance criteria** _(current status: archived, assignee: orchestrator)_
+- `t_8d408f94` — **Specify transparency flow and decomposition data contract** _(current status: archived, assignee: orchestrator)_
+- `t_154c2207` — **Specify transparency output and placement before recommendations** _(current status: archived, assignee: orchestrator)_
+- `t_fbd58928` — **Specify transparency UX and data contract for assumed chemistry** _(current status: archived, assignee: orchestrator)_
+- `t_3d7c843f` — **Specify transparency UX and data contract for reaction decomposition** _(current status: archived, assignee: orchestrator)_
+- `t_e462ad95` — **Specify transparency-step UX and data contract** _(current status: archived, assignee: orchestrator)_
+- `t_0127123f` — **Specify two-pass re-evaluation flow and output contract** _(current status: archived, assignee: orchestrator)_
+- `t_279fcfa3` — **Specify two-pass re-evaluation pipeline behavior** _(current status: archived, assignee: orchestrator)_
+- `t_805e7c80` — **Specify two-pass re-evaluation pipeline behavior** _(current status: archived, assignee: orchestrator)_
+- `t_a54c341c` — **Specify two-pass re-evaluation pipeline behavior** _(current status: archived, assignee: orchestrator)_
+- `t_a68dac77` — **Specify two-pass re-evaluation pipeline behavior** _(current status: archived, assignee: orchestrator)_
+- `t_f3aae305` — **Specify two-pass re-evaluation pipeline behavior** _(current status: archived, assignee: orchestrator)_
+- `t_1e259507` — **Specify two-pass re-evaluation pipeline design** _(current status: archived, assignee: orchestrator)_
+- `t_3d300777` — **Specify two-pass retrieval re-evaluation pipeline** _(current status: archived, assignee: orchestrator)_
+- `t_e52c62bf` — **Specify UI copy and rendering rules for provenance states** _(current status: archived, assignee: orchestrator)_
+- `t_e33e1118` — **Specify weighted principle scoring model and admin UX** _(current status: archived, assignee: orchestrator)_
+- `t_999ce092` — **Specify weighted scoring model and admin UX** _(current status: archived, assignee: orchestrator)_
+- `t_ece8bf75` — **Specify weighted scoring model and admin UX** _(current status: archived, assignee: orchestrator)_
+- `t_72460f1a` — **Specify weighted scoring model and admin UX requirements** _(current status: archived, assignee: orchestrator)_
+- `t_c8f17932` — **Specify weighted-principle admin workflow and grading rules** _(current status: archived, assignee: orchestrator)_
+- `t_83771bb9` — **Specify weighting model and admin workflow** _(current status: archived, assignee: orchestrator)_
+- `t_314a6787` — **Specify weighting model and admin-grade behavior** _(current status: archived, assignee: orchestrator)_
+- `t_b9cb3daa` — **Standardize Analysis page radius classes in affected components** _(current status: archived, assignee: orchestrator)_
+- `t_85c18884` — **Standardize Analysis page radius classes in relevant UI files** _(current status: archived, assignee: orchestrator)_
+- `t_d112d2af` — **Standardize Analysis page radius classes in UI components** _(current status: archived, assignee: orchestrator)_
+- `t_0c1b3b90` — **Standardize Analysis page radius classes in UI files** _(current status: archived, assignee: orchestrator)_
+- `t_ea494736` — **Standardize card and button radii on Analysis page** _(current status: archived, assignee: worker-gemma)_
+- `t_96ad7124` — **Standardize pill and badge radii on Analysis page** _(current status: archived, assignee: worker-gemma)_
+- `t_0ae35652` — **Summarize before/after results and flag confidence limits** _(current status: archived, assignee: reviewer)_
+- `t_f4b9f0fb` — **Summarize delivered UI changes and follow-ups** _(current status: archived, assignee: worker-gemma)_
+- `t_4bad3a3d` — **Summarize diagnosis and recommend reviewer unblock path** _(current status: archived, assignee: reviewer)_
+- `t_c7d7a739` — **Swap residual semantic colors for brand tokens in atlas components** _(current status: archived, assignee: worker-gemma)_
+- `t_1406afe9` — **Synthesize child outputs into a single implementation spec** _(current status: archived, assignee: orchestrator)_
+- `t_55361e85` — **Synthesize entity and governance recommendation memo** _(current status: archived, assignee: reviewer)_
+- `t_c845b501` — **Synthesize entity setup recommendation and next-step checklist** _(current status: archived, assignee: reviewer)_
+- `t_ab88afe1` — **Synthesize entity-setup recommendation and decision memo** _(current status: archived, assignee: reviewer)_
+- `t_e004a300` — **Synthesize findings into a founder decision memo** _(current status: archived, assignee: reviewer)_
+- `t_65c817b2` — **Synthesize findings into a founder decision memo and next-step checklist** _(current status: archived, assignee: reviewer)_
+- `t_fc041e79` — **Synthesize GAC review into actionable principles** _(current status: archived, assignee: orchestrator)_
+- `t_18e53dd6` — **Synthesize incident and define investigation questions** _(current status: archived, assignee: orchestrator)_
+- `t_161e4377` — **Synthesize observed inconsistency and likely root cause** _(current status: archived, assignee: orchestrator)_
+- `t_4605af0e` — **Synthesize recommendation and next-step checklist** _(current status: archived, assignee: reviewer)_
+- `t_c1fba39c` — **Synthesize recommendation and next-step checklist** _(current status: archived, assignee: orchestrator)_
+- `t_27f5e9de` — **Synthesize recommendation and next-step plan** _(current status: archived, assignee: orchestrator)_
+- `t_9ab011e9` — **Synthesize retrieval blueprint for implementation handoff** _(current status: archived, assignee: reviewer)_
+- `t_f37b8bbf` — **Synthesize taxonomy, mappings, and enforcement guidance** _(current status: archived, assignee: orchestrator)_
+- `t_9010b5fe` — **Synthesize UI labeling and enforcement plan** _(current status: archived, assignee: orchestrator)_
+- `t_1b2ca703` — **Synthesize validation findings and recommend follow-ups** _(current status: archived, assignee: reviewer)_
+- `t_783102e7` — **Test Phase 2 parallel evaluation under local-model latency** _(current status: archived, assignee: orchestrator)_
+- `t_3db8bb97` — **Test Phase 2 parallel principle evaluation with local latency** _(current status: archived, assignee: worker-gemma)_
+- `t_ae1e1116` — **Tighten downstream reviewer leaf for validation bundle** _(current status: archived, assignee: orchestrator)_
+- `t_91064787` — **Tighten Evidence Atlas PMI/provenance implementation in PrincipleSection** _(current status: archived, assignee: worker-gemma)_
+- `t_2634dc1f` — **Trace recommendation and Atlas anchor mapping** _(current status: archived, assignee: orchestrator)_
+- `t_bdf0b292` — **Trace recommendation and Atlas link surfaces** _(current status: archived, assignee: orchestrator)_
+- `t_f7541361` — **Transparency spec duplicate — superseded by canonical path t_4eda315d -> t_17208212 -> t_06b605ee** _(current status: archived, assignee: orchestrator)_
+- `t_16935c6d` — **Triage backend provenance-contract gaps for true Declared/mixed-input states** _(current status: archived, assignee: orchestrator)_
+- `t_30dc1df0` — **Triage: tighten P1 PMI provenance contract and benchmark-only fallback** _(current status: archived, assignee: orchestrator)_
+- `t_1ebceb24` — **UI audit duplicate/quarantine — superseded by root t_98a132b5 and spec lane t_b4c662da** _(current status: archived, assignee: orchestrator)_
+- `t_e363646a` — **UI audit duplicate/quarantine — superseded by t_1e528c7a + t_36b33cd6** _(current status: archived, assignee: orchestrator)_
+- `t_69fadfd0` — **UI implementation duplicate/quarantine — broad legacy P0/P1 bundle superseded by canonical remediation lane [blocked-by::Use the canonical narrow remediation path t_1f9b6c89 / t_4702beb9 -> t_b4c662da instead of reviving this broad duplicate] [done-when::This duplicate stays parked until the canonical remediation lane lands, is explicitly retired, or a fresh triage task replaces it]** _(current status: archived, assignee: orchestrator)_
+- `t_c9e04a25` — **UI: P1 waste breakdown toggle duplicate — superseded by canonical repair path t_7c80faa2 -> t_94307c20** _(current status: archived, assignee: orchestrator)_
+- `t_f0bfe6d4` — **UI: Ship print-only impact cover sheet on /analyze and /analyze/[id]** _(current status: archived, assignee: orchestrator)_
+- `t_8fa00c3b` — **Update Analysis page buttons to 4px radius** _(current status: archived, assignee: orchestrator)_
+- `t_ba648657` — **Update Analysis page cards and badges to approved radii** _(current status: archived, assignee: orchestrator)_
+- `t_c5b8878d` — **Update Analysis page radius classes to approved standards** _(current status: archived, assignee: orchestrator)_
+- `t_541def21` — **Update Analysis page radius classes to the new standard** _(current status: archived, assignee: worker-gemma)_
+- `t_f73d4ca9` — **Update backlog item with root cause and next actions** _(current status: archived, assignee: reviewer)_
+- `t_b8528ad1` — **Update BACKLOG.md entry with bug summary and DoD** _(current status: archived, assignee: orchestrator)_
+- `t_25becbb9` — **Update backlog/spec for deterministic scoring follow-up** _(current status: archived, assignee: orchestrator)_
+- `t_b5084e6f` — **Update backlog/spec note on deterministic scoring mitigation** _(current status: archived, assignee: orchestrator)_
+- `t_be4d1d7a` — **Update Evidence Atlas route card to brand color tokens** _(current status: archived, assignee: worker-gemma)_
+- `t_adb009c2` — **Validate 5 consecutive end-to-end Qwen runs and document gaps** _(current status: archived, assignee: reviewer)_
+- `t_40fd0f2f` — **Validate audit logging end-to-end and summarize changes** _(current status: archived, assignee: reviewer)_
+- `t_7558057c` — **Validate auditability and document query paths** _(current status: archived, assignee: reviewer)_
+- `t_b0774b6e` — **Validate citation outputs and QA sampled records** _(current status: archived, assignee: reviewer)_
+- `t_78045f6c` — **Validate end-to-end audit trail and summarize usage** _(current status: archived, assignee: reviewer)_
+- `t_cb2f96b0` — **Validate end-to-end retrieval and searchability on sample papers** _(current status: archived, assignee: reviewer)_
+- `t_5ee81d45` — **Validate mobile viewport behavior across the demo flow** _(current status: archived, assignee: reviewer)_
+- `t_9b462626` — **Validate output quality for literature-backed route optimization** _(current status: archived, assignee: reviewer)_
+- `t_94307c20` — **Validate P1 waste density behavior and polish copy/states** _(current status: archived, assignee: reviewer)_
+- `t_211b6140` — **Validate pipeline outputs and recommend next fixes** _(current status: archived, assignee: reviewer)_
+- `t_e0f60888` — **Validate Qwen structured output for assemble phase** _(current status: archived, assignee: orchestrator)_
+- `t_156e873e` — **Validate Qwen structured output for evaluate phase** _(current status: archived, assignee: orchestrator)_
+- `t_8fc621b8` — **Validate Qwen structured output for parse phase** _(current status: archived, assignee: orchestrator)_
+- `t_4b4fe930` — **Validate Qwen structured output in assemble phase** _(current status: archived, assignee: orchestrator)_
+- `t_870ac051` — **Validate Qwen structured output in evaluate phase** _(current status: archived, assignee: worker-gemma)_
+- `t_f3cdc168` — **Validate Qwen structured output in evaluate phase** _(current status: archived, assignee: orchestrator)_
+- `t_924041c4` — **Validate Qwen structured output in parse phase** _(current status: archived, assignee: worker-gemma)_
+- `t_a0733bc2` — **Validate Qwen structured output in parse phase using the triazolo benchmark harness** _(current status: archived, assignee: orchestrator)_
+- `t_efbd538f` — **Validate retrieval and search integration for backlog papers** _(current status: archived, assignee: reviewer)_
+- `t_a842d99b` — **Validate retrieval and searchability for selected backlog papers** _(current status: archived, assignee: reviewer)_
+- `t_7257856f` — **Validate retrieval and searchability on the target backlog set** _(current status: archived, assignee: reviewer)_
+- `t_f70f6236` — **Validate saved and unsaved New Analysis dialog flows** _(current status: archived, assignee: worker-gemma)_
+- `t_a95fea20` — **Validate searchable extracted content for pilot papers** _(current status: archived, assignee: reviewer)_
+- `t_88e145df` — **Validate searchable extraction for selected backlog papers** _(current status: archived, assignee: reviewer)_
+- `t_532d1927` — **Validation literature benchmark duplicate/quarantine — superseded by t_43bf9d7f corpus lane** _(current status: archived, assignee: orchestrator)_
+- `t_7a020fe5` — **Verify 5 consecutive clean runs and document remaining risks** _(current status: archived, assignee: reviewer)_
+- `t_20a24116` — **Verify all recommendation deep links end-to-end** _(current status: archived, assignee: reviewer)_
+- `t_bcf00f28` — **Verify and instrument SSE heartbeat/progress event flow** _(current status: archived, assignee: worker-gemma)_
+- `t_5a2d93d8` — **Verify audit trail end-to-end and document usage** _(current status: archived, assignee: orchestrator)_
+- `t_6de1d143` — **Verify browser consumes and displays streamed progress events** _(current status: archived, assignee: worker-gemma)_
+- `t_59307158` — **Verify complete demo reaction results on homepage** _(current status: archived, assignee: reviewer)_
+- `t_3d58341d` — **Verify deep links across recommendation cards and Atlas navigation** _(current status: archived, assignee: reviewer)_
+- `t_cbc966d7` — **Verify deep links open the exact supporting Atlas sections** _(current status: archived, assignee: reviewer)_
+- `t_9e20f5b5` — **Verify deep-link behavior across recommendation flows** _(current status: archived, assignee: reviewer)_
+- `t_749e83c6` — **Verify deep-link behavior across recommendations and routes** _(current status: archived, assignee: reviewer)_
+- `t_0dbe7873` — **Verify deep-link behavior and regression risk** _(current status: archived, assignee: reviewer)_
+- `t_d0e91d45` — **Verify deep-link behavior end to end** _(current status: archived, assignee: reviewer)_
+- `t_67a2a0dd` — **Verify deep-link behavior in affected UI paths** _(current status: archived, assignee: orchestrator)_
+- `t_feba1d39` — **Verify demo readiness and note rollout gaps** _(current status: archived, assignee: reviewer)_
+- `t_1c1fa5fc` — **Verify end-to-end audit logging and summarize usage** _(current status: archived, assignee: reviewer)_
+- `t_1e0b9ac9` — **Verify end-to-end browser-visible SSE streaming behavior** _(current status: archived, assignee: orchestrator)_
+- `t_21205c2f` — **Verify end-to-end demo reaction behavior on the homepage** _(current status: archived, assignee: reviewer)_
+- `t_59e22bdf` — **Verify end-to-end local Qwen startup and routing** _(current status: archived, assignee: reviewer)_
+- `t_612564b2` — **Verify end-to-end local routing and refine docs/config** _(current status: archived, assignee: reviewer)_
+- `t_ffb8c25b` — **Verify end-to-end logging and document closure notes** _(current status: archived, assignee: reviewer)_
+- `t_2aece6d4` — **Verify end-to-end traceability and document usage** _(current status: archived, assignee: reviewer)_
+- `t_d08a11f0` — **Verify Evidence Atlas color consistency and catch regressions** _(current status: archived, assignee: reviewer)_
+- `t_17542f44` — **Verify Evidence Atlas route consistency and remove leftovers** _(current status: archived, assignee: reviewer)_
+- `t_7884c8b9` — **Verify extracted full text is searchable with PubMed records** _(current status: archived, assignee: orchestrator)_
+- `t_67ba75fe` — **Verify extracted full text is searchable with PubMed-linked records** _(current status: archived, assignee: reviewer)_
+- `t_8a922a18` — **Verify fixes and re-run UI/audit QA** _(current status: archived, assignee: reviewer)_
+- `t_e50d0aad` — **Verify keyboard-only flow and screen reader announcement** _(current status: archived, assignee: worker-gemma)_
+- `t_6256e433` — **Verify local Qwen routing and document gaps** _(current status: archived, assignee: reviewer)_
+- `t_d717573f` — **Verify mobile flows for progress, results, and bulk actions** _(current status: archived, assignee: reviewer)_
+- `t_84c509f2` — **Verify mobile viewport behavior and note remaining issues** _(current status: archived, assignee: reviewer)_
+- `t_72aaa0f0` — **Verify New Analysis dialog behavior for saved and unsaved analyses** _(current status: archived, assignee: reviewer)_
+- `t_31c65b7d` — **Verify PMI display and provenance end to end** _(current status: archived, assignee: reviewer)_
+- `t_9850fc67` — **Verify radius consistency and interaction states** _(current status: archived, assignee: reviewer)_
+- `t_40ede2f1` — **Verify radius standardization on Analysis page** _(current status: archived, assignee: reviewer)_
+- `t_220470e3` — **Verify retrieval results and searchable full-text integration** _(current status: archived, assignee: reviewer)_
+- `t_12b81371` — **Verify saved and unsaved clear-analysis dialog behavior** _(current status: archived, assignee: reviewer)_
+- `t_f5d5ab90` — **Verify saved vs unsaved dialog behavior for New Analysis flow** _(current status: archived, assignee: reviewer)_
+- `t_8d806c82` — **Verify tracing writes in concrete pipeline files** _(current status: archived, assignee: orchestrator)_
+- `t_26296f0a` — **Verify visual consistency and scan for leftover color classes** _(current status: archived, assignee: reviewer)_
+- `t_a8be5ea8` — **Website duplicate quarantine child: broad site-wide implementation brief superseded by canonical website lane t_32b600e1 [blocked-by::Use the canonical website path under t_045b4a0a instead of reviving this older worker-gemma child] [done-when::This duplicate stays parked until the canonical website lane lands, is explicitly retired, or a fresh triage decision replaces it]** _(current status: archived, assignee: orchestrator)_
+- `t_91098ce6` — **Website duplicate quarantine: enterprise sitemap/page-messaging root superseded by canonical website lane t_045b4a0a -> t_32b600e1 [blocked-by::Canonical website root already owns the requirements/copy lane; do not resume this older worker-gemma branch] [done-when::This duplicate stays parked until the canonical lane lands, is explicitly retired, or is replaced by a fresh triage decision]** _(current status: archived, assignee: orchestrator)_
+- `t_ad89e424` — **Website logo/proof-point policy duplicate — superseded by canonical trust-assets/legal lane t_22ad3578 -> t_c5d4843e** _(current status: archived, assignee: orchestrator)_
+- `t_b0083ade` — **Wire extracted full text into search/index path** _(current status: archived, assignee: orchestrator)_
+- `t_d4e4f657` — **Wire extracted full text into searchable records** _(current status: archived, assignee: worker-gemma)_
+- `t_f4532c0a` — **Wire per-call tracing into callClaude** _(current status: archived, assignee: orchestrator)_
+- `t_5d139538` — **Wire pipeline to route through LLM_BASE_URL** _(current status: archived, assignee: worker-gemma)_
+- `t_830fc233` — **Wire provenance data into scoring presentation layer** _(current status: archived, assignee: worker-gemma)_
+- `t_de5b5ed3` — **Wire recommendation cards to Atlas deep links** _(current status: archived, assignee: worker-gemma)_
+- `t_6d5abe67` — **Wire recommendation cards to Evidence Atlas deep links** _(current status: archived, assignee: worker-gemma)_
+- `t_08b7ef6b` — **Wire recommendation cards to matching Atlas anchors** _(current status: archived, assignee: orchestrator)_
+- `t_fe751205` — **Wire recommendation cards to matching Atlas deep links** _(current status: archived, assignee: worker-gemma)_
+- `t_676fb8af` — **Wire recommendation cards to matching Atlas section anchors** _(current status: archived, assignee: orchestrator)_
+- `t_c9918475` — **Write canonical scoring provenance taxonomy spec** _(current status: archived, assignee: orchestrator)_
+- `t_2b29a394` — **Write enforcement and adoption spec for UI consistency** _(current status: archived, assignee: worker-gemma)_
+- `t_4291dfd3` — **Write enterprise product spec for context-aware scoring** _(current status: archived, assignee: worker-gemma)_
+- `t_89f6b640` — **Write implementation spec for P11 and real-time GAC integration** _(current status: archived, assignee: orchestrator)_
+- `t_16a306b6` — **Write incident analysis for triazolo count inconsistency** _(current status: archived, assignee: orchestrator)_
+- `t_4ab6123e` — **Write incident analysis for triazolo result inconsistency** _(current status: archived, assignee: orchestrator)_
+- `t_b1a2d61d` — **Write incident analysis for triazolo result inconsistency** _(current status: archived, assignee: orchestrator)_
+- `t_7dd20046` — **Write model selection and startup instructions** _(current status: archived, assignee: worker-gemma)_
+- `t_2ed556e9` — **Write provenance taxonomy spec and decision rules** _(current status: archived, assignee: orchestrator)_
+- `t_e432d624` — **Write the demo flow and presenter talk track** _(current status: archived, assignee: orchestrator)_
+- `t_d0ef1f22` — **Write the live demo flow and narration** _(current status: archived, assignee: orchestrator)_
+- `t_4988aad3` — **Write the live demo flow and presenter talk track** _(current status: archived, assignee: orchestrator)_
