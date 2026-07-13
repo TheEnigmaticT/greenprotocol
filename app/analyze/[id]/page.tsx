@@ -137,7 +137,7 @@ export default function AnalysisByIdPage() {
         <div className="flex items-center gap-2 sm:gap-4">
           <Link
             href="/"
-            className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
+            className="hidden sm:inline-block text-sm px-3 py-1.5 rounded border transition-colors font-[family-name:var(--font-mono)]"
             style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
           >
             New Analysis
@@ -162,7 +162,7 @@ export default function AnalysisByIdPage() {
         <ChemistryDataNotice status={data.analysis.chemistryDataStatus} />
 
         {data.analysis.deterministicScores && (
-          <section className="p-6 rounded-xl print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
+          <section className="p-6 rounded-lg print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
             <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} analysisId={id} />
           </section>
         )}
@@ -181,7 +181,7 @@ export default function AnalysisByIdPage() {
             </div>
             <a
               href={`/analyze/${id}/evidence`}
-              className="shrink-0 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+              className="shrink-0 px-3 py-1.5 rounded text-sm font-medium transition-colors"
               style={{ background: '#F5F0E8', color: '#1C3822', border: '1px solid #D6D0C4' }}
             >
               View →
