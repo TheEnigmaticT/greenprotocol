@@ -31,7 +31,21 @@ export default function AnalyzePage() {
   function handleNewAnalysis() {
     const hasAccepted = data?.analysis.recommendations.some(r => r.isAccepted)
     if (hasAccepted) {
-      if (!window.confirm('Starting a new analysis will clear your current results, including any accepted recommendations. Continue?')) return
+      // If analysis is saved to Supabase, offer to copy the link before clearing
+      if (data?.id) {
+        const analysisUrl = `${window.location.origin}/analyze/${data.id}`
+        const message = `Starting a new analysis will clear your current results, including any accepted recommendations.\n\nThis analysis is saved. You can return to it later using this link:\n${analysisUrl}\n\nWould you like to copy the link to your clipboard before continuing?`
+        
+        if (window.confirm(message)) {
+          navigator.clipboard.writeText(analysisUrl).catch(() => {
+            // Fallback: show a prompt with the URL
+            window.prompt('Copy this link to return to your analysis:', analysisUrl)
+          })
+        }
+      } else {
+        // No saved ID, just confirm
+        if (!window.confirm('Starting a new analysis will clear your current results, including any accepted recommendations. Continue?')) return
+      }
     }
     sessionStorage.removeItem('gpc_analysis')
     sessionStorage.removeItem('gpc_protocol')
