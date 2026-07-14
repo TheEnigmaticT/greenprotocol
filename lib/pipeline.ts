@@ -151,7 +151,7 @@ async function callClaude<T>(
   const start = Date.now()
   console.log(`[callClaude] ${label}: starting (model=${model})`)
 
-  let message: Anthropic.Messages.Message
+  let message: Anthropic.Messages.Message | undefined
   let success = true
   let errorMessage: string | undefined
 
@@ -206,6 +206,10 @@ async function callClaude<T>(
         error_message: errorMessage,
       }, context.supabase)
     }
+  }
+
+  if (!message) {
+    throw new Error(`Claude API call failed for ${label}`)
   }
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1)
@@ -564,6 +568,7 @@ function deduplicateRecommendations(
   context?: CallContext
 ): { deduped: Recommendation[]; mergeMap: Record<string, number[]> } {
   const map = new Map<string, MergeSlot>()
+  const mergeMap: Record<string, number[]> = {}
 
   for (let i = 0; i < recs.length; i++) {
     const rec = recs[i]

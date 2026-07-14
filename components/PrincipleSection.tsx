@@ -434,7 +434,7 @@ export default function PrincipleSection({
                           </div>
                         ))}
                       </div>
-                    )
+                    )}
                     {rec.evidence.sdsReferences && rec.evidence.sdsReferences.length > 0 && (
                       <div className="mt-1.5">
                         <p className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: '#78716C', fontFamily: 'var(--font-mono)' }}>
