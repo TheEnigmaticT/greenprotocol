@@ -1,6 +1,7 @@
 """Shared models for scoring modules."""
 
-from pydantic import BaseModel, Field
+from enum import Enum
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChemicalInput(BaseModel):
@@ -15,6 +16,18 @@ class ChemicalInput(BaseModel):
     step_number: int = 0
 
 
+class ScoreProvenance(str, Enum):
+    """Canonical provenance taxonomy for all scores and metrics.
+    
+    See docs/SCORING_PROVENANCE_TAXONOMY.md for complete definitions.
+    """
+    DECLARED = "declared"           # From protocol text
+    CALCULATED = "calculated"       # Deterministic formulas from chemical databases
+    BENCHMARK = "benchmark"         # Industry-average estimates (ACS GCI benchmarks)
+    MODEL_INFERRED = "model-inferred"  # AI assessment (requires expert review)
+    UNAVAILABLE = "unavailable"     # Missing data, cannot score
+
+
 class PrincipleScore(BaseModel):
     """Score for a single green chemistry principle."""
     principle_number: int
@@ -25,7 +38,33 @@ class PrincipleScore(BaseModel):
     details: dict = Field(default_factory=dict)
     chemicals_flagged: list[str] = Field(default_factory=list)
     data_sources: list[str] = Field(default_factory=list)
-    confidence: str = "calculated"  # calculated, estimated, partial
+    confidence: ScoreProvenance = ScoreProvenance.CALCULATED
+    
+    @field_validator('confidence')
+    @classmethod
+    def validate_confidence(cls, v: ScoreProvenance) -> ScoreProvenance:
+        """Ensure confidence is a valid ScoreProvenance value."""
+        if isinstance(v, str):
+            # Handle legacy string values during migration
+            mapping = {
+                'calculated': ScoreProvenance.CALCULATED,
+                'estimated': ScoreProvenance.MODEL_INFERRED,
+                'partial': ScoreProvenance.BENCHMARK,  # Fold partial into benchmark
+                'benchmark': ScoreProvenance.BENCHMARK,
+                'unavailable': ScoreProvenance.UNAVAILABLE,
+                'declared': ScoreProvenance.DECLARED,
+            }
+            return mapping.get(v.lower(), ScoreProvenance.CALCULATED)
+        return v
+    
+    @field_validator('score')
+    @classmethod
+    def validate_unavailable_score(cls, v: float, info) -> float:
+        """Ensure unavailable confidence pairs with score -1."""
+        confidence = info.data.get('confidence')
+        if confidence == ScoreProvenance.UNAVAILABLE and v != -1:
+            raise ValueError('Unavailable scores must have score = -1')
+        return v
 
 
 class ScoringRequest(BaseModel):

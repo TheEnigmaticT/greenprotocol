@@ -1,7 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { PrincipleScore, DeterministicScores } from '@/lib/types'
+import { PrincipleScore, DeterministicScores, ScoreProvenance } from '@/lib/types'
+
+// Canonical provenance labels for UI display
+const PROVENANCE_LABELS: Record<ScoreProvenance, string> = {
+  'declared': 'declared',
+  'calculated': 'calculated',
+  'benchmark': 'benchmark-derived',
+  'model-inferred': 'AI-estimated',
+  'unavailable': 'unavailable',
+}
+
+const PROVENANCE_DESCRIPTIONS: Record<ScoreProvenance, string> = {
+  'declared': 'Value explicitly stated in the protocol text',
+  'calculated': 'Derived from chemical databases using deterministic formulas',
+  'benchmark': 'Estimated from industry benchmark data (ACS GCI)',
+  'model-inferred': 'AI-assessed score — review reasoning below',
+  'unavailable': 'Score could not be computed — required data was missing',
+}
 
 const PRINCIPLE_SHORT_NAMES: Record<number, string> = {
   1: 'Waste Prevention',
@@ -39,8 +56,8 @@ function ScoreBar({ score }: { score: PrincipleScore }) {
 
   const confidenceLabel = score.confidence === 'calculated' ? ''
     : score.confidence === 'benchmark' ? '~'
-    : score.confidence === 'estimated' ? '≈'
-    : score.confidence === 'partial' ? '~'
+    : score.confidence === 'model-inferred' ? '≈'
+    : score.confidence === 'declared' ? '*'
     : '?'
 
   const shortName = PRINCIPLE_SHORT_NAMES[score.principle_number] || score.principle_name
@@ -91,9 +108,8 @@ function ScoreBar({ score }: { score: PrincipleScore }) {
             <div className="flex items-start gap-1.5">
               <span style={{ color: '#D97706' }}>ℹ</span>
               <span style={{ color: '#78716C' }}>
-                {score.confidence === 'estimated' && 'AI-assessed score — review reasoning below'}
-                {score.confidence === 'benchmark' && 'Score estimated from industry benchmarks'}
-                {score.confidence === 'partial' && 'Partial data available — some inputs missing'}
+                <strong>{PROVENANCE_LABELS[score.confidence]}:</strong>{' '}
+                {PROVENANCE_DESCRIPTIONS[score.confidence]}
               </span>
             </div>
           )}
@@ -229,7 +245,8 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
       <div className="flex flex-wrap gap-3 text-xs" style={{ color: '#A8A29E' }}>
         <span>Lower = greener</span>
         <span>· No symbol = calculated</span>
-        <span>· ~ = benchmarked</span>
+        <span>· * = declared</span>
+        <span>· ~ = benchmark-derived</span>
         <span>· ≈ = AI-estimated</span>
         {projectedScores && <span>· Green delta = projected improvement</span>}
         <span>· Click for details</span>

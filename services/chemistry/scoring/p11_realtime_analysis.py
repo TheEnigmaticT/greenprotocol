@@ -1,13 +1,15 @@
 """P11: Real-Time Analysis for Pollution Prevention
 
+PROVENANCE: model-inferred
+
 Assesses whether a protocol includes in-process analytical monitoring,
 real-time feedback, or inline quality checks that could prevent waste
 by catching problems early rather than at the end.
 
 This is the one principle that is INHERENTLY qualitative — there is no
-formula. The score is an LLM assessment of monitoring adequacy.
+formula. The score is an AI assessment of monitoring adequacy.
 
-CONFIDENCE: Always "estimated". The UI MUST surface the full reasoning
+CONFIDENCE: Always "model-inferred". The UI MUST surface the full reasoning
 so a scientist can evaluate whether the assessment is credible.
 
 What we look for:
@@ -25,7 +27,7 @@ What we DON'T look for (but would improve the score):
 Score: 0 (comprehensive real-time monitoring) to 10 (no monitoring at all)
 """
 
-from scoring.models import PrincipleScore
+from scoring.models import PrincipleScore, ScoreProvenance
 from llm_client import call_llm
 import json
 import re
@@ -75,7 +77,7 @@ async def score_p11(
             principle_name="Real-Time Analysis for Pollution Prevention",
             score=-1.0, normalized=-1.0,
             details={"error": "Protocol text required for monitoring assessment"},
-            confidence="unavailable",
+            confidence=ScoreProvenance.UNAVAILABLE,
             data_sources=[],
         )
 
@@ -101,7 +103,7 @@ async def score_p11(
             principle_name="Real-Time Analysis for Pollution Prevention",
             score=-1.0, normalized=-1.0,
             details={"error": "LLM returned no response"},
-            confidence="unavailable",
+            confidence=ScoreProvenance.UNAVAILABLE,
             data_sources=[],
         )
 
@@ -118,7 +120,7 @@ async def score_p11(
             principle_name="Real-Time Analysis for Pollution Prevention",
             score=-1.0, normalized=-1.0,
             details={"error": f"Failed to parse assessment: {response[:300]}"},
-            confidence="unavailable",
+            confidence=ScoreProvenance.UNAVAILABLE,
             data_sources=[],
         )
 
@@ -149,6 +151,6 @@ async def score_p11(
             ),
         },
         chemicals_flagged=[],
-        data_sources=["llm_assessment"],
-        confidence="estimated",
+        data_sources=["ai_assessment"],
+        confidence=ScoreProvenance.MODEL_INFERRED,
     )

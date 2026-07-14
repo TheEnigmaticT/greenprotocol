@@ -6,7 +6,7 @@
  *   2. SDS — supporting evidence and workflow context only
  */
 
-import type { AnalysisMetadata, Recommendation } from '@/lib/types'
+import type { AnalysisMetadata, Recommendation, Citation } from '@/lib/types'
 
 /**
  * Build a short software citation string for display or export.
@@ -55,4 +55,58 @@ export function buildRecommendationCitationString(
   const id = analysisId ?? rec.citationMetadata?.analysisId
   const idPart = id ? ` Analysis ID: ${id}.` : ''
   return `GreenChemistry.ai v${version}. Recommendation: replace ${rec.original.chemical} with ${rec.alternative.chemical} (Step ${rec.stepNumber}).${idPart} Generated ${date}.`
+}
+
+/**
+ * Format a literature citation in ACS (American Chemical Society) style.
+ * 
+ * ACS format:
+ * Author1, A.; Author2, B.; Author3, C. Title. Journal Year, Volume, Pages. DOI: 10.xxxx/xxxxx
+ * 
+ * Example:
+ * Prat, D.; Wells, A.; Hayler, J. CHEM21 Selection Guide of Classical-Solvents. Green Chem. 2016, 18, 288-296. DOI: 10.1039/c5gc01008j
+ */
+export function formatCitationACS(citation: Citation): string {
+  const parts: string[] = []
+  
+  // Authors (already formatted as "Last, F.; Last2, F2;")
+  if (citation.citation) {
+    // Extract authors from the existing citation string (format: "Authors (Year). Title.")
+    const match = citation.citation.match(/^(.+?)\s*\((\d{4}|n\.d\.)\)\.\s*(.+)\./)
+    if (match) {
+      const [, authors, year, title] = match
+      parts.push(authors)
+      
+      // Title
+      if (title) {
+        parts.push(title)
+      }
+      
+      // Journal and year
+      if (citation.source_name && year !== 'n.d.') {
+        // Abbreviate common journals for ACS style
+        const journalAbbr = citation.source_name
+          .replace('Green Chemistry', 'Green Chem.')
+          .replace('ACS Sustainable Chemistry & Engineering', 'ACS Sustain. Chem. Eng.')
+          .replace('Chemical Reviews', 'Chem. Rev.')
+          .replace('Journal of the American Chemical Society', 'J. Am. Chem. Soc.')
+        
+        parts.push(`${journalAbbr} ${year}`)
+      }
+      
+      // DOI
+      if (citation.doi) {
+        return `${parts.join('. ')}. DOI: ${citation.doi}`
+      }
+      
+      return parts.join('. ') + '.'
+    }
+  }
+  
+  // Fallback: use the original citation string with DOI appended
+  if (citation.doi) {
+    return `${citation.citation} DOI: ${citation.doi}`
+  }
+  
+  return citation.citation || citation.source_name || 'Unknown source'
 }

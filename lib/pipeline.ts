@@ -5,8 +5,11 @@ import { getAnalysisMetadata } from '@/lib/version'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
-import { searchLiterature } from '@/lib/vector-search'
+import { searchLiterature, SearchResult } from '@/lib/vector-search'
 import { buildSdsReferences } from '@/lib/sds'
+import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
+import { logLLMTrace, logDedupTrace } from '@/lib/trace'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
 
@@ -130,22 +133,80 @@ const ASSEMBLE_SCHEMA: InputSchema = {
   required: ['revisedProtocol', 'overallAssessment'],
 }
 
-async function callClaude<T>(system: string, userContent: string, schema: InputSchema, label: string = 'unknown', model: string = SONNET): Promise<T> {
+interface CallContext {
+  userId?: string
+  analysisId?: string
+  supabase?: SupabaseClient
+}
+
+async function callClaude<T>(
+  system: string,
+  userContent: string,
+  schema: InputSchema,
+  label: string = 'unknown',
+  model: string = SONNET,
+  context?: CallContext
+): Promise<T> {
+  const startTime = new Date()
   const start = Date.now()
   console.log(`[callClaude] ${label}: starting (model=${model})`)
 
-  const message = await anthropic.messages.create({
-    model,
-    max_tokens: 8192,
-    system,
-    tools: [{
-      name: 'return_result',
-      description: 'Return the structured analysis result',
-      input_schema: schema,
-    }],
-    tool_choice: { type: 'tool', name: 'return_result' },
-    messages: [{ role: 'user', content: userContent }],
-  })
+  let message: Anthropic.Messages.Message
+  let success = true
+  let errorMessage: string | undefined
+
+  try {
+    message = await anthropic.messages.create({
+      model,
+      max_tokens: 8192,
+      system,
+      tools: [{
+        name: 'return_result',
+        description: 'Return the structured analysis result',
+        input_schema: schema,
+      }],
+      tool_choice: { type: 'tool', name: 'return_result' },
+      messages: [{ role: 'user', content: userContent }],
+    })
+  } catch (err) {
+    success = false
+    errorMessage = err instanceof Error ? err.message : String(err)
+    throw err
+  } finally {
+    const endTime = new Date()
+    const elapsed = Date.now() - start
+
+    // Log trace if context provided
+    if (context?.userId) {
+      const phase = label.startsWith('principle-') ? 'principle' : label
+      void logLLMTrace({
+        analysis_id: context.analysisId,
+        user_id: context.userId,
+        call_label: label,
+        model,
+        phase,
+        started_at: startTime.toISOString(),
+        completed_at: endTime.toISOString(),
+        latency_ms: elapsed,
+        input_tokens: message?.usage.input_tokens || 0,
+        output_tokens: message?.usage.output_tokens || 0,
+        total_tokens: (message?.usage.input_tokens || 0) + (message?.usage.output_tokens || 0),
+        request_payload: {
+          system: system.substring(0, 500) + '...', // Truncate for storage
+          userContent: userContent.substring(0, 500) + '...',
+          schema: schema,
+        },
+        response_payload: {
+          stop_reason: message?.stop_reason || 'error',
+          content: message?.content || [],
+          usage: message?.usage || { input_tokens: 0, output_tokens: 0 },
+        },
+        stop_reason: message?.stop_reason || 'error',
+        success,
+        error_message: errorMessage,
+      }, context.supabase)
+    }
+  }
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1)
   console.log(`[callClaude] ${label}: completed in ${elapsed}s (stop=${message.stop_reason}, in=${message.usage.input_tokens} out=${message.usage.output_tokens})`)
@@ -168,9 +229,9 @@ interface ParseResult {
   message?: string
 }
 
-async function parseProtocol(protocolText: string): Promise<ParseResult> {
+async function parseProtocol(protocolText: string, context?: CallContext): Promise<ParseResult> {
   console.log('Phase 1: Parsing protocol...')
-  const result = await callClaude<ParseResult>(PARSE_SYSTEM_PROMPT, protocolText, PARSE_SCHEMA, 'parse')
+  const result = await callClaude<ParseResult>(PARSE_SYSTEM_PROMPT, protocolText, PARSE_SCHEMA, 'parse', SONNET, context)
 
   if (result.error === 'not_chemistry') {
     throw new NotChemistryError(result.message || 'Not a chemistry protocol')
@@ -189,7 +250,8 @@ interface PrincipleResult {
 
 async function evaluatePrinciple(
   principleNumber: number,
-  steps: AnalysisStep[]
+  steps: AnalysisStep[],
+  context?: CallContext
 ): Promise<PrincipleResult> {
   const principle = PRINCIPLES.find(p => p.number === principleNumber)!
   const systemPrompt = buildPrinciplePrompt(principle, steps)
@@ -200,7 +262,8 @@ async function evaluatePrinciple(
 
 async function evaluateAllPrinciples(
   steps: AnalysisStep[],
-  onProgress?: (event: ProgressEvent) => void
+  onProgress?: (event: ProgressEvent) => void,
+  context?: CallContext
 ): Promise<Recommendation[]> {
   console.log('Phase 2: Evaluating 12 principles in batches of 4...')
 
@@ -222,7 +285,7 @@ async function evaluateAllPrinciples(
 
     const batchStart = Date.now()
     const batchResults = await Promise.allSettled(
-      batch.map(p => evaluatePrinciple(p.number, steps))
+      batch.map(p => evaluatePrinciple(p.number, steps, context))
     )
     console.log(`Phase 2: batch ${batchIdx + 1} completed in ${((Date.now() - batchStart) / 1000).toFixed(1)}s`)
 
@@ -235,7 +298,8 @@ async function evaluateAllPrinciples(
         const rawRecs = result.value.recommendations || []
         // Guard against malformed recs (strings instead of objects)
         const recs = rawRecs.filter((r: unknown): r is Record<string, unknown> => typeof r === 'object' && r !== null)
-        for (const rec of recs) {
+        for (let i = 0; i < recs.length; i++) {
+    const rec = recs[i]
           if (!Array.isArray(rec.principleNumbers) || rec.principleNumbers.length === 0) {
             rec.principleNumbers = [principle.number]
           }
@@ -287,7 +351,8 @@ interface AssembleResult {
 async function assembleResult(
   protocolText: string,
   steps: AnalysisStep[],
-  recommendations: Recommendation[]
+  recommendations: Recommendation[],
+  context?: CallContext
 ): Promise<AssembleResult> {
   console.log('Phase 3: Assembling revised protocol...')
 
@@ -307,7 +372,7 @@ async function assembleResult(
   const systemPrompt = buildAssemblePrompt(protocolText, steps, recommendations)
 
   try {
-    const result = await callClaude<AssembleResult>(systemPrompt, 'Generate the revised protocol and overall assessment based on the recommendations above.', ASSEMBLE_SCHEMA, 'assemble')
+    const result = await callClaude<AssembleResult>(systemPrompt, 'Generate the revised protocol and overall assessment based on the recommendations above.', ASSEMBLE_SCHEMA, 'assemble', SONNET, context)
     console.log('Phase 3 complete')
     return result
   } catch (err) {
@@ -349,6 +414,137 @@ export function rankRecommendations(recs: Recommendation[]): Recommendation[] {
   })
 }
 
+// ─── Phase 2.7: Re-evaluation ───────────────────────────────────
+
+interface ReevaluationResult {
+  action: 'confirm' | 'downgrade' | 'suppress'
+  revisedConfidence: 'high' | 'medium' | 'low'
+  revisedSeverity?: 'high' | 'medium' | 'low'
+  revisedRationale: string
+  evidenceAssessment: {
+    supportsOriginalIssue: boolean
+    supportsAlternative: boolean
+    contextMatch: 'strong' | 'partial' | 'weak' | 'none'
+    quantitativeData: boolean
+  }
+  concerns: string[]
+  suppressionReason?: string
+}
+
+async function reevaluateRecommendation(
+  recommendation: Recommendation,
+  literatureEvidence: SearchResult[]
+): Promise<ReevaluationResult | null> {
+  try {
+    const systemPrompt = buildReevaluatePrompt(recommendation, literatureEvidence)
+    const result = await callClaude<ReevaluationResult>(
+      systemPrompt,
+      'Re-evaluate this recommendation based on the retrieved literature evidence.',
+      REEVALUATE_SCHEMA as unknown as InputSchema,
+      `reevaluate-step${recommendation.stepNumber}-${recommendation.original.chemical.substring(0, 15)}`
+    )
+    return result
+  } catch (err) {
+    console.warn(`[pipeline] Re-evaluation failed for ${recommendation.original.chemical}:`, err)
+    return null
+  }
+}
+
+async function reevaluateAllRecommendations(
+  recommendations: Recommendation[],
+  onProgress?: (event: ProgressEvent) => void
+): Promise<{ recommendations: Recommendation[]; stats: { confirmed: number; downgraded: number; suppressed: number; failed: number } }> {
+  console.log(`Phase 2.7: Re-evaluating ${recommendations.length} recommendations against literature...`)
+  onProgress?.({ type: 'phase', phase: 2, message: `Re-evaluating ${recommendations.length} recommendations...` })
+
+  const stats = { confirmed: 0, downgraded: 0, suppressed: 0, failed: 0 }
+  const keepRecommendations: Recommendation[] = []
+
+  // Re-evaluate each recommendation sequentially (to avoid rate limits)
+  for (let i = 0; i < recommendations.length; i++) {
+    const rec = recommendations[i]
+    const chemName = rec.original.chemical
+    
+    console.log(`Phase 2.7: [${i + 1}/${recommendations.length}] Re-evaluating ${chemName}...`)
+
+    // Retrieve literature for this specific recommendation
+    const query = `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
+    let literatureEvidence: SearchResult[] = []
+    
+    try {
+      literatureEvidence = await searchLiterature({
+        query,
+        limit: 5,
+        threshold: 0.3,
+        principles: rec.principleNumbers,
+        chemicals: [rec.original.chemical.toLowerCase(), rec.alternative.chemical.toLowerCase()],
+      })
+      console.log(`Phase 2.7: Found ${literatureEvidence.length} literature matches for ${chemName}`)
+    } catch (err) {
+      console.warn(`Phase 2.7: Literature retrieval failed for ${chemName}:`, err)
+    }
+
+    // Re-evaluate with LLM
+    const reevaluation = await reevaluateRecommendation(rec, literatureEvidence)
+
+    if (!reevaluation) {
+      stats.failed++
+      // Keep the original recommendation if re-evaluation fails
+      keepRecommendations.push(rec)
+      continue
+    }
+
+    // Apply re-evaluation results
+    if (reevaluation.action === 'suppress') {
+      stats.suppressed++
+      console.log(`Phase 2.7: SUPPRESSED ${chemName} — ${reevaluation.suppressionReason}`)
+      // Don't add to keepRecommendations
+      continue
+    }
+
+    // Update recommendation based on re-evaluation
+    const updatedRec = { ...rec }
+    updatedRec.confidenceLevel = reevaluation.revisedConfidence
+    
+    if (reevaluation.revisedSeverity) {
+      updatedRec.severity = reevaluation.revisedSeverity
+    }
+
+    // Append concerns to caveats if they exist
+    if (reevaluation.concerns.length > 0) {
+      const concernsText = reevaluation.concerns.join('; ')
+      updatedRec.alternative.caveats = updatedRec.alternative.caveats
+        ? `${updatedRec.alternative.caveats}; ${concernsText}`
+        : concernsText
+    }
+
+    // Update rationale with revised version
+    updatedRec.alternative.rationale = reevaluation.revisedRationale
+
+    // Store evidence assessment metadata
+    if (!updatedRec.evidence) {
+      updatedRec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
+    }
+    // @ts-expect-error — adding non-standard field for evidence assessment metadata
+    updatedRec.evidence.reevaluationMeta = reevaluation.evidenceAssessment
+
+    if (reevaluation.action === 'confirm') {
+      stats.confirmed++
+      console.log(`Phase 2.7: CONFIRMED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
+    } else if (reevaluation.action === 'downgrade') {
+      stats.downgraded++
+      console.log(`Phase 2.7: DOWNGRADED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
+    }
+
+    keepRecommendations.push(updatedRec)
+  }
+
+  console.log(`Phase 2.7 complete: ${stats.confirmed} confirmed, ${stats.downgraded} downgraded, ${stats.suppressed} suppressed, ${stats.failed} failed`)
+  onProgress?.({ type: 'phase', phase: 2, message: `Re-evaluation complete: ${stats.suppressed} recommendations suppressed` })
+
+  return { recommendations: keepRecommendations, stats }
+}
+
 // ─── Deduplication ───────────────────────────────────────────────
 
 const SEVERITY_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 }
@@ -363,10 +559,14 @@ interface MergeSlot {
   alternativesByChemical: Map<string, Recommendation['alternative']>
 }
 
-function deduplicateRecommendations(recs: Recommendation[]): Recommendation[] {
+function deduplicateRecommendations(
+  recs: Recommendation[],
+  context?: CallContext
+): { deduped: Recommendation[]; mergeMap: Record<string, number[]> } {
   const map = new Map<string, MergeSlot>()
 
-  for (const rec of recs) {
+  for (let i = 0; i < recs.length; i++) {
+    const rec = recs[i]
     // Key by step + original chemical (case-insensitive)
     const key = `${rec.stepNumber}:${rec.original.chemical.toLowerCase()}`
     const existing = map.get(key)
@@ -379,6 +579,7 @@ function deduplicateRecommendations(recs: Recommendation[]): Recommendation[] {
       const alternativesByChemical = new Map<string, Recommendation['alternative']>()
       alternativesByChemical.set(rec.alternative.chemical.toLowerCase(), rec.alternative)
       map.set(key, { best: { ...rec }, issuesByPrinciple, alternativesByChemical })
+      mergeMap[key] = [i]
       continue
     }
 
@@ -463,20 +664,35 @@ function deduplicateRecommendations(recs: Recommendation[]): Recommendation[] {
   }
 
   // Sort by step number, then severity (high first)
-  return results.sort((a, b) =>
+  const deduped = results.sort((a, b) =>
     a.stepNumber - b.stepNumber || SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity]
   )
+
+  // Log dedup trace if context provided
+  if (context?.userId) {
+    void logDedupTrace({
+      analysis_id: context.analysisId,
+      user_id: context.userId,
+      raw_recommendations: recs,
+      deduped_recommendations: deduped,
+      merge_map: mergeMap,
+      dedup_rules: 'severity+confidence',
+    }, context.supabase)
+  }
+
+  return { deduped, mergeMap }
 }
 
 // ─── Main Pipeline ──────────────────────────────────────────────
 
 export async function analyzeProtocol(
   protocolText: string,
-  onProgress?: (event: ProgressEvent) => void
+  onProgress?: (event: ProgressEvent) => void,
+  context?: CallContext
 ): Promise<AnalysisResult> {
   // Phase 1: Parse
   onProgress?.({ type: 'phase', phase: 1, message: 'Parsing protocol...' })
-  const parsed = await parseProtocol(protocolText)
+  const parsed = await parseProtocol(protocolText, context)
   onProgress?.({ type: 'phase', phase: 1, message: `Parsed "${parsed.protocolTitle}" — ${parsed.steps.length} steps` })
 
   // Phase 1.5: Rationalize quantities + deterministic scoring (if service available)
@@ -580,7 +796,7 @@ export async function analyzeProtocol(
 
   // Phase 2: Evaluate all 12 principles in parallel (LLM qualitative recommendations)
   onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
-  const rawRecommendations = await evaluateAllPrinciples(parsed.steps, onProgress)
+  const rawRecommendations = await evaluateAllPrinciples(parsed.steps, onProgress, context)
 
   // Phase 2.5: Ground recommendations in literature via Vector Search
   onProgress?.({ type: 'phase', phase: 2, message: 'Grounding recommendations in literature...' })
@@ -640,7 +856,7 @@ export async function analyzeProtocol(
   }
 
   // Deduplicate: merge recommendations for the same chemical in the same step
-  const recommendations = deduplicateRecommendations(rawRecommendations)
+  const { deduped: recommendations } = deduplicateRecommendations(rawRecommendations, context)
   console.log(`Deduplication: ${rawRecommendations.length} raw → ${recommendations.length} merged`)
   onProgress?.({ type: 'phase', phase: 2, message: `Found ${recommendations.length} recommendations` })
 
@@ -684,11 +900,24 @@ export async function analyzeProtocol(
     }
   }
 
+  // Phase 2.7: Re-evaluate recommendations against literature evidence
+  // This is the two-pass pipeline: generate recommendations (Phase 2), then re-evaluate them (Phase 2.7)
+  let reevaluationStats = { confirmed: 0, downgraded: 0, suppressed: 0, failed: 0 }
+  let finalRecommendations = recommendations
+  
+  try {
+    const reevalResult = await reevaluateAllRecommendations(recommendations, onProgress)
+    finalRecommendations = reevalResult.recommendations
+    reevaluationStats = reevalResult.stats
+  } catch (err) {
+    console.warn('[pipeline] Phase 2.7 re-evaluation skipped due to error:', err)
+  }
+
   // v0.6: Derive evidence tier and rerank
-  for (const rec of recommendations) {
+  for (const rec of finalRecommendations) {
     rec.evidenceTier = deriveEvidenceTier(rec)
   }
-  recommendations.sort((a, b) => {
+  finalRecommendations.sort((a, b) => {
     const scoreA = (SEVERITY_WEIGHT[a.severity] ?? 1) * (TIER_MULTIPLIER[a.evidenceTier ?? 'inferred'] ?? 1)
     const scoreB = (SEVERITY_WEIGHT[b.severity] ?? 1) * (TIER_MULTIPLIER[b.evidenceTier ?? 'inferred'] ?? 1)
     if (scoreB !== scoreA) return scoreB - scoreA
@@ -698,7 +927,7 @@ export async function analyzeProtocol(
   })
 
   // v0.6: Derive primaryBenefit if the LLM didn't provide one
-  for (const rec of recommendations) {
+  for (const rec of finalRecommendations) {
     if (!rec.primaryBenefit) {
       // Derive from principle numbers
       const principles = rec.principleNumbers || []
@@ -722,7 +951,7 @@ export async function analyzeProtocol(
 
   // v0.6: Stamp citation metadata on all recommendations
   const metadata = getAnalysisMetadata()
-  for (const rec of recommendations) {
+  for (const rec of finalRecommendations) {
     rec.citationMetadata = {
       gcaiVersion: metadata.gcaiVersion,
       generatedAt: metadata.generatedAt,
@@ -731,7 +960,7 @@ export async function analyzeProtocol(
 
   // Phase 3: Assemble revised protocol
   onProgress?.({ type: 'phase', phase: 3, message: 'Assembling revised protocol...' })
-  const assembled = await assembleResult(protocolText, parsed.steps, recommendations)
+  const assembled = await assembleResult(protocolText, parsed.steps, finalRecommendations)
 
   // Attach process complexity from deterministic scores
   const complexityScore = deterministicScores?.scores.find(s => s.principle_number === 13)
@@ -755,7 +984,7 @@ export async function analyzeProtocol(
     protocolTitle: parsed.protocolTitle,
     chemistrySubdomain: parsed.chemistrySubdomain,
     steps: parsed.steps,
-    recommendations,
+    recommendations: finalRecommendations,
     revisedProtocol: assembled.revisedProtocol,
     overallAssessment: assembled.overallAssessment,
     deterministicScores,
@@ -769,5 +998,7 @@ export async function analyzeProtocol(
         ? 'We could not retrieve every chemical reference record live. This analysis used the best data available, and queued the missing items so the analysis can be re-run when updated reference data is available.'
         : 'All requested chemical reference data was available from cache or bundled sources.',
     },
+    // v0.7: Re-evaluation statistics
+    reevaluationStats,
   }
 }

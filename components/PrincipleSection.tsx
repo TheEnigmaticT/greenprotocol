@@ -1,7 +1,7 @@
 'use client'
 
-import { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical } from '@/lib/types'
-import { buildRecommendationCitationString } from '@/lib/citation'
+import { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical, ScoreProvenance } from '@/lib/types'
+import { buildRecommendationCitationString, formatCitationACS } from '@/lib/citation'
 
 const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
   A: { bg: '#DCFCE7', text: '#166534' },
@@ -30,22 +30,22 @@ export function humanSource(id: string): string {
   return SOURCE_LABELS[id] ?? id
 }
 
-const CONFIDENCE_INFO: Record<string, { label: string; description: string }> = {
+const CONFIDENCE_INFO: Record<ScoreProvenance, { label: string; description: string }> = {
+  declared: {
+    label: 'declared',
+    description: 'Value explicitly stated in the protocol text.',
+  },
   calculated: {
     label: 'calculated',
     description: 'Derived from molecular data using deterministic formulas (RDKit, PubChem, CHEM21).',
   },
   benchmark: {
-    label: 'benchmark',
+    label: 'benchmark-derived',
     description: 'Estimated from ACS GCI industry benchmark data for this reaction class.',
   },
-  estimated: {
+  'model-inferred': {
     label: 'AI-estimated',
     description: 'AI-assessed score — no deterministic formula available for this principle in this protocol.',
-  },
-  partial: {
-    label: 'partial data',
-    description: 'Calculated with incomplete input data; one or more chemicals could not be fully resolved.',
   },
   unavailable: {
     label: 'unavailable',
@@ -53,7 +53,7 @@ const CONFIDENCE_INFO: Record<string, { label: string; description: string }> = 
   },
 }
 
-function ScoreBadge({ score, maxScore, confidence }: { score: number; maxScore: number; confidence: string }) {
+function ScoreBadge({ score, maxScore, confidence }: { score: number; maxScore: number; confidence: ScoreProvenance }) {
   const pct = maxScore > 0 ? score / maxScore : 0
   const color = pct <= 0.3 ? '#166534' : pct <= 0.6 ? '#92400E' : '#991B1B'
   const info = CONFIDENCE_INFO[confidence]
@@ -412,19 +412,29 @@ export default function PrincipleSection({
                 {rec.evidence && (rec.evidence.citations.length > 0 || (rec.evidence.sdsReferences?.length ?? 0) > 0) && (
                   <div className="mt-2 pt-2 border-t border-[#E7E5E4]">
                     {rec.evidence.citations.length > 0 && (
-                      <div className="space-y-0.5">
+                      <div className="space-y-1.5">
+                        <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)' }}>
+                          Literature Citations
+                        </p>
                         {rec.evidence.citations.map((cite, ci) => (
-                          <p key={ci} className="text-[10px] italic" style={{ color: '#57534E' }}>
-                            {cite.citation}
+                          <div key={ci} className="text-[10px]" style={{ color: '#57534E' }}>
+                            <p className="font-[family-name:var(--font-mono)] leading-relaxed">
+                              {formatCitationACS(cite)}
+                            </p>
                             {cite.url && (
-                              <a href={cite.url} target="_blank" rel="noopener noreferrer" className="ml-1 text-[#16a34a] hover:underline not-italic font-bold">
-                                [Link]
+                              <a 
+                                href={cite.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-[#16a34a] hover:underline font-semibold inline-flex items-center gap-1 mt-0.5"
+                              >
+                                View article ↗
                               </a>
                             )}
-                          </p>
+                          </div>
                         ))}
                       </div>
-                    )}
+                    )
                     {rec.evidence.sdsReferences && rec.evidence.sdsReferences.length > 0 && (
                       <div className="mt-1.5">
                         <p className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: '#78716C', fontFamily: 'var(--font-mono)' }}>

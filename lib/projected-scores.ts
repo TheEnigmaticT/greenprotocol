@@ -1,9 +1,10 @@
 /**
- * Client-side projected score estimation after accepting/declining recommendations.
+ * Client-side projected score re-calculation after accepting/declining recommendations.
  *
- * For principles where we can re-estimate from local chemical DB data (P3, P5, P7, P10, P12),
- * we recalculate using the same formulas as the Python scoring service.
- * For principles we can't recalculate (P1, P2, P4, P6, P8, P9, P11), we keep the original score.
+ * For principles where we can re-calculate from local chemical DB data (P3, P5, P10, P12),
+ * we recalculate using the same deterministic formulas as the Python scoring service.
+ * These are NOT estimates — they are fully calculated scores using the canonical formulas.
+ * For principles we can't recalculate (P1, P2, P4, P6, P7, P8, P9, P11), we keep the original score.
  */
 
 import { AnalysisResult, DeterministicScores, PrincipleScore } from './types'
@@ -184,19 +185,20 @@ export function projectScores(analysis: AnalysisResult): DeterministicScores | n
     switch (s.principle_number) {
       case 3: {
         const newScore = scoreP3(slots)
-        return { ...clone, score: newScore, normalized: newScore / 10, confidence: 'estimated' as const }
+        // This is a deterministic calculation, not an estimate
+        return { ...clone, score: newScore, normalized: newScore / 10, confidence: 'calculated' as const }
       }
       case 5: {
         const newScore = scoreP5(slots)
-        return { ...clone, score: newScore, normalized: newScore / 10, confidence: 'estimated' as const }
+        return { ...clone, score: newScore, normalized: newScore / 10, confidence: 'calculated' as const }
       }
       case 10: {
         const newScore = scoreP10(slots)
-        return { ...clone, score: newScore, normalized: newScore / 10, confidence: 'estimated' as const }
+        return { ...clone, score: newScore, normalized: newScore / 10, confidence: 'calculated' as const }
       }
       case 12: {
         const newScore = scoreP12(slots)
-        return { ...clone, score: newScore, normalized: newScore / 10, confidence: 'estimated' as const }
+        return { ...clone, score: newScore, normalized: newScore / 10, confidence: 'calculated' as const }
       }
       default:
         return clone

@@ -96,7 +96,10 @@ export async function POST(request: Request) {
   const pipeline = (async () => {
     try {
       console.log(`[pipeline ${elapsed()}s] starting analyzeProtocol`)
-      const analysisResult = await analyzeProtocol(protocolText, send)
+      const analysisResult = await analyzeProtocol(protocolText, send, {
+        userId: user.id,
+        supabase,
+      })
       console.log(`[pipeline ${elapsed()}s] analyzeProtocol complete`)
 
       // Enrich chemicals with hardcoded data

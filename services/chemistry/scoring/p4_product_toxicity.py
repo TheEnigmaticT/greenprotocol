@@ -7,7 +7,7 @@ of what the protocol produces, not what it consumes.
 Score: 0 (non-toxic products) to 10 (highly toxic/CMR products)
 """
 
-from scoring.models import ChemicalInput, PrincipleScore
+from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
 from ghs import score_health_hazard, is_cmr
 
 PRODUCT_ROLES = {
@@ -34,9 +34,9 @@ def score_p4(
             principle_name="Designing Safer Chemicals",
             score=0.0, normalized=0.0,
             details={"note": "No products identified in protocol. "
-                     "Score based on LLM assessment."},
-            confidence="partial",
-            data_sources=["pubchem_ghs"],
+                     "Molecular design scope - out of range for protocol analysis."},
+            confidence=ScoreProvenance.UNAVAILABLE,
+            data_sources=[],  # No data sources when unavailable
         )
 
     max_health = 0.0
@@ -83,5 +83,5 @@ def score_p4(
         },
         chemicals_flagged=flagged,
         data_sources=["pubchem_ghs"],
-        confidence="calculated" if products else "partial",
+        confidence=ScoreProvenance.CALCULATED if products else ScoreProvenance.UNAVAILABLE,
     )

@@ -122,6 +122,13 @@ export interface AnalysisResult {
   // v0.6: waste analysis + citability
   analysisMetadata?: AnalysisMetadata
   wasteAnalysis?: WasteAnalysis
+  // v0.7: two-pass re-evaluation stats
+  reevaluationStats?: {
+    confirmed: number
+    downgraded: number
+    suppressed: number
+    failed: number
+  }
 }
 
 export interface ImpactDelta {
@@ -168,6 +175,17 @@ export type ProgressEvent =
 
 // ─── Deterministic Scoring Types ─────────────────────────────────
 
+/**
+ * Canonical provenance taxonomy for all scores and metrics.
+ * See docs/SCORING_PROVENANCE_TAXONOMY.md for definitions.
+ */
+export type ScoreProvenance =
+  | 'declared'        // From protocol text
+  | 'calculated'      // Deterministic formulas from chemical databases
+  | 'benchmark'       // Industry-average estimates (ACS GCI benchmarks)
+  | 'model-inferred'  // AI assessment (requires expert review)
+  | 'unavailable'     // Missing data, cannot score
+
 export interface PrincipleScore {
   principle_number: number
   principle_name: string
@@ -177,7 +195,7 @@ export interface PrincipleScore {
   details: Record<string, unknown>
   chemicals_flagged: string[]
   data_sources: string[]
-  confidence: 'calculated' | 'benchmark' | 'estimated' | 'partial' | 'unavailable'
+  confidence: ScoreProvenance
   compatibility_warnings?: string[]
 }
 
@@ -221,7 +239,7 @@ export interface WasteSummary {
   grade: string               // A-F
   primaryDriver: string       // one-sentence explanation
   bestNextAction?: string
-  confidence: 'calculated' | 'partial' | 'estimated'
+  confidence: ScoreProvenance
 }
 
 export interface HazardBucket {

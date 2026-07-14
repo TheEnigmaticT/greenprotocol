@@ -1,5 +1,7 @@
 """P8: Reduce Derivatives (Baran Ideality Metric)
 
+PROVENANCE: model-inferred
+
 Quantitative scoring using Baran's published % Ideality formula:
 
   % Ideality = (construction + strategic_redox) / total_steps × 100
@@ -35,7 +37,7 @@ Sources:
 Score: 0 (100% ideal, no concessions) to 10 (0% ideal, all concessions)
 """
 
-from scoring.models import PrincipleScore
+from scoring.models import PrincipleScore, ScoreProvenance
 from llm_client import call_llm
 import json
 import re
@@ -125,7 +127,7 @@ async def score_p8(
             principle_name="Reduce Derivatives (Baran Ideality)",
             score=-1.0, normalized=-1.0,
             details={"error": "No steps to classify"},
-            confidence="unavailable",
+            confidence=ScoreProvenance.UNAVAILABLE,
             data_sources=[],
         )
 
@@ -135,7 +137,7 @@ async def score_p8(
             principle_name="Reduce Derivatives (Baran Ideality)",
             score=-1.0, normalized=-1.0,
             details={"error": "Protocol text required for step classification"},
-            confidence="unavailable",
+            confidence=ScoreProvenance.UNAVAILABLE,
             data_sources=[],
         )
 
@@ -148,7 +150,7 @@ async def score_p8(
             score=-1.0, normalized=-1.0,
             details={"error": metadata.get("error", "Classification failed"),
                      "llm_called": metadata.get("llm_called")},
-            confidence="unavailable",
+            confidence=ScoreProvenance.UNAVAILABLE,
             data_sources=[],
         )
 
@@ -220,9 +222,15 @@ async def score_p8(
                 "were avoidable (unsolved research problem). "
                 "DOZN does not yet score P8 quantitatively."
             ),
+            "reasoning": (
+                f"AI classified {total} steps: {ideal_steps} ideal "
+                f"({construction} construction, {strategic_redox} strategic redox), "
+                f"{concession_protection} protecting group steps, "
+                f"{concession_other} other concessions. "
+                f"Ideality: {ideality_pct:.1f}%"
+            ),
         },
         chemicals_flagged=flagged,
-        data_sources=["baran_ideality", "llm_classification"],
-        # Always "estimated" because step classification is LLM-derived
-        confidence="estimated",
+        data_sources=["baran_ideality", "ai_assessment"],
+        confidence=ScoreProvenance.MODEL_INFERRED,
     )
