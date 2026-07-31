@@ -57,6 +57,7 @@ services/chemistry/*.log
 /data/chemical-seeds/*.generated.json
 /data/chemical-seeds/*worker-state*.json
 /data/chemical-seeds/backups/
+/data/literature/
 test-results/
 tmp/repo-cleanup-2026-07-01/
 tmp/benchmarks/
