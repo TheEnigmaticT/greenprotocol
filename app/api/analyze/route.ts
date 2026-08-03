@@ -61,6 +61,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
+  const { data: analysisRun, error: analysisRunError } = await supabase
+    .from('gpc_analysis_runs')
+    .insert({
+      user_id: user.id,
+      status: 'running',
+    })
+    .select('id')
+    .single()
+
+  if (analysisRunError || !analysisRun?.id) {
+    return NextResponse.json({ error: 'Failed to create analysis audit run' }, { status: 500 })
+  }
+
   // Stream SSE events via ReadableStream — controller.enqueue() is synchronous,
   // avoiding the race condition where TransformStream writer.close() can beat
   // un-awaited writer.write() calls.
@@ -94,10 +107,12 @@ export async function POST(request: Request) {
 
   // Run pipeline in background, streaming progress
   const pipeline = (async () => {
+    let analysisRunCompleted = false
     try {
       console.log(`[pipeline ${elapsed()}s] starting analyzeProtocol`)
       const analysisResult = await analyzeProtocol(protocolText, send, {
         userId: user.id,
+        analysisRunId: analysisRun.id,
         supabase,
       })
       console.log(`[pipeline ${elapsed()}s] analyzeProtocol complete`)
@@ -135,6 +150,22 @@ export async function POST(request: Request) {
         throw new Error(insertError?.message || 'Failed to persist analysis')
       }
 
+      const { error: analysisRunUpdateError } = await supabase
+        .from('gpc_analysis_runs')
+        .update({
+          analysis_id: insertedRow.id,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', analysisRun.id)
+        .eq('user_id', user.id)
+
+      if (analysisRunUpdateError) {
+        throw new Error(`Failed to complete analysis audit run: ${analysisRunUpdateError.message}`)
+      }
+
+      analysisRunCompleted = true
+
       send({
         type: 'result',
         data: {
@@ -167,6 +198,16 @@ export async function POST(request: Request) {
       const msg = error.message || error.error?.message || 'Unknown error'
       send({ type: 'error', error: `Analysis failed: ${msg}` })
     } finally {
+      if (!analysisRunCompleted) {
+        await supabase
+          .from('gpc_analysis_runs')
+          .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', analysisRun.id)
+          .eq('user_id', user.id)
+      }
       clearInterval(heartbeat)
       console.log(`[pipeline ${elapsed()}s] closing stream`)
       try { controller.close() } catch { /* already closed */ }

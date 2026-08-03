@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis } from '@/lib/types'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
@@ -136,6 +137,7 @@ const ASSEMBLE_SCHEMA: InputSchema = {
 interface CallContext {
   userId?: string
   analysisId?: string
+  analysisRunId?: string
   supabase?: SupabaseClient
 }
 
@@ -181,6 +183,7 @@ async function callClaude<T>(
       const phase = label.startsWith('principle-') ? 'principle' : label
       void logLLMTrace({
         analysis_id: context.analysisId,
+        analysis_run_id: context.analysisRunId,
         user_id: context.userId,
         call_label: label,
         model,
@@ -673,10 +676,15 @@ function deduplicateRecommendations(
     a.stepNumber - b.stepNumber || SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity]
   )
 
+  for (const recommendation of deduped) {
+    recommendation.id ||= randomUUID()
+  }
+
   // Log dedup trace if context provided
   if (context?.userId) {
     void logDedupTrace({
       analysis_id: context.analysisId,
+      analysis_run_id: context.analysisRunId,
       user_id: context.userId,
       raw_recommendations: recs,
       deduped_recommendations: deduped,

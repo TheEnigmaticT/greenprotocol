@@ -96,7 +96,9 @@ function extractChemicalSubjects(text: string, tags: string[]): string[] {
     tag.toLowerCase().includes('catalyst') ||
     /^[A-Z][a-z]?\d*$/.test(tag) // Chemical formulas
   )
-  chemicals.add(...chemicalTags)
+  for (const chemicalTag of chemicalTags) {
+    chemicals.add(chemicalTag)
+  }
   
   // Extract from text
   const solvents = [

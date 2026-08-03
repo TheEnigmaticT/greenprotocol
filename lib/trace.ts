@@ -14,6 +14,7 @@ import type { Recommendation } from '@/lib/types'
 
 export interface LLMCallTrace {
   analysis_id?: string
+  analysis_run_id?: string
   user_id: string
   call_label: string
   model: string
@@ -37,6 +38,7 @@ export async function logLLMTrace(trace: LLMCallTrace, supabase?: SupabaseClient
     
     const { error } = await client.from('gpc_analysis_traces').insert({
       analysis_id: trace.analysis_id || null,
+      analysis_run_id: trace.analysis_run_id || null,
       user_id: trace.user_id,
       call_label: trace.call_label,
       model: trace.model,
@@ -72,6 +74,7 @@ export async function logLLMTrace(trace: LLMCallTrace, supabase?: SupabaseClient
 
 export interface DedupTrace {
   analysis_id?: string
+  analysis_run_id?: string
   user_id: string
   raw_recommendations: Recommendation[]
   deduped_recommendations: Recommendation[]
@@ -85,6 +88,7 @@ export async function logDedupTrace(trace: DedupTrace, supabase?: SupabaseClient
     
     const { error } = await client.from('gpc_dedup_log').insert({
       analysis_id: trace.analysis_id || null,
+      analysis_run_id: trace.analysis_run_id || null,
       user_id: trace.user_id,
       raw_recommendations: trace.raw_recommendations,
       raw_count: trace.raw_recommendations.length,

@@ -2,6 +2,7 @@
  * Client for the chemistry microservice (services/chemistry/).
  * Handles unit conversions and deterministic scoring.
  */
+import type { ScoreProvenance } from '@/lib/types'
 
 const CHEMISTRY_SERVICE_URL = process.env.CHEMISTRY_SERVICE_URL || 'http://localhost:8000'
 const CHEMISTRY_SERVICE_TOKEN = process.env.CHEMISTRY_SERVICE_TOKEN
@@ -39,7 +40,7 @@ interface ScoreResult {
     details: Record<string, unknown>
     chemicals_flagged: string[]
     data_sources: string[]
-    confidence: 'calculated' | 'benchmark' | 'estimated' | 'partial' | 'unavailable'
+    confidence: ScoreProvenance
     compatibility_warnings?: string[]
   }>
   total_score: number

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
@@ -24,6 +24,14 @@ interface StoredData {
 }
 
 export default function AnalyzePage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen" style={{ background: '#FAF8F3' }} />}>
+      <AnalyzePageContent />
+    </Suspense>
+  )
+}
+
+function AnalyzePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const newAnalysisRequested = searchParams.get('new') === '1'

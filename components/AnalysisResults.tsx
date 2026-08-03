@@ -3,9 +3,10 @@
 import PrincipleTag from './PrincipleTag'
 import QuickWins from './QuickWins'
 import { useState, useMemo, useCallback } from 'react'
-import { AnalysisResult, Recommendation, Evidence } from '@/lib/types'
+import type { AnalysisResult, Recommendation, Evidence } from '@/lib/types'
 import Link from 'next/link'
 import WasteScoreCard from './WasteScoreCard'
+import { TalkAboutThis } from './TalkAboutThis'
 import { buildCitationString } from '@/lib/citation'
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -148,16 +149,26 @@ function RecommendationCard({
           )}
         </div>
         
-        <button
-          onClick={onToggleAccept}
-          className={`text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border shrink-0 self-start sm:self-auto ${
-            isAccepted 
-              ? 'bg-[#16a34a] text-white border-[#16a34a]' 
-              : 'bg-white text-[#78716C] border-[#D6D0C4] hover:border-[#16a34a] hover:text-[#16a34a]'
-          }`}
-        >
-          {isAccepted ? '✓ Accepted' : 'Accept Solution'}
-        </button>
+        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+          {rec.id && (
+            <TalkAboutThis
+              analysisId={analysisId}
+              scope={{ kind: 'recommendation', recommendationId: rec.id }}
+              title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
+              evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
+            />
+          )}
+          <button
+            onClick={onToggleAccept}
+            className={`text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border ${
+              isAccepted
+                ? 'bg-[#16a34a] text-white border-[#16a34a]'
+                : 'bg-white text-[#78716C] border-[#D6D0C4] hover:border-[#16a34a] hover:text-[#16a34a]'
+            }`}
+          >
+            {isAccepted ? '✓ Accepted' : 'Accept Solution'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1,7 +1,8 @@
 'use client'
 
-import { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical, ScoreProvenance } from '@/lib/types'
+import type { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical, ScoreProvenance } from '@/lib/types'
 import { buildRecommendationCitationString, formatCitationACS } from '@/lib/citation'
+import { TalkAboutThis } from './TalkAboutThis'
 
 const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
   A: { bg: '#DCFCE7', text: '#166534' },
@@ -184,7 +185,7 @@ export default function PrincipleSection({
   return (
     <section id={anchorId} className="scroll-mt-20">
       {/* Section header — number pill + name, no duplication */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <span
           className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded"
           style={{ background: '#ECB815', color: '#1C3822', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}
@@ -194,6 +195,12 @@ export default function PrincipleSection({
         <h2 className="text-lg font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C1917' }}>
           {principleName}
         </h2>
+        <TalkAboutThis
+          analysisId={analysisId}
+          scope={{ kind: 'principle', principleNumber }}
+          title={`P${principleNumber}: ${principleName}`}
+          evidenceState={recommendations.some(recommendation => (recommendation.evidence?.citations.length ?? 0) > 0) ? 'sourced' : 'inferred'}
+        />
       </div>
 
       {/* Score */}

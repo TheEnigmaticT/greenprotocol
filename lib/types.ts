@@ -66,6 +66,7 @@ export interface Citation {
 }
 
 export interface Recommendation {
+  id?: string
   stepNumber: number
   principleNumbers: number[]
   principleNames: string[]
