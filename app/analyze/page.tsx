@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
 import { calculateOriginalTotals } from '@/lib/calculations'
 import { projectScores } from '@/lib/projected-scores'
@@ -13,6 +13,7 @@ import ScoreCard from '@/components/ScoreCard'
 import UserMenu from '@/components/UserMenu'
 import ChemistryDataNotice from '@/components/ChemistryDataNotice'
 import ProtocolInput from '@/components/ProtocolInput'
+import { NEW_ANALYSIS_HREF, clearAnalysisSession, resolveAnalysisSession } from '@/lib/analysis-session'
 
 interface StoredData {
   id?: string
@@ -24,6 +25,8 @@ interface StoredData {
 
 export default function AnalyzePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const newAnalysisRequested = searchParams.get('new') === '1'
   const [data, setData] = useState<StoredData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [persistError, setPersistError] = useState<string | null>(null)
@@ -47,29 +50,18 @@ export default function AnalyzePage() {
         if (!window.confirm('Starting a new analysis will clear your current results, including any accepted recommendations. Continue?')) return
       }
     }
-    sessionStorage.removeItem('gpc_analysis')
-    sessionStorage.removeItem('gpc_protocol')
-    router.push('/')
+    clearAnalysisSession(sessionStorage)
+    router.push(NEW_ANALYSIS_HREF)
   }
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('gpc_analysis')
-    if (!stored) {
-      setLoaded(true)
-      return
-    }
-
-    try {
-      const parsed = JSON.parse(stored)
-      setData({
-        ...parsed,
-        protocolText: parsed.protocolText || sessionStorage.getItem('gpc_protocol') || undefined,
-      })
-    } catch {
-      sessionStorage.removeItem('gpc_analysis')
-    }
+    setData(resolveAnalysisSession<StoredData>({
+      sessionStorage,
+      searchParams: new URLSearchParams(newAnalysisRequested ? 'new=1' : ''),
+    }))
+    setPersistError(null)
     setLoaded(true)
-  }, [])
+  }, [newAnalysisRequested])
 
   // Debounced persist to Supabase when recommendations are accepted/rejected
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)

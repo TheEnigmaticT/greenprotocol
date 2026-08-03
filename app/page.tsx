@@ -7,6 +7,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { NEW_ANALYSIS_HREF } from '@/lib/analysis-session'
 
 const COLS = `
   .g { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.5rem; width: 100%; max-width: 1360px; box-sizing: border-box; margin: 0 auto; padding: 0 80px; }
@@ -163,7 +164,7 @@ export default function LandingPage() {
               />
             </div>
             <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
-              <Link href="/analyze" style={{
+              <Link href={NEW_ANALYSIS_HREF} style={{
                 background:C.gold, color:C.black,
                 fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,
                 letterSpacing:'0.06em', padding:'0.5rem 0.8rem',
@@ -217,7 +218,7 @@ export default function LandingPage() {
               of Green Chemistry. Specific, chemically-validated swaps
               — in seconds.
             </p>
-            <Link href="/analyze" style={{
+            <Link href={NEW_ANALYSIS_HREF} style={{
               display:'inline-block',
               background:C.gold, color:C.black,
               fontFamily:MONO, fontWeight:700, fontSize:'0.85rem',
@@ -335,7 +336,7 @@ export default function LandingPage() {
                 The 12 Principles<br/>of Green Chemistry
               </h2>
             </div>
-            <Link href="/analyze" style={{fontFamily:MONO, fontSize:'0.7rem',
+            <Link href={NEW_ANALYSIS_HREF} style={{fontFamily:MONO, fontSize:'0.7rem',
               color:C.vivid, letterSpacing:'0.05em',
               textDecoration:'underline', textUnderlineOffset:'3px'}}>
               Score your protocol →
@@ -957,7 +958,7 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
 
           {/* CTAs — cols 7-11 */}
           <div className="c5 cs8 contact-cta-col" style={{display:'flex', flexDirection:'column', justifyContent:'center', gap:'0.875rem'}}>
-            <Link href="/analyze" className="contact-cta-link" style={{
+            <Link href={NEW_ANALYSIS_HREF} className="contact-cta-link" style={{
               background:C.forest, color:C.cream,
               fontFamily:MONO, fontWeight:700, fontSize:'0.85rem',
               letterSpacing:'0.06em', padding:'1.1rem 2rem',

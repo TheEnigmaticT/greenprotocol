@@ -1,0 +1,5 @@
+# Primary parser backend for page-aware literature PDF extraction.
+pdf-inspector>=0.2.6,<0.3
+
+# Existing comparison/fallback backend.
+PyMuPDF>=1.24

@@ -7,6 +7,7 @@ import { GpcProfile, AnalysisSummary } from '@/lib/types'
 import UserMenu from '@/components/UserMenu'
 import UsernameSetup from '@/components/UsernameSetup'
 import AnalysisCard from '@/components/AnalysisCard'
+import { NEW_ANALYSIS_HREF } from '@/lib/analysis-session'
 
 export default function DashboardPage() {
   const [profile, setProfile] = useState<GpcProfile | null | undefined>(undefined)
@@ -70,7 +71,7 @@ export default function DashboardPage() {
         </Link>
         <div className="flex items-center gap-2 sm:gap-4">
           <Link
-            href="/analyze"
+            href={NEW_ANALYSIS_HREF}
             className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
             style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
           >
@@ -127,7 +128,7 @@ export default function DashboardPage() {
           <div className="text-center py-16 space-y-4">
             <p className="text-lg" style={{ color: '#78716C' }}>No analyses yet.</p>
             <Link
-              href="/analyze"
+              href={NEW_ANALYSIS_HREF}
               className="inline-block px-6 py-3 rounded-lg font-semibold text-sm"
               style={{ background: '#7C2D36', color: '#FAF8F3' }}
             >

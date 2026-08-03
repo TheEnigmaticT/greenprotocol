@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { NEW_ANALYSIS_HREF } from '@/lib/analysis-session'
 
 function LoginForm() {
   const [email, setEmail] = useState('')
@@ -52,7 +53,7 @@ function LoginForm() {
       // Hard navigation (not router.push) so the server re-reads the freshly
       // set session cookie and we bypass the stale, pre-auth prefetch of
       // /analyze that the client router cached on page load.
-      window.location.assign('/analyze')
+      window.location.assign(NEW_ANALYSIS_HREF)
     } catch {
       setError('Something went wrong. Check your connection and try again.')
     } finally {

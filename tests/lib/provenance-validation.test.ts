@@ -4,7 +4,7 @@
  * Run with: npm test tests/lib/provenance-validation.test.ts
  */
 
-import { describe, it, expect } from '@jest/globals'
+import { describe, it, expect } from 'vitest'
 import { validateScore, assertValidScore, isValidProvenance } from '@/lib/validate-provenance'
 import type { PrincipleScore } from '@/lib/types'
 

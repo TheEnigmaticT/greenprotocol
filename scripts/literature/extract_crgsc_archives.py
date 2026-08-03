@@ -14,7 +14,7 @@ import zipfile
 from pathlib import Path
 from typing import Iterable
 
-import fitz
+from pdf_extractor import extract_pdf
 
 DOI_RE = re.compile(r"10\.1016/[A-Za-z0-9().:/_-]+", re.I)
 ISSUE_RE = re.compile(
@@ -31,17 +31,6 @@ def clean_doi(value: str | None) -> str | None:
     if not value:
         return None
     return value.rstrip(".,;:)")
-
-
-def extract_text(data: bytes) -> tuple[str, int, list[int]]:
-    doc = fitz.open(stream=data, filetype="pdf")
-    pages: list[str] = []
-    lengths: list[int] = []
-    for page in doc:
-        text = page.get_text("text")
-        pages.append(text)
-        lengths.append(len(text))
-    return "\n\n--- PAGE BREAK ---\n\n".join(pages), len(doc), lengths
 
 
 def document_type(filename: str, title: str | None) -> str:
@@ -109,6 +98,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--extractor",
+        choices=("pdf-inspector", "pymupdf"),
+        default="pdf-inspector",
+        help="PDF parser backend; pymupdf remains available for comparison/fallback",
+    )
     args = parser.parse_args()
 
     articles_dir = args.output_dir / "articles"
@@ -131,7 +126,10 @@ def main() -> int:
             })
             continue
 
-        text, page_count, page_lengths = extract_text(data)
+        extraction = extract_pdf(data, extractor=args.extractor)
+        text = extraction.text
+        page_count = extraction.page_count
+        page_lengths = extraction.page_text_lengths
         metadata = metadata_from_text(text, filename)
         archive_volume = re.search(r"CRGSC_Vol_(\d+)", archive.name, re.I)
         if metadata.get("volume") is None and archive_volume:
@@ -169,6 +167,14 @@ def main() -> int:
             "metadata_path": str(metadata_path),
             "page_count": page_count,
             "page_text_lengths": page_lengths,
+            "extraction_method": extraction.extractor,
+            "extractor_version": extraction.extractor_version,
+            "pdf_type": extraction.pdf_type,
+            "extraction_confidence": extraction.confidence,
+            "pages_needing_ocr": extraction.pages_needing_ocr,
+            "pages_with_tables": extraction.pages_with_tables,
+            "pages_with_columns": extraction.pages_with_columns,
+            "has_encoding_issues": extraction.has_encoding_issues,
             **metadata,
         }
         metadata_path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

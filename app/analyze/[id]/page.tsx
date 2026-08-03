@@ -12,6 +12,7 @@ import FinalizedProtocol from '@/components/FinalizedProtocol'
 import ScoreCard from '@/components/ScoreCard'
 import UserMenu from '@/components/UserMenu'
 import ChemistryDataNotice from '@/components/ChemistryDataNotice'
+import { NEW_ANALYSIS_HREF } from '@/lib/analysis-session'
 
 interface AnalysisData {
   id: string
@@ -136,7 +137,7 @@ export default function AnalysisByIdPage() {
         </Link>
         <div className="flex items-center gap-2 sm:gap-4">
           <Link
-            href="/"
+            href={NEW_ANALYSIS_HREF}
             className="hidden sm:inline-block text-sm px-3 py-1.5 rounded border transition-colors font-[family-name:var(--font-mono)]"
             style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
           >
