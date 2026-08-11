@@ -227,6 +227,7 @@ function AnalyzePageContent() {
             analysis={data.analysis}
             originalProtocol={data.protocolText}
             onUpdateAnalysis={handleUpdateAnalysis}
+            analysisId={data.id}
           />
         </section>
 

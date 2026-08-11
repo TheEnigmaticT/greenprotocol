@@ -195,6 +195,7 @@ export default function AnalysisByIdPage() {
             analysis={data.analysis}
             originalProtocol={data.protocolText}
             onUpdateAnalysis={handleUpdateAnalysis}
+            analysisId={id}
           />
         </section>
 

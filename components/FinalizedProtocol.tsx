@@ -1,6 +1,7 @@
 'use client'
 
 import { AnalysisResult, Recommendation } from '@/lib/types'
+import { TalkAboutThis } from './TalkAboutThis'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -20,10 +21,12 @@ function SeverityBadge({ severity }: { severity: string }) {
   )
 }
 
-function PendingCard({ rec, onAccept, onDecline }: {
+function PendingCard({ rec, onAccept, onDecline, analysisId, recommendationIndex }: {
   rec: Recommendation
   onAccept: () => void
   onDecline: () => void
+  analysisId?: string
+  recommendationIndex: number
 }) {
   return (
     <div className="p-4 rounded-lg border space-y-3" style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}>
@@ -32,7 +35,15 @@ function PendingCard({ rec, onAccept, onDecline }: {
           <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>Step {rec.stepNumber}</span>
           <SeverityBadge severity={rec.severity} />
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <TalkAboutThis
+            analysisId={analysisId}
+            scope={rec.id
+              ? { kind: 'recommendation', recommendationId: rec.id }
+              : { kind: 'recommendation', recommendationIndex }}
+            title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
+            evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
+          />
           <button
             onClick={onAccept}
             className="text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border bg-white hover:border-[#16a34a] hover:text-[#16a34a]"
@@ -74,10 +85,12 @@ export default function FinalizedProtocol({
   analysis,
   originalProtocol,
   onUpdateAnalysis,
+  analysisId,
 }: {
   analysis: AnalysisResult
   originalProtocol?: string
   onUpdateAnalysis?: (updated: AnalysisResult) => void
+  analysisId?: string
 }) {
   const total = analysis.recommendations.length
   const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
@@ -160,6 +173,8 @@ export default function FinalizedProtocol({
                     rec={rec}
                     onAccept={() => setRecAccepted(globalIndex, true)}
                     onDecline={() => setRecAccepted(globalIndex, false)}
+                    analysisId={analysisId}
+                    recommendationIndex={globalIndex}
                   />
                 )
               })}
