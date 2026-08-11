@@ -1,4 +1,7 @@
-from fastapi import FastAPI, HTTPException
+import os
+import secrets
+
+from fastapi import Depends, FastAPI, Header, HTTPException
 from scoring.models import ScoringRequest, ScoringResponse
 from scoring.p1_waste_prevention import score_p1
 from scoring.p2_atom_economy import score_p2
@@ -12,6 +15,7 @@ from scoring.rcra import compute_regulatory_context
 from scoring.process_complexity import analyze_complexity
 from ghs import lookup_hcodes
 from models import BatchRequest, BatchResponse, ConvertResponse
+from assistant_tools import AssistantToolRequest, AssistantToolResponse, execute_assistant_tool
 from converter import convert
 from yield_extractor import extract_yield_and_type
 import cache as chem_cache
@@ -32,12 +36,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="GC.ai Chemistry Service", lifespan=lifespan)
 
+
+
+def require_service_token(
+    x_chemistry_service_token: str | None = Header(default=None),
+) -> None:
+    configured_token = os.getenv("CHEMISTRY_SERVICE_TOKEN")
+    if configured_token and not secrets.compare_digest(x_chemistry_service_token or "", configured_token):
+        raise HTTPException(status_code=401, detail="Invalid chemistry service token")
 @app.get("/health")
 def health():
     return {"status": "ok", "cache_size": chem_cache.size()}
 
-
-@app.post("/batch", response_model=BatchResponse)
+@app.post("/batch", response_model=BatchResponse, dependencies=[Depends(require_service_token)])
 async def batch_convert(request: BatchRequest):
     """Batch convert chemicals to standardized units."""
     tasks = [convert(c.chemical_name, c.quantity) for c in request.chemicals]
@@ -55,6 +66,12 @@ async def batch_convert(request: BatchRequest):
         else:
             converted.append(result)
     return BatchResponse(results=converted)
+
+
+@app.post("/assistant-tools", response_model=AssistantToolResponse, dependencies=[Depends(require_service_token)])
+async def assistant_tools(request: AssistantToolRequest):
+    """Execute one read-only assistant chemistry lookup."""
+    return await execute_assistant_tool(request)
 
 
 def _hcodes_from_cache(chem_name: str) -> list[str]:
@@ -80,7 +97,7 @@ def _hcodes_from_cache(chem_name: str) -> list[str]:
     return []
 
 
-@app.post("/score", response_model=ScoringResponse)
+@app.post("/score", response_model=ScoringResponse, dependencies=[Depends(require_service_token)])
 async def score_protocol(request: ScoringRequest):
     """Score a protocol based on Green Chemistry principles."""
     if not request.chemicals:
