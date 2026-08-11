@@ -35,6 +35,7 @@ export interface ChatCompletionStreamRequest {
   model: string
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
   stream: true
+  max_tokens: number
   provider?: {
     data_collection: 'deny'
     zdr: true
@@ -119,6 +120,7 @@ export function createOpenAICompatibleChatProvider(
       const completionRequest: ChatCompletionStreamRequest = {
         model: config.model,
         stream: true,
+        max_tokens: 1024,
         messages: [
           { role: 'system', content: request.system },
           ...request.messages,

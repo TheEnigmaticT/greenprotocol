@@ -85,6 +85,7 @@ describe('createOpenAICompatibleChatProvider', () => {
         zdr: true,
         allow_fallbacks: false,
       },
+      max_tokens: 1024,
       reasoning: { effort: 'minimal' },
     }))
   })
