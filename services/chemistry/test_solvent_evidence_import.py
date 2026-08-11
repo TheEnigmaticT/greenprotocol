@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import json
+import sqlite3
 import threading
 from pathlib import Path
 
@@ -119,10 +120,43 @@ def test_screening_query_matches_normalized_solute_within_temperature_window(tmp
     fixture_raw, fixture_manifests = fixture_assets
     store = SolventEvidenceStore(build_index(fixture_raw, fixture_manifests, tmp_path / "evidence.sqlite").index_path)
 
-    rows, truncated = store.screening_solubility("CCO", "ethanol", 298.159, limit=21)
+    rows, truncated = store.screening_solubility("CCO", "ethanol", 298.16, limit=21)
 
     assert truncated is False
     assert [row["solute_smiles"] for row in rows] == ["C(C)O"]
+
+
+def test_store_migrates_a_preexisting_v1_solubility_index(tmp_path):
+    path = tmp_path / "legacy.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE schema_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            INSERT INTO schema_metadata VALUES ('schema_version', '1');
+            CREATE TABLE single_solubility (
+                id INTEGER PRIMARY KEY, solute_smiles TEXT NOT NULL, solvent TEXT NOT NULL,
+                normalized_solvent TEXT NOT NULL, solvent_smiles TEXT NOT NULL,
+                compound_name TEXT NOT NULL, cas TEXT, pubchem_id TEXT, temperature_k REAL,
+                solubility_mole_fraction REAL, solubility_mol_per_l REAL, log_s_mol_per_l REAL,
+                source_doi TEXT, measurements_json TEXT NOT NULL, units_json TEXT NOT NULL,
+                raw_values_json TEXT NOT NULL
+            );
+            INSERT INTO single_solubility VALUES (
+                1, 'C(C)O', 'ethanol', 'ethanol', 'CCO', 'ethanol', NULL, NULL, 298.15,
+                0.1, NULL, NULL, '10.1000/example', '{}', '{}', '{}'
+            );
+            """
+        )
+
+    store = SolventEvidenceStore(path)
+    rows, truncated = store.screening_solubility("CCO", "ethanol", 298.15, limit=20)
+
+    assert truncated is False
+    assert [row["solute_smiles"] for row in rows] == ["C(C)O"]
+    with sqlite3.connect(path) as connection:
+        assert connection.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
+        ).fetchone() == ("2",)
 
 
 def test_failed_rebuild_leaves_prior_valid_index_untouched(tmp_path, fixture_assets):

@@ -330,7 +330,7 @@ def _insert_density(connection: sqlite3.Connection, records: object) -> int:
 
 
 def _insert_metadata(connection: sqlite3.Connection, manifests: Mapping[str, DatasetManifest]) -> None:
-    connection.execute("INSERT INTO schema_metadata (key, value) VALUES (?, ?)", ("schema_version", "1"))
+    connection.execute("INSERT INTO schema_metadata (key, value) VALUES (?, ?)", ("schema_version", "2"))
     for manifest in manifests.values():
         payload = {
             "schema_version": manifest.schema_version,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from decimal import Decimal
 from dataclasses import dataclass
 from typing import Any
 
@@ -148,9 +149,13 @@ def _matching_measurements(
         for measurement in measurements
         if normalize_smiles(measurement.get("solute_smiles", "")) == normalized_solute
         and _finite_temperature(measurement.get("temperature_k"))
-        and abs(float(measurement["temperature_k"]) - temperature_k) <= 0.01
+        and _within_temperature_window(measurement["temperature_k"], temperature_k)
         and _finite_number(measurement.get("solubility_mole_fraction"))
     ]
+
+
+def _within_temperature_window(measured: float, requested: float) -> bool:
+    return abs(Decimal(str(measured)) - Decimal(str(requested))) <= Decimal("0.01")
 
 
 def _best_mole_fraction(measurements: list[dict[str, Any]]) -> float | None:

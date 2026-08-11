@@ -7,6 +7,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from rdkit import Chem
 
 from solvent_evidence_schema import normalize_identity
 
@@ -50,6 +51,7 @@ class SolventEvidenceStore:
 
     def __init__(self, path: Path | str):
         self.path = Path(path)
+        self._migrate_legacy_solubility_index()
         self._validate()
 
     def lookup_chem21(self, name: str) -> dict[str, Any] | None:
@@ -146,7 +148,7 @@ class SolventEvidenceStore:
                               log_s_mol_per_l, source_doi, measurements_json, units_json, raw_values_json
                        FROM single_solubility
                        WHERE normalized_solute_smiles = ? AND normalized_solvent = ?
-                         AND abs(temperature_k - ?) <= 0.01
+                         AND abs(temperature_k - ?) <= 0.010001
                        LIMIT ?""",
                     (normalized_solute_smiles, normalize_identity(solvent), temperature_k, limit + 1),
                 )
@@ -194,6 +196,49 @@ class SolventEvidenceStore:
         with self._connect() as connection:
             return [convert(row) for row in connection.execute(query, parameters)]
 
+    def _migrate_legacy_solubility_index(self) -> None:
+        """Atomically add the normalized solute key to a pre-v2 evidence index."""
+        if not self.path.is_file():
+            return
+        try:
+            with sqlite3.connect(self.path) as connection:
+                table = connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'single_solubility'"
+                ).fetchone()
+                if table is None:
+                    return
+                columns = {
+                    row[1] for row in connection.execute("PRAGMA table_info(single_solubility)")
+                }
+                if "normalized_solute_smiles" in columns:
+                    connection.execute(
+                        "UPDATE schema_metadata SET value = '2' WHERE key = 'schema_version'"
+                    )
+                    return
+                connection.execute("ALTER TABLE single_solubility ADD COLUMN normalized_solute_smiles TEXT")
+                rows = connection.execute("SELECT id, solute_smiles FROM single_solubility").fetchall()
+                normalized_rows: list[tuple[str, int]] = []
+                for row_id, solute_smiles in rows:
+                    molecule = Chem.MolFromSmiles(solute_smiles)
+                    if molecule is None:
+                        raise ValueError(f"invalid solute SMILES in legacy index: {solute_smiles!r}")
+                    normalized_rows.append((Chem.MolToSmiles(molecule, canonical=True), row_id))
+                connection.executemany(
+                    "UPDATE single_solubility SET normalized_solute_smiles = ? WHERE id = ?",
+                    normalized_rows,
+                )
+                connection.execute(
+                    """CREATE INDEX single_solubility_lookup_normalized
+                       ON single_solubility(normalized_solute_smiles, normalized_solvent, temperature_k)"""
+                )
+                connection.execute(
+                    "UPDATE schema_metadata SET value = '2' WHERE key = 'schema_version'"
+                )
+        except (sqlite3.Error, ValueError) as exc:
+            raise SolventEvidenceUnavailableError(
+                f"CHEM21 index is unavailable: unable to migrate solubility structure key: {exc}"
+            ) from exc
+
     def _validate(self) -> None:
         if not self.path.is_file():
             raise SolventEvidenceUnavailableError(f"CHEM21 index is unavailable at {self.path}")
@@ -205,7 +250,7 @@ class SolventEvidenceStore:
                 ).fetchone()
         except sqlite3.Error as exc:
             raise SolventEvidenceUnavailableError(f"CHEM21 index is unavailable: {exc}") from exc
-        if integrity is None or integrity[0] != "ok" or schema is None or schema[0] != "1":
+        if integrity is None or integrity[0] != "ok" or schema is None or schema[0] not in {"1", "2"}:
             raise SolventEvidenceUnavailableError("CHEM21 index is unavailable: invalid schema or integrity check")
 
     def _connect(self) -> sqlite3.Connection:
