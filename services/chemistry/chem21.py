@@ -1,151 +1,139 @@
-"""CHEM21 solvent selection guide data.
+"""Compatibility adapter for the local CHEM21 solvent evidence index."""
 
-Classifications: recommended, problematic, hazardous, highly_hazardous
-Scores: 1-3 (green/recommended), 4-6 (yellow/problematic), 
-        7-9 (red/hazardous), 10 (highly hazardous)
-
-Source: Prat et al., Green Chem., 2016, 18, 288-296
-DOI: 10.1039/C5GC01008J
-"""
+from __future__ import annotations
 
 from dataclasses import dataclass
 
+from solvent_evidence_schema import normalize_identity
+from solvent_evidence_store import get_store
 
-@dataclass
+
+CHEM21_CITATION = {
+    "source_id": "CHEM21",
+    "source_name": "CHEM21 Solvent Selection Guide",
+    "citation": "Prat et al., Green Chem., 2016, 18, 288-296",
+    "url": "https://doi.org/10.1039/C5GC01008J",
+    "doi": "10.1039/C5GC01008J",
+}
+
+# Historical shorthand is lookup compatibility, not a second source of CHEM21 data.
+_COMPATIBILITY_ALIASES = {
+    "h2o": "Water",
+    "deionized water": "Water",
+    "etoh": "Ethanol",
+    "ipa": "Isopropyl alcohol",
+    "ipoh": "Isopropyl alcohol",
+    "2-propanol": "Isopropyl alcohol",
+    "1-butanol": "n-Butanol",
+    "buoh": "n-Butanol",
+    "etoac": "Ethyl acetate",
+    "mek": "Methyl ethyl ketone",
+    "2-butanone": "Methyl ethyl ketone",
+    "meoh": "Methanol",
+    "acoh": "Acetic acid",
+    "n-heptane": "Heptane",
+    "dimethyl sulfoxide": "Dimethyl sulfoxide",
+    "acn": "Acetonitrile",
+    "mecn": "Acetonitrile",
+    "thf": "Tetrahydrofuran",
+    "2-methf": "Methyl tetrahydrofuran",
+    "2-methyltetrahydrofuran": "Methyl tetrahydrofuran",
+    "et2o": "Diethyl ether",
+    "ether": "Diethyl ether",
+    "1,4-dioxane": "Dioxane",
+    "dcm": "Dichloromethane",
+    "dmf": "N,N-Dimethylformamide",
+    "dma": "N,N-Dimethylacetamide",
+    "dmac": "N,N-Dimethylacetamide",
+    "nmp": "N-Methyl-2-pyrrolidinone",
+    "chcl3": "Chloroform",
+    "ccl4": "Carbon tetrachloride",
+    "dce": "1,2-Dichloroethane",
+    "n-hexane": "Hexane",
+    "hexanes": "Hexane",
+    "dipe": "Diisopropyl ether",
+    "isopropanol": "Isopropyl alcohol",
+    "isopropyl acetate": "Isopropylacetate",
+    "methylcyclohexane": "Methyl cyclohexane",
+}
+
+
+@dataclass(frozen=True)
 class SolventEntry:
     name: str
-    classification: str  # recommended, problematic, hazardous, highly_hazardous
-    safety: int     # 1-10
-    health: int     # 1-10
-    environment: int  # 1-10
-    overall: int    # 1-10 (max of safety, health, env)
+    classification: str
+    safety: int
+    health: int
+    environment: int
+    overall: int
 
 
-# CHEM21 solvent guide — 53 classical + less-classical solvents
-# Scores from the published guide (safety, health, environment)
-CHEM21_SOLVENTS: dict[str, SolventEntry] = {}
-
-def _add(name: str, cls: str, s: int, h: int, e: int, *aliases: str):
-    entry = SolventEntry(name=name, classification=cls, safety=s,
-                         health=h, environment=e, overall=max(s, h, e))
-    CHEM21_SOLVENTS[name.lower()] = entry
-    for a in aliases:
-        CHEM21_SOLVENTS[a.lower()] = entry
-
-# RECOMMENDED solvents (green, scores 1-3)
-_add("Water", "recommended", 1, 1, 1, "h2o", "deionized water")
-_add("Ethanol", "recommended", 3, 2, 1, "etoh")
-_add("Isopropanol", "recommended", 3, 2, 1, "ipa", "ipoh", "2-propanol")
-_add("1-Butanol", "recommended", 3, 2, 1, "buoh", "n-butanol")
-_add("Ethyl acetate", "recommended", 3, 2, 1, "etoac")
-_add("Isopropyl acetate", "recommended", 3, 2, 1)
-_add("Methyl ethyl ketone", "recommended", 3, 2, 1, "mek", "2-butanone")
-_add("Acetone", "recommended", 3, 1, 1)
-_add("Methanol", "recommended", 3, 3, 1, "meoh")
-_add("Acetic acid", "recommended", 3, 3, 1, "acoh")
-_add("Sulfolane", "recommended", 1, 3, 1)
-_add("Heptane", "recommended", 3, 2, 1, "n-heptane")
-_add("Anisole", "recommended", 3, 2, 1)
-_add("p-Cymene", "recommended", 3, 1, 1)
-_add("Dihydrolevoglucosenone", "recommended", 2, 2, 1, "cyrene")
-
-# PROBLEMATIC solvents (yellow, scores 4-6)
-_add("Toluene", "problematic", 3, 5, 3)
-_add("Cyclohexane", "problematic", 3, 3, 5)
-_add("Methylcyclohexane", "problematic", 3, 3, 5)
-_add("DMSO", "problematic", 1, 4, 1, "dimethyl sulfoxide")
-_add("Acetonitrile", "problematic", 3, 4, 3, "acn", "mecn")
-_add("Tetrahydrofuran", "problematic", 5, 4, 3, "thf")
-_add("2-Methyltetrahydrofuran", "problematic", 5, 4, 3, "2-methf")
-_add("Xylene", "problematic", 3, 5, 5, "xylenes")
-_add("Diethyl ether", "problematic", 5, 4, 3, "et2o", "ether")
-_add("1,4-Dioxane", "problematic", 5, 5, 3, "dioxane")
-
-# HAZARDOUS solvents (red, scores 7-9)
-_add("Dichloromethane", "hazardous", 3, 7, 5, "dcm")
-_add("N,N-Dimethylformamide", "hazardous", 1, 7, 3, "dmf")
-_add("N,N-Dimethylacetamide", "hazardous", 1, 7, 3, "dma", "dmac")
-_add("N-Methyl-2-pyrrolidone", "hazardous", 1, 7, 3, "nmp")
-_add("Pyridine", "hazardous", 3, 7, 3)
-_add("Chloroform", "hazardous", 1, 7, 5, "chcl3")
-_add("Dimethyl sulfate", "hazardous", 1, 9, 3)
-_add("Formic acid", "hazardous", 3, 7, 1)
-_add("Nitromethane", "hazardous", 7, 5, 3)
-
-# HIGHLY HAZARDOUS solvents (brown, score 10)
-_add("Carbon tetrachloride", "highly_hazardous", 1, 10, 7, "ccl4")
-_add("1,2-Dichloroethane", "highly_hazardous", 3, 10, 7, "dce")
-_add("Benzene", "highly_hazardous", 3, 10, 5)
-_add("Hexane", "highly_hazardous", 3, 5, 7, "n-hexane", "hexanes")
-_add("Pentane", "highly_hazardous", 7, 3, 5)
-_add("Diisopropyl ether", "highly_hazardous", 7, 4, 5, "dipe")
+def _evidence_row(name: str) -> dict | None:
+    store = get_store()
+    row = store.lookup_chem21(name)
+    if row is not None:
+        return row
+    canonical = _COMPATIBILITY_ALIASES.get(normalize_identity(name))
+    return store.lookup_chem21(canonical) if canonical is not None else None
 
 
 def lookup_solvent(name: str) -> SolventEntry | None:
-    """Look up a solvent in the CHEM21 guide."""
-    return CHEM21_SOLVENTS.get(name.lower().strip())
+    """Look up a solvent in the generated CHEM21 evidence index."""
+    row = _evidence_row(name)
+    if row is None:
+        return None
+    scores = row["scores"]
+    return SolventEntry(
+        name=row["name"],
+        classification=row["classification"],
+        safety=scores["safety"],
+        health=scores["health"],
+        environment=scores["environment"],
+        overall=scores["overall"],
+    )
 
 
 def lookup_solvent_with_evidence(name: str) -> dict | None:
-    """Look up a solvent in the CHEM21 guide with citable evidence."""
-    entry = lookup_solvent(name)
-    if not entry:
+    """Look up a solvent with CHEM21's citable evidence and replacements."""
+    row = _evidence_row(name)
+    if row is None:
         return None
-        
-    return {
-        "name": entry.name,
-        "classification": entry.classification,
-        "scores": {
-            "safety": entry.safety,
-            "health": entry.health,
-            "environment": entry.environment,
-            "overall": entry.overall
-        },
-        "evidence": {
-            "source_id": "CHEM21",
-            "source_name": "CHEM21 Solvent Selection Guide",
-            "citation": "Prat et al., Green Chem., 2016, 18, 288-296",
-            "url": "https://doi.org/10.1039/C5GC01008J",
-            "doi": "10.1039/C5GC01008J"
-        }
+    response = {
+        "name": row["name"],
+        "classification": row["classification"],
+        "scores": row["scores"],
+        "evidence": CHEM21_CITATION,
     }
+    if row.get("replacements"):
+        response["replacements"] = row["replacements"]
+    return response
 
 
 def classify_solvent(name: str) -> str:
-    """Get the CHEM21 classification for a solvent.
-    
-    Returns: recommended, problematic, hazardous, highly_hazardous, or unknown
-    """
+    """Return a CHEM21 classification, or ``unknown`` for an unlisted solvent."""
     entry = lookup_solvent(name)
     return entry.classification if entry else "unknown"
 
 
 def get_vetted_evidence(chemical_name: str, cid: int | None = None) -> dict:
-    """Consolidate vetted evidence from PubChem and CHEM21."""
-    evidence = {
-        "why_flagged": [],
-        "why_replacement": [],
-        "citations": []
-    }
-    
-    # Check CHEM21 for solvent-specific evidence
+    """Consolidate CHEM21 evidence in the legacy evidence-response shape."""
+    evidence = {"why_flagged": [], "why_replacement": [], "citations": []}
     c21 = lookup_solvent_with_evidence(chemical_name)
-    if c21:
-        if c21["classification"] != "recommended":
-            evidence["why_flagged"].append({
-                "source": "CHEM21",
-                "content": f"Classified as '{c21['classification']}' in CHEM21 selection guide (Score: {c21['scores']['overall']}/10)."
-            })
-            # Add citation
-            evidence["citations"].append(c21["evidence"])
-            
-            # Find alternatives
-            alts = get_recommended_alternatives(c21["classification"])
-            for alt in alts:
-                evidence["why_replacement"].append({
-                    "chemical": alt["name"],
-                    "source": "CHEM21",
-                    "content": "Recommended as a green replacement with lower safety/health/environmental impact."
-                })
+    if c21 is None or c21["classification"] == "recommended":
+        return evidence
 
+    evidence["why_flagged"].append({
+        "source": "CHEM21",
+        "content": (
+            f"Classified as '{c21['classification']}' in CHEM21 selection guide "
+            f"(Score: {c21['scores']['overall']}/10)."
+        ),
+    })
+    evidence["citations"].append(c21["evidence"])
+    for replacement in c21.get("replacements", []):
+        evidence["why_replacement"].append({
+            "chemical": replacement,
+            "source": "CHEM21",
+            "content": "CHEM21 lists this as a replacement option.",
+        })
     return evidence

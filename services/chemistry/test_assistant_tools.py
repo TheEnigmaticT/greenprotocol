@@ -16,10 +16,10 @@ def test_chem21_tool_returns_scores_and_prat_citation():
     assert payload["source"] == "CHEM21"
     assert payload["data"]["classification"] == "hazardous"
     assert payload["data"]["scores"] == {
-        "safety": 1,
-        "health": 7,
-        "environment": 3,
-        "overall": 7,
+        "safety": 3,
+        "health": 9,
+        "environment": 5,
+        "overall": 9,
     }
     assert payload["citations"] == [{
         "source_id": "CHEM21",

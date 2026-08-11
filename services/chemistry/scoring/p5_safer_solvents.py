@@ -9,6 +9,21 @@ Score: 0 (all recommended solvents) to 10 (all highly hazardous)
 
 from scoring.models import ChemicalInput, PrincipleScore
 from chem21 import lookup_solvent, SolventEntry
+from solvent_evidence_store import SolventEvidenceUnavailableError
+
+
+def _chem21_unavailable(error: SolventEvidenceUnavailableError) -> PrincipleScore:
+    return PrincipleScore(
+        principle_number=5,
+        principle_name="Safer Solvents and Auxiliaries",
+        score=-1.0,
+        normalized=-1.0,
+        details={"error": f"CHEM21 data unavailable: {error}"},
+        confidence="unavailable",
+        data_sources=[],
+    )
+
+
 
 # Weight multipliers for CHEM21 classifications
 CLASS_WEIGHTS = {
@@ -49,7 +64,10 @@ def score_p5(chemicals: list[ChemicalInput]) -> PrincipleScore:
         if mass_g <= 0:
             mass_g = 100.0  # Default assumption if mass unknown
 
-        entry = lookup_solvent(chem.name)
+        try:
+            entry = lookup_solvent(chem.name)
+        except SolventEvidenceUnavailableError as error:
+            return _chem21_unavailable(error)
 
         if entry:
             weight = CLASS_WEIGHTS.get(entry.classification, 0.5)
