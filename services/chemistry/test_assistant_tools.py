@@ -1,4 +1,5 @@
 import asyncio
+import pytest
 
 import assistant_tools
 from assistant_tools import AssistantToolRequest, execute_assistant_tool
@@ -74,6 +75,30 @@ def test_configured_service_rejects_tool_request_without_token(monkeypatch):
             "/assistant-tools",
             json={"operation": "chem21", "chemical_name": "DMF"},
         )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("payload", [
+    {
+        "operation": "solvent_evidence",
+        "mode": "density",
+        "solvent": "DMF",
+        "temperature_k": 298.15,
+    },
+    {"operation": "solvent_hazard", "solvent": "DMF"},
+    {
+        "operation": "solvent_screening",
+        "solute_smiles": "CCO",
+        "current_solvent": "DMF",
+        "temperature_k": 298.15,
+    },
+])
+def test_configured_service_rejects_all_local_operations_without_token(monkeypatch, payload):
+    monkeypatch.setenv("CHEMISTRY_SERVICE_TOKEN", "test-token")
+
+    with TestClient(app) as client:
+        response = client.post("/assistant-tools", json=payload)
 
     assert response.status_code == 401
 

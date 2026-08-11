@@ -15,7 +15,7 @@ from scoring.rcra import compute_regulatory_context
 from scoring.process_complexity import analyze_complexity
 from ghs import lookup_hcodes
 from models import BatchRequest, BatchResponse, ConvertResponse
-from assistant_tools import AssistantToolRequest, AssistantToolResponse, execute_assistant_tool
+from assistant_tools import AssistantToolPayload, AssistantToolResponse, execute_assistant_tool
 from converter import convert
 from yield_extractor import extract_yield_and_type
 import cache as chem_cache
@@ -69,7 +69,7 @@ async def batch_convert(request: BatchRequest):
 
 
 @app.post("/assistant-tools", response_model=AssistantToolResponse, dependencies=[Depends(require_service_token)])
-async def assistant_tools(request: AssistantToolRequest):
+async def assistant_tools(request: AssistantToolPayload):
     """Execute one read-only assistant chemistry lookup."""
     return await execute_assistant_tool(request)
 
