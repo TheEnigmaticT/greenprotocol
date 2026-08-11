@@ -11,5 +11,13 @@
     "doi": "10.5281/zenodo.18660057",
     "acquisition_method": "download",
     "reuse_status": "verified"
+  },
+  "measurement_conditions": {
+    "temperature_column": "Temperature_K",
+    "temperature_unit": "K",
+    "fraction_column": "Fraction_Solvent1",
+    "fraction_type_column": "Fraction_Type",
+    "fraction_types": ["mole", "mass"],
+    "solubility_columns": ["Solubility(mole_fraction)", "LogS(mole_fraction)", "Solubility(g/g100)", "LogS(g/g100)"]
   }
 }

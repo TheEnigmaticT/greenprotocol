@@ -3,7 +3,7 @@
   "dataset_id": "bigsoldb_densities",
   "asset_filename": "BigSolDBv2.0_densities.csv",
   "sha256": "02226420d9fb3294cb32211dac7f6ff7fa067511924afdb9f1893af1e334aac6",
-  "record_count": 2209,
+  "record_count": 2210,
   "license": "CC-BY-4.0",
   "attribution": "BigSolDB v2.0 densities, Zenodo record 15094979; Vandaele et al., Scientific Data 2025.",
   "source": {
@@ -12,5 +12,11 @@
     "paper_doi": "10.1038/s41597-025-05559-8",
     "acquisition_method": "download",
     "reuse_status": "verified"
+  },
+  "measurement_conditions": {
+    "temperature_column": "Temperature_K",
+    "temperature_unit": "K",
+    "density_column": "Density_g/cm^3",
+    "density_unit": "g/cm^3"
   }
 }

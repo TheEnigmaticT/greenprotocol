@@ -77,6 +77,7 @@ class DatasetManifest:
     license: str
     attribution: str
     source: Mapping[str, str]
+    measurement_conditions: Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -98,11 +99,11 @@ class SingleSolubilityRecord:
     solvent: str
     solvent_smiles: str
     compound_name: str
-    cas: str
-    pubchem_id: str
-    raw_measurements: Mapping[str, str]
-    units: Mapping[str, str]
-    source_doi: str
+    cas: str | None
+    pubchem_id: str | None
+    raw_measurements: Mapping[str, str | None]
+    units: Mapping[str, str | None]
+    source_doi: str | None
     raw_values: Mapping[str, str]
 
 
@@ -114,20 +115,20 @@ class MixtureSolubilityRecord:
     solvent_1_smiles: str
     solvent_2_smiles: str
     compound_name: str
-    cas: str
-    pubchem_id: str
-    raw_measurements: Mapping[str, str]
-    units: Mapping[str, str]
-    source_doi: str
+    cas: str | None
+    pubchem_id: str | None
+    raw_measurements: Mapping[str, str | None]
+    units: Mapping[str, str | None]
+    source_doi: str | None
     raw_values: Mapping[str, str]
 
 
 @dataclass(frozen=True)
 class DensityRecord:
     solvent: str
-    raw_measurements: Mapping[str, str]
-    units: Mapping[str, str]
-    source_doi: str
+    raw_measurements: Mapping[str, str | None]
+    units: Mapping[str, str | None]
+    source_doi: str | None
     raw_values: Mapping[str, str]
 
 
@@ -153,6 +154,7 @@ def validate_manifest(path: str | Path, asset_path: str | Path) -> DatasetManife
         "license",
         "attribution",
         "source",
+        "measurement_conditions",
     }
     missing = sorted(required - payload.keys()) if isinstance(payload, dict) else sorted(required)
     if missing:
@@ -171,6 +173,9 @@ def validate_manifest(path: str | Path, asset_path: str | Path) -> DatasetManife
         for field in ("name", "doi", "acquisition_method", "reuse_status")
     ):
         raise ValueError("manifest source metadata is incomplete")
+    measurement_conditions = payload["measurement_conditions"]
+    if not isinstance(measurement_conditions, dict) or not measurement_conditions:
+        raise ValueError("manifest measurement_conditions must be a non-empty object")
 
     actual_sha256 = _sha256(asset)
     if payload["sha256"] != actual_sha256:
@@ -187,6 +192,7 @@ def validate_manifest(path: str | Path, asset_path: str | Path) -> DatasetManife
         license=payload["license"],
         attribution=payload["attribution"],
         source=MappingProxyType(source.copy()),
+        measurement_conditions=MappingProxyType(measurement_conditions.copy()),
     )
 
 
@@ -244,11 +250,11 @@ def read_single_solubility_csv(path: str | Path) -> Iterable[SingleSolubilityRec
             solvent=_required_cell(row, "Solvent", row_number),
             solvent_smiles=_required_cell(row, "SMILES_Solvent", row_number),
             compound_name=_required_cell(row, "Compound_Name", row_number),
-            cas=_required_cell(row, "CAS", row_number),
-            pubchem_id=_required_cell(row, "PubChem_CID", row_number),
-            raw_measurements=_measurements(row, measurement_fields, row_number),
+            cas=_optional_cell(row, "CAS"),
+            pubchem_id=_optional_cell(row, "PubChem_CID"),
+            raw_measurements=_measurements(row, measurement_fields),
             units=units,
-            source_doi=_required_cell(row, "Source", row_number),
+            source_doi=_optional_cell(row, "Source"),
             raw_values=_immutable_row(row),
         )
 
@@ -262,16 +268,13 @@ def read_mixture_solubility_csv(path: str | Path) -> Iterable[MixtureSolubilityR
         "LogS(g/g100)",
         "Fraction_Solvent1",
     )
-    units = MappingProxyType(
-        {
-            "Temperature_K": "K",
-            "Solubility(mole_fraction)": "mole_fraction",
-            "LogS(mole_fraction)": "mole_fraction",
-            "Solubility(g/g100)": "g/g100",
-            "LogS(g/g100)": "g/g100",
-            "Fraction_Solvent1": "raw_fraction",
-        }
-    )
+    base_units = {
+        "Temperature_K": "K",
+        "Solubility(mole_fraction)": "mole_fraction",
+        "LogS(mole_fraction)": "mole_fraction",
+        "Solubility(g/g100)": "g/g100",
+        "LogS(g/g100)": "g/g100",
+    }
     for row_number, row in _dict_rows(path, MIXTURE_SOLUBILITY_REQUIRED_COLUMNS):
         yield MixtureSolubilityRecord(
             solute_smiles=_required_cell(row, "SMILES_Solute", row_number),
@@ -280,11 +283,13 @@ def read_mixture_solubility_csv(path: str | Path) -> Iterable[MixtureSolubilityR
             solvent_1_smiles=_required_cell(row, "SMILES_Solvent1", row_number),
             solvent_2_smiles=_required_cell(row, "SMILES_Solvent2", row_number),
             compound_name=_required_cell(row, "Compound_Name", row_number),
-            cas=_required_cell(row, "CAS", row_number),
-            pubchem_id=_required_cell(row, "PubChem_CID", row_number),
-            raw_measurements=_measurements(row, measurement_fields, row_number),
-            units=units,
-            source_doi=_required_cell(row, "Source", row_number),
+            cas=_optional_cell(row, "CAS"),
+            pubchem_id=_optional_cell(row, "PubChem_CID"),
+            raw_measurements=_measurements(row, measurement_fields),
+            units=MappingProxyType(
+                {**base_units, "Fraction_Solvent1": _optional_cell(row, "Fraction_Type")}
+            ),
+            source_doi=_optional_cell(row, "Source"),
             raw_values=_immutable_row(row),
         )
 
@@ -295,9 +300,9 @@ def read_density_csv(path: str | Path) -> Iterable[DensityRecord]:
     for row_number, row in _dict_rows(path, DENSITY_REQUIRED_COLUMNS):
         yield DensityRecord(
             solvent=_required_cell(row, "Solvent", row_number),
-            raw_measurements=_measurements(row, measurement_fields, row_number),
+            raw_measurements=_measurements(row, measurement_fields),
             units=units,
-            source_doi=_required_cell(row, "Source", row_number),
+            source_doi=_optional_cell(row, "Source"),
             raw_values=_immutable_row(row),
         )
 
@@ -358,14 +363,19 @@ def _required_cell(row: Mapping[str, str], field: str, row_number: int) -> str:
     return value
 
 
+def _optional_cell(row: Mapping[str, str], field: str) -> str | None:
+    value = row.get(field)
+    return value if value is not None and value.strip() else None
+
+
 def _nonempty_cells(row: Mapping[str, str], *fields: str) -> tuple[str, ...]:
     return tuple(row[field] for field in fields if row.get(field, "").strip())
 
 
 def _measurements(
-    row: Mapping[str, str], fields: tuple[str, ...], row_number: int
-) -> Mapping[str, str]:
-    return MappingProxyType({field: _required_cell(row, field, row_number) for field in fields})
+    row: Mapping[str, str], fields: tuple[str, ...]
+) -> Mapping[str, str | None]:
+    return MappingProxyType({field: _optional_cell(row, field) for field in fields})
 
 
 def _immutable_row(row: Mapping[str, str]) -> Mapping[str, str]:

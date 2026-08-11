@@ -12,5 +12,10 @@
     "paper_doi": "10.1038/s41597-025-05559-8",
     "acquisition_method": "download",
     "reuse_status": "verified"
+  },
+  "measurement_conditions": {
+    "temperature_column": "Temperature_K",
+    "temperature_unit": "K",
+    "solubility_columns": ["Solubility(mole_fraction)", "Solubility(mol/L)", "LogS(mol/L)"]
   }
 }

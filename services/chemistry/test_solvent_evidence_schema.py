@@ -125,3 +125,44 @@ def test_all_manifest_metadata_preserves_source_identity_and_schema_version():
     assert manifests["mixturesoldb"]["source"]["doi"] == "10.5281/zenodo.18660057"
     assert all(manifest["schema_version"] == 1 for manifest in manifests.values())
     assert all(manifest["license"] for manifest in manifests.values())
+
+
+def test_evidence_parsers_iterate_complete_sources_and_preserve_missing_values():
+    single_path = RAW_DIR / "BigSolDBv2.0.csv"
+    mixture_path = RAW_DIR / "MixtureSolDB.csv"
+    density_path = RAW_DIR / "BigSolDBv2.0_densities.csv"
+
+    assert sum(1 for _ in read_single_solubility_csv(single_path)) == 103944
+    assert sum(1 for _ in read_mixture_solubility_csv(mixture_path)) == 175626
+    assert sum(1 for _ in read_density_csv(density_path)) == 2210
+
+    single_with_missing_identifiers = next(
+        record
+        for record in read_single_solubility_csv(single_path)
+        if record.compound_name == "Phloroglucinol tris(cyclic 2,2-dimethyl-1,3-propanediol phosphate)"
+    )
+    assert single_with_missing_identifiers.cas is None
+    assert single_with_missing_identifiers.pubchem_id is None
+    assert single_with_missing_identifiers.raw_values["CAS"] == ""
+    assert single_with_missing_identifiers.raw_values["PubChem_CID"] == ""
+
+    mixture_with_missing_measurements = next(
+        record
+        for record in read_mixture_solubility_csv(mixture_path)
+        if record.compound_name == "Indomethacin"
+    )
+    assert mixture_with_missing_measurements.raw_measurements["Solubility(g/g100)"] is None
+    assert mixture_with_missing_measurements.raw_values["Solubility(g/g100)"] == ""
+    assert mixture_with_missing_measurements.units["Fraction_Solvent1"] == "mass"
+
+
+def test_manifests_describe_measurement_conditions():
+    manifests = {
+        path.stem: json.loads(path.read_text(encoding="utf-8"))
+        for path in MANIFEST_DIR.glob("*.json")
+    }
+
+    assert manifests["chem21"]["measurement_conditions"]["score_scale"] == "1-10"
+    assert manifests["bigsoldb"]["measurement_conditions"]["temperature_column"] == "Temperature_K"
+    assert manifests["mixturesoldb"]["measurement_conditions"]["fraction_type_column"] == "Fraction_Type"
+    assert manifests["densities"]["measurement_conditions"]["density_unit"] == "g/cm^3"
