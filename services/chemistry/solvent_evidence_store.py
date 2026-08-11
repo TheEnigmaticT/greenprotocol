@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,36 @@ from solvent_evidence_schema import normalize_identity
 class SolventEvidenceUnavailableError(RuntimeError):
     """The generated local index is absent, invalid, or unreadable."""
 
+
+
+@dataclass(frozen=True)
+class HazardProfile:
+    """A locally persisted, source-backed PubChem GHS profile."""
+
+    solvent: str
+    cid: int
+    hcodes: tuple[dict[str, str], ...]
+    cmr: bool
+    acute: bool
+    organ: bool
+    health: bool
+    environmental: bool
+    physical: bool
+    source_url: str
+    snapshot_path: str
+    snapshot_sha256: str
+    retrieved_at: str
+    state: str
+
+    def category_levels(self) -> dict[str, int]:
+        """Return the screening-facing binary levels for sourced GHS categories."""
+        return {
+            "cmr": int(self.cmr),
+            "acute": int(self.acute),
+            "organ": int(self.organ),
+            "environment": int(self.environmental),
+            "physical": int(self.physical),
+        }
 
 class SolventEvidenceStore:
     """Validated read-only access to a generated solvent evidence SQLite index."""
@@ -47,6 +78,46 @@ class SolventEvidenceStore:
         if replacements:
             result["replacements"] = replacements
         return result
+
+    def hazard_profile(self, solvent: str) -> HazardProfile | None:
+        """Return a complete local PubChem GHS profile for a catalogued solvent."""
+        normalized = normalize_identity(solvent)
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT h.profile_json
+                   FROM hazard_profiles AS h
+                   WHERE h.normalized_name = COALESCE(
+                       (SELECT c.normalized_name
+                        FROM chem21_aliases AS a
+                        JOIN chem21 AS c ON c.id = a.chem21_id
+                        WHERE a.normalized_alias = ?),
+                       ?
+                   )
+                   LIMIT 1""",
+                (normalized, normalized),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(row["profile_json"])
+        if payload.get("state") != "complete":
+            return None
+        snapshot = payload["snapshot"]
+        return HazardProfile(
+            solvent=payload["solvent"],
+            cid=payload["cid"],
+            hcodes=tuple(payload["hcodes"]),
+            cmr=payload["cmr"],
+            acute=payload["acute"],
+            organ=payload["organ"],
+            health=payload["health"],
+            environmental=payload["environmental"],
+            physical=payload["physical"],
+            source_url=payload["source_url"],
+            snapshot_path=snapshot["path"],
+            snapshot_sha256=snapshot["sha256"],
+            retrieved_at=snapshot["retrieved_at"],
+            state=payload["state"],
+        )
 
     def single_solubility(self, solute_smiles: str, solvent: str, temperature_k: float) -> list[dict[str, Any]]:
         return self._query_measurements(

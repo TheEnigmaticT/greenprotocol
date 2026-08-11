@@ -50,6 +50,31 @@ PHYSICAL_HAZARD_CODES = {
 }
 
 
+def parse_hcodes_with_details(data: dict) -> list[dict[str, str]]:
+    """Parse structured PubChem GHS hazard statements without fetching."""
+    hazards: list[dict[str, str]] = []
+    seen_codes: set[str] = set()
+    sections = data.get("Record", {}).get("Section", [])
+    for section in sections:
+        for subsection in section.get("Section", []):
+            if "GHS Classification" not in subsection.get("TOCHeading", ""):
+                continue
+            for info in subsection.get("Information", []):
+                if info.get("Name") != "GHS Hazard Statements":
+                    continue
+                for value in info.get("Value", {}).get("StringWithMarkup", []):
+                    match = re.match(r"(H\d{3}[A-Za-z]*)[^:]*:\s*(.*)", value.get("String", ""))
+                    if match and match.group(1) not in seen_codes:
+                        code, description = match.groups()
+                        hazards.append({
+                            "code": code,
+                            "description": description.strip(),
+                            "source": "PubChem GHS Classification",
+                        })
+                        seen_codes.add(code)
+    return hazards
+
+
 async def lookup_hcodes_with_details(cid: int) -> list[dict]:
     """Fetch GHS H-codes and their descriptions for a compound from PubChem."""
     url = (
@@ -58,38 +83,11 @@ async def lookup_hcodes_with_details(cid: int) -> list[dict]:
     )
     try:
         data = await fetch_pubchem_json(url, f"GHS CID {cid}")
-        if not data:
-            return []
-        
-        hazards = []
-        seen_codes = set()
-        
-        sections = data.get("Record", {}).get("Section", [])
-        for section in sections:
-            # Look for GHS Classification section
-            for sub in section.get("Section", []):
-                if "GHS Classification" in sub.get("TOCHeading", ""):
-                    for info in sub.get("Information", []):
-                        if info.get("Name") == "GHS Hazard Statements":
-                            for val in info.get("Value", {}).get("StringWithMarkup", []):
-                                s = val.get("String", "")
-                                # Pattern: H300 (100%): Fatal if swallowed
-                                match = re.match(r"(H\d{3}[A-Za-z]*)[^:]*:\s*(.*)", s)
-                                if match:
-                                    code, desc = match.groups()
-                                    if code not in seen_codes:
-                                        hazards.append({
-                                            "code": code,
-                                            "description": desc.strip(),
-                                            "source": "PubChem GHS Classification"
-                                        })
-                                        seen_codes.add(code)
-        return hazards
+        return parse_hcodes_with_details(data) if data else []
     except Exception as e:
         print(f"[ghs] details lookup error for CID {cid}: {e}")
         return []
 
-    """Fetch GHS H-codes for a compound from PubChem."""
 async def lookup_hcodes(cid: int) -> list[str]:
     """Fetch GHS H-codes for a compound from PubChem."""
     details = await lookup_hcodes_with_details(cid)
@@ -162,9 +160,8 @@ def score_physical_hazard(hcodes: list[str]) -> float:
 
 def is_cmr(hcodes: list[str]) -> bool:
     """Check if chemical is carcinogenic, mutagenic, or reprotoxic."""
-    cmr_codes = {"H340", "H341", "H350", "H351", "H360", "H360D",
-                 "H360F", "H361"}
-    return bool(set(hcodes) & cmr_codes)
+    cmr_prefixes = ("H340", "H341", "H350", "H351", "H360", "H361")
+    return any(code.upper().startswith(cmr_prefixes) for code in hcodes)
 
 
 def is_suspected_carcinogen(hcodes: list[str]) -> bool:
