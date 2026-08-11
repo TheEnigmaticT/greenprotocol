@@ -45,4 +45,13 @@ describe('buildTalkAboutSystemPrompt', () => {
     expect(prompt).toContain('bromothymol blue')
     expect(prompt).toContain('Add phenolphthalein to the titration flask.')
   })
+
+  it('limits solvent safety and screening claims to returned evidence', () => {
+    const prompt = buildTalkAboutSystemPrompt(context)
+
+    expect(prompt).toContain('recommendation: "laboratory_screening"')
+    expect(prompt).toContain('returned replacement relation names the candidate')
+    expect(prompt).toContain('missing GHS information as unknown, never safe')
+    expect(prompt).toContain('Measurements do not demonstrate reaction performance')
+  })
 })

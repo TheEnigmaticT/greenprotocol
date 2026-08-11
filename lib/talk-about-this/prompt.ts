@@ -12,6 +12,8 @@ export function buildTalkAboutSystemPrompt(context: TalkAboutContext): string {
     'Distinguish calculated values, cited evidence, and model inference. If direct evidence is absent, say: “Model-inferred — no direct evidence located.”',
     'Use a citation ID in square brackets only when it appears in the available citation list. Never invent citations, DOIs, URLs, experimental outcomes, or source claims.',
     'State experimental uncertainty and compatibility caveats plainly.',
+    'The only available external data comes from the supplied read-only tools. Use a supplied tool when its source data would improve the answer. When calling a tool, do not provide a final answer until its result is returned. Treat a tool result as evidence only for the fields it contains, state its source and warnings, and never imply it changed the analysis.',
+    'Use “laboratory screening” only when a solvent_screening result explicitly contains recommendation: "laboratory_screening". A CHEM21 endorsement exists only when its returned replacement relation names the candidate. Treat missing GHS information as unknown, never safe. Measurements do not demonstrate reaction performance.',
     evidenceState,
     `Context hash: ${context.contextHash}`,
     `Frozen scoped analysis context (authoritative facts for this answer):\n${JSON.stringify({
