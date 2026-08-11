@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from decimal import Decimal, InvalidOperation
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -138,22 +139,37 @@ class SolventEvidenceStore:
     def screening_solubility(
         self, normalized_solute_smiles: str, solvent: str, temperature_k: float, *, limit: int
     ) -> tuple[list[dict[str, Any]], bool]:
-        """Return bounded pure-solvent screening rows in the required temperature window."""
+        """Page a narrow SQL superset until the bounded decimal-exact result is known."""
+        if limit < 1:
+            raise ValueError("screening_solubility limit must be positive")
+        matches: list[dict[str, Any]] = []
+        offset = 0
+        page_size = max(64, limit + 1)
         with self._connect() as connection:
-            rows = [
-                self._single_result(row)
-                for row in connection.execute(
+            while len(matches) <= limit:
+                rows = connection.execute(
                     """SELECT solute_smiles, solvent, solvent_smiles, compound_name, cas, pubchem_id,
                               temperature_k, solubility_mole_fraction, solubility_mol_per_l,
                               log_s_mol_per_l, source_doi, measurements_json, units_json, raw_values_json
                        FROM single_solubility
                        WHERE normalized_solute_smiles = ? AND normalized_solvent = ?
                          AND abs(temperature_k - ?) <= 0.010001
-                       LIMIT ?""",
-                    (normalized_solute_smiles, normalize_identity(solvent), temperature_k, limit + 1),
-                )
-            ]
-        return rows[:limit], len(rows) > limit
+                       ORDER BY id
+                       LIMIT ? OFFSET ?""",
+                    (
+                        normalized_solute_smiles, normalize_identity(solvent), temperature_k,
+                        page_size, offset,
+                    ),
+                ).fetchall()
+                for row in rows:
+                    if _within_temperature_window(row["temperature_k"], temperature_k):
+                        matches.append(self._single_result(row))
+                        if len(matches) > limit:
+                            break
+                if len(rows) < page_size or len(matches) > limit:
+                    break
+                offset += page_size
+        return matches[:limit], len(matches) > limit
 
     def mixture_solubility(
         self, solute_smiles: str, solvent_1: str, solvent_2: str,
@@ -210,13 +226,15 @@ class SolventEvidenceStore:
                 columns = {
                     row[1] for row in connection.execute("PRAGMA table_info(single_solubility)")
                 }
-                if "normalized_solute_smiles" in columns:
+                connection.execute("BEGIN IMMEDIATE")
+                if "normalized_solute_smiles" not in columns:
                     connection.execute(
-                        "UPDATE schema_metadata SET value = '2' WHERE key = 'schema_version'"
+                        "ALTER TABLE single_solubility ADD COLUMN normalized_solute_smiles TEXT"
                     )
-                    return
-                connection.execute("ALTER TABLE single_solubility ADD COLUMN normalized_solute_smiles TEXT")
-                rows = connection.execute("SELECT id, solute_smiles FROM single_solubility").fetchall()
+                rows = connection.execute(
+                    """SELECT id, solute_smiles FROM single_solubility
+                       WHERE normalized_solute_smiles IS NULL"""
+                ).fetchall()
                 normalized_rows: list[tuple[str, int]] = []
                 for row_id, solute_smiles in rows:
                     molecule = Chem.MolFromSmiles(solute_smiles)
@@ -227,10 +245,19 @@ class SolventEvidenceStore:
                     "UPDATE single_solubility SET normalized_solute_smiles = ? WHERE id = ?",
                     normalized_rows,
                 )
+                if connection.execute(
+                    "SELECT 1 FROM single_solubility WHERE normalized_solute_smiles IS NULL LIMIT 1"
+                ).fetchone() is not None:
+                    raise ValueError("legacy index migration left an unnormalized solute structure")
                 connection.execute(
-                    """CREATE INDEX single_solubility_lookup_normalized
+                    """CREATE INDEX IF NOT EXISTS single_solubility_lookup_normalized
                        ON single_solubility(normalized_solute_smiles, normalized_solvent, temperature_k)"""
                 )
+                if connection.execute(
+                    """SELECT 1 FROM sqlite_master
+                       WHERE type = 'index' AND name = 'single_solubility_lookup_normalized'"""
+                ).fetchone() is None:
+                    raise ValueError("legacy index migration did not create normalized solubility index")
                 connection.execute(
                     "UPDATE schema_metadata SET value = '2' WHERE key = 'schema_version'"
                 )
@@ -315,6 +342,13 @@ class SolventEvidenceStore:
             "units": json.loads(row["units_json"]),
             "raw_values": json.loads(row["raw_values_json"]),
         }
+
+
+def _within_temperature_window(measured: object, requested: float) -> bool:
+    try:
+        return abs(Decimal(str(measured)) - Decimal(str(requested))) <= Decimal("0.01")
+    except (InvalidOperation, ValueError):
+        return False
 
 
 _DEFAULT_INDEX_PATH = Path(__file__).parent / "data" / "solvent-evidence" / "solvent-evidence.sqlite"

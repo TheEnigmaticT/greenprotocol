@@ -23,3 +23,8 @@ Review fix round 2:
 - SQL uses a narrow `±0.010001 K` superset so binary floating-point cannot omit a mathematical `±0.01 K` boundary; the screening predicate performs the final decimal-exact `±0.01 K` check.
 - New imports emit schema version 2. Opening a preexisting version-1 index deterministically migrates the normalized solute column and index before screening queries; the migration regression covers a legacy v1 SQLite file.
 - `python3 -m pytest services/chemistry/test_solvent_screening.py services/chemistry/test_assistant_tools.py services/chemistry/test_solvent_evidence_import.py -q` — 24 passed in 2.84s.
+
+Review fix round 3:
+- Screening pages the SQL temperature superset and applies the decimal-exact predicate before the 20-row cap, so outer-sliver rows cannot displace a valid `±0.01 K` observation.
+- Legacy migration now starts `BEGIN IMMEDIATE` before `ALTER TABLE`; it backfills, verifies no missing normalized keys, verifies the index, then upgrades schema metadata. A forced conversion failure rolls the transaction back to usable v1 before a later successful resume.
+- `python3 -m pytest services/chemistry/test_solvent_screening.py services/chemistry/test_assistant_tools.py services/chemistry/test_solvent_evidence_import.py -q` — 24 passed in 1.98s.

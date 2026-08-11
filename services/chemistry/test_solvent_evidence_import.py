@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from solvent_evidence_import import build_index
-from solvent_evidence_store import SolventEvidenceStore
+import solvent_evidence_store
+from solvent_evidence_store import SolventEvidenceStore, SolventEvidenceUnavailableError
 
 
 CHEM21_COLUMNS = (
@@ -118,15 +119,33 @@ def test_build_index_is_transactional_and_queries_all_measurement_kinds(tmp_path
 
 def test_screening_query_matches_normalized_solute_within_temperature_window(tmp_path, fixture_assets):
     fixture_raw, fixture_manifests = fixture_assets
-    store = SolventEvidenceStore(build_index(fixture_raw, fixture_manifests, tmp_path / "evidence.sqlite").index_path)
+    index = build_index(fixture_raw, fixture_manifests, tmp_path / "evidence.sqlite").index_path
+    with sqlite3.connect(index) as connection:
+        connection.row_factory = sqlite3.Row
+        row = dict(connection.execute("SELECT * FROM single_solubility").fetchone())
+        columns = tuple(column for column in row if column != "id")
+        insert = (
+            f"INSERT INTO single_solubility ({', '.join(columns)}) "
+            f"VALUES ({', '.join('?' for _ in columns)})"
+        )
+        row["temperature_k"] = 298.1600005
+        connection.execute(
+            "UPDATE single_solubility SET temperature_k = ? WHERE id = ?",
+            (row["temperature_k"], 1),
+        )
+        connection.executemany(insert, [tuple(row[column] for column in columns)] * 19)
+        row["temperature_k"] = 298.16
+        connection.execute(insert, tuple(row[column] for column in columns))
 
-    rows, truncated = store.screening_solubility("CCO", "ethanol", 298.16, limit=21)
+    rows, truncated = SolventEvidenceStore(index).screening_solubility(
+        "CCO", "ethanol", 298.15, limit=20
+    )
 
     assert truncated is False
-    assert [row["solute_smiles"] for row in rows] == ["C(C)O"]
+    assert [row["temperature_k"] for row in rows] == [298.16]
 
 
-def test_store_migrates_a_preexisting_v1_solubility_index(tmp_path):
+def test_store_migrates_a_preexisting_v1_solubility_index(tmp_path, monkeypatch):
     path = tmp_path / "legacy.sqlite"
     with sqlite3.connect(path) as connection:
         connection.executescript(
@@ -147,6 +166,22 @@ def test_store_migrates_a_preexisting_v1_solubility_index(tmp_path):
             );
             """
         )
+
+    class FailingChem:
+        @staticmethod
+        def MolFromSmiles(_: str):
+            return None
+
+    monkeypatch.setattr(solvent_evidence_store, "Chem", FailingChem)
+    with pytest.raises(SolventEvidenceUnavailableError):
+        SolventEvidenceStore(path)
+    with sqlite3.connect(path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(single_solubility)")}
+        assert "normalized_solute_smiles" not in columns
+        assert connection.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
+        ).fetchone() == ("1",)
+    monkeypatch.undo()
 
     store = SolventEvidenceStore(path)
     rows, truncated = store.screening_solubility("CCO", "ethanol", 298.15, limit=20)
