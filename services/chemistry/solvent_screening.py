@@ -6,8 +6,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-from chem21 import _COMPATIBILITY_ALIASES
-from solvent_evidence_schema import normalize_identity
+from chem21 import CHEM21_CITATION
 from solvent_evidence_store import HazardProfile, SolventEvidenceStore, get_store
 
 try:
@@ -33,7 +32,7 @@ class ScreeningCandidate:
     current_measurements: tuple[dict[str, Any], ...]
     candidate_measurements: tuple[dict[str, Any], ...]
     hazard_comparison: dict[str, dict[str, int]]
-    citations: list[str]
+    citations: list[dict[str, str]]
     chem21_relation: str | None
     warnings: list[str]
 
@@ -76,11 +75,11 @@ def screen_candidates(
     if not isinstance(replacements, list) or not replacements:
         return []
 
-    current_measurements = _matching_measurements(
-        evidence_store.single_solubility(solute_smiles, current_solvent, temperature_k),
-        normalized_solute,
-        temperature_k,
+    current_rows, current_truncated = evidence_store.screening_solubility(
+        normalized_solute, current_solvent, temperature_k, limit=20
     )
+    current_measurements = _matching_measurements(current_rows, normalized_solute, temperature_k)
+    current_truncated = current_truncated or len(current_measurements) > 20
     if not current_measurements:
         return []
     current_profile = evidence_store.hazard_profile(current_solvent)
@@ -91,11 +90,11 @@ def screen_candidates(
     for replacement in replacements:
         if not _valid_identity(replacement):
             continue
-        candidate_measurements = _matching_measurements(
-            evidence_store.single_solubility(solute_smiles, replacement, temperature_k),
-            normalized_solute,
-            temperature_k,
+        candidate_rows, candidate_truncated = evidence_store.screening_solubility(
+            normalized_solute, replacement, temperature_k, limit=20
         )
+        candidate_measurements = _matching_measurements(candidate_rows, normalized_solute, temperature_k)
+        candidate_truncated = candidate_truncated or len(candidate_measurements) > 20
         if not candidate_measurements:
             continue
         candidate_profile = evidence_store.hazard_profile(replacement)
@@ -108,14 +107,17 @@ def screen_candidates(
             continue
 
         candidate_name = candidate_measurements[0]["solvent"]
+        warnings = [VALIDATION_WARNING]
+        if current_truncated or candidate_truncated:
+            warnings.append("Results were truncated to the first 20 raw measurements.")
         candidates.append(
             ScreeningCandidate(
                 solvent=candidate_name,
                 solubility_mole_fraction=candidate_solubility,
                 current_solubility_mole_fraction=current_solubility,
                 recommendation="laboratory_screening",
-                current_measurements=tuple(current_measurements),
-                candidate_measurements=tuple(candidate_measurements),
+                current_measurements=tuple(current_measurements[:20]),
+                candidate_measurements=tuple(candidate_measurements[:20]),
                 hazard_comparison={
                     category: {
                         "current": current_profile.category_levels()[category],
@@ -123,11 +125,16 @@ def screen_candidates(
                     }
                     for category in current_profile.category_levels()
                 },
-                citations=_citations(current_measurements, candidate_measurements),
+                citations=_citations(
+                    current_measurements,
+                    candidate_measurements,
+                    current_profile,
+                    candidate_profile,
+                ),
                 chem21_relation=(
                     f"CHEM21 lists {candidate_name} as a replacement for {current_chem21['name']}."
                 ),
-                warnings=[VALIDATION_WARNING],
+                warnings=warnings,
             )
         )
     return candidates
@@ -151,13 +158,29 @@ def _best_mole_fraction(measurements: list[dict[str, Any]]) -> float | None:
     return max(values) if values else None
 
 
-def _citations(*measurement_sets: list[dict[str, Any]]) -> list[str]:
-    return list(dict.fromkeys(
-        measurement["source"]
-        for measurements in measurement_sets
-        for measurement in measurements
-        if isinstance(measurement.get("source"), str) and measurement["source"]
-    ))
+def _citations(
+    current_measurements: list[dict[str, Any]],
+    candidate_measurements: list[dict[str, Any]],
+    current_profile: HazardProfile,
+    candidate_profile: HazardProfile,
+) -> list[dict[str, str]]:
+    citations: list[dict[str, str]] = [CHEM21_CITATION.copy()]
+    for measurement in (*current_measurements, *candidate_measurements):
+        source = measurement.get("source")
+        if isinstance(source, str) and source:
+            citations.append({"source": source})
+    for profile in (current_profile, candidate_profile):
+        citations.append(
+            {
+                "source": profile.source_url,
+                "snapshot_path": profile.snapshot_path,
+                "snapshot_sha256": profile.snapshot_sha256,
+                "retrieved_at": profile.retrieved_at,
+            }
+        )
+    return [dict(citation) for citation in dict.fromkeys(
+        tuple(sorted(citation.items())) for citation in citations
+    )]
 
 
 def _finite_number(value: object) -> bool:

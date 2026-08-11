@@ -30,8 +30,8 @@ class FixtureStore:
         self.mutation = mutation
         self.calls = []
 
-    def single_solubility(self, solute_smiles: str, solvent: str, temperature_k: float):
-        self.calls.append(("single_solubility", solute_smiles, solvent, temperature_k))
+    def screening_solubility(self, normalized_solute_smiles: str, solvent: str, temperature_k: float, *, limit: int):
+        self.calls.append(("screening_solubility", normalized_solute_smiles, solvent, temperature_k, limit))
         candidate_solute = "CCO" if self.mutation != "different_structure" else "CC"
         candidate_temperature = 298.15 if self.mutation != "temperature_303_15" else 303.15
         candidate_solubility = 0.30 if self.mutation != "lower_solubility" else 0.05
@@ -57,7 +57,8 @@ class FixtureStore:
                 "raw_values": {"Solubility(mole_fraction)": str(candidate_solubility)},
             },
         ]
-        return [record for record in records if record["solvent"] == solvent]
+        matched = [record for record in records if record["solvent"] == solvent]
+        return matched[:limit], len(matched) > limit
 
     def hazard_profile(self, solvent: str):
         if self.mutation == "missing_ghs" and solvent == "Acetonitrile":
@@ -101,8 +102,26 @@ def test_screening_requires_exact_structure_same_temperature_and_complete_non_re
         "environment": {"current": 1, "candidate": 1},
         "physical": {"current": 1, "candidate": 1},
     }
-    assert candidates[0].citations == ["10.1000/current", "10.1000/candidate"]
+    assert {"source": "10.1000/current"} in candidates[0].citations
+    assert {"source": "10.1000/candidate"} in candidates[0].citations
+    assert any(citation.get("source_id") == "CHEM21" for citation in candidates[0].citations)
+    assert any(citation.get("snapshot_path") == "snapshot.json" for citation in candidates[0].citations)
     assert "compatibility" in candidates[0].warnings[0]
+
+
+def test_screening_caps_returned_measurements_and_reports_truncation():
+    class UnboundedFixtureStore(FixtureStore):
+        def screening_solubility(self, normalized_solute_smiles, solvent, temperature_k, *, limit):
+            rows, _ = super().screening_solubility(
+                normalized_solute_smiles, solvent, temperature_k, limit=limit
+            )
+            return rows * 21, False
+
+    candidate = _candidates_for(UnboundedFixtureStore())[0]
+
+    assert len(candidate.current_measurements) == 20
+    assert len(candidate.candidate_measurements) == 20
+    assert "Results were truncated to the first 20 raw measurements." in candidate.warnings
 
 
 @pytest.mark.parametrize("mutation", ["different_structure", "temperature_303_15", "lower_solubility", "missing_ghs", "adds_h350"])
@@ -144,9 +163,9 @@ def test_local_evidence_caps_raw_measurements_and_never_calls_pubchem(monkeypatc
     import assistant_tools
 
     class ManyRowsStore(FixtureStore):
-        def single_solubility(self, solute_smiles, solvent, temperature_k):
-            self.calls.append(("single_solubility", solute_smiles, solvent, temperature_k))
-            return [{"id": index} for index in range(21)]
+        def single_solubility(self, solute_smiles, solvent, temperature_k, *, limit=None):
+            self.calls.append(("single_solubility", solute_smiles, solvent, temperature_k, limit))
+            return [{"id": index} for index in range(limit or 21)]
 
     store = ManyRowsStore()
     monkeypatch.setattr(assistant_tools, "get_store", lambda: store)
@@ -165,3 +184,4 @@ def test_local_evidence_caps_raw_measurements_and_never_calls_pubchem(monkeypatc
     assert result.status == "ok"
     assert len(result.data["measurements"]) == 20
     assert result.warnings == ["Results were truncated to the first 20 raw measurements."]
+    assert store.calls == [("single_solubility", "CCO", "DMF", 298.15, 21)]

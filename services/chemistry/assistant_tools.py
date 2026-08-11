@@ -242,18 +242,17 @@ def _execute_local_evidence(request: AssistantToolRequest) -> AssistantToolRespo
     try:
         store = get_store()
         if request.mode == "single_solubility":
-            measurements = store.single_solubility(request.solute_smiles or "", request.solvent or "", request.temperature_k)
+            measurements = store.single_solubility(
+                request.solute_smiles or "", request.solvent or "", request.temperature_k, limit=21
+            )
         elif request.mode == "mixture_solubility":
             measurements = store.mixture_solubility(
                 request.solute_smiles or "", request.solvent or "", request.co_solvent or "",
                 request.fraction_solvent, request.fraction_type or "",
+                temperature_k=request.temperature_k, limit=21,
             )
-            measurements = [
-                row for row in measurements
-                if _same_temperature(row.get("temperature_k"), request.temperature_k)
-            ]
         else:
-            measurements = store.density(request.solvent or "", request.temperature_k)
+            measurements = store.density(request.solvent or "", request.temperature_k, limit=21)
     except SolventEvidenceUnavailableError as error:
         return _local_unavailable(request, error)
     return _measurement_response(request, measurements)

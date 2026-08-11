@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping
+from rdkit import Chem
 
 from solvent_evidence_schema import (
     Chem21Record,
@@ -131,6 +132,7 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         CREATE TABLE single_solubility (
             id INTEGER PRIMARY KEY,
             solute_smiles TEXT NOT NULL,
+            normalized_solute_smiles TEXT NOT NULL,
             solvent TEXT NOT NULL,
             normalized_solvent TEXT NOT NULL,
             solvent_smiles TEXT NOT NULL,
@@ -147,7 +149,7 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             raw_values_json TEXT NOT NULL
         );
         CREATE INDEX single_solubility_lookup
-            ON single_solubility(solute_smiles, normalized_solvent, temperature_k);
+            ON single_solubility(normalized_solute_smiles, normalized_solvent, temperature_k);
         CREATE TABLE mixture_solubility (
             id INTEGER PRIMARY KEY,
             solute_smiles TEXT NOT NULL,
@@ -262,14 +264,15 @@ def _insert_single_solubility(connection: sqlite3.Connection, records: object) -
         measurement = record.raw_measurements
         connection.execute(
             """INSERT INTO single_solubility (
-                solute_smiles, solvent, normalized_solvent, solvent_smiles, compound_name,
+                solute_smiles, normalized_solute_smiles, solvent, normalized_solvent, solvent_smiles, compound_name,
                 cas, pubchem_id, temperature_k, solubility_mole_fraction,
                 solubility_mol_per_l, log_s_mol_per_l, source_doi, measurements_json,
                 units_json, raw_values_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                record.solute_smiles, record.solvent, normalize_identity(record.solvent), record.solvent_smiles,
-                record.compound_name, record.cas, record.pubchem_id, _number(measurement["Temperature_K"]),
+                record.solute_smiles, _normalized_smiles(record.solute_smiles), record.solvent,
+                normalize_identity(record.solvent), record.solvent_smiles, record.compound_name,
+                record.cas, record.pubchem_id, _number(measurement["Temperature_K"]),
                 _number(measurement["Solubility(mole_fraction)"]), _number(measurement["Solubility(mol/L)"]),
                 _number(measurement["LogS(mol/L)"]), record.source_doi, _json(measurement), _json(record.units),
                 _json(record.raw_values),
@@ -344,6 +347,13 @@ def _insert_metadata(connection: sqlite3.Connection, manifests: Mapping[str, Dat
             "INSERT INTO datasets (dataset_id, manifest_json) VALUES (?, ?)",
             (manifest.dataset_id, _json(payload)),
         )
+
+
+def _normalized_smiles(smiles: str) -> str:
+    molecule = Chem.MolFromSmiles(smiles)
+    if molecule is None:
+        raise ValueError(f"invalid solute SMILES in source asset: {smiles!r}")
+    return Chem.MolToSmiles(molecule, canonical=True)
 
 
 def _number(value: str | None) -> float | None:

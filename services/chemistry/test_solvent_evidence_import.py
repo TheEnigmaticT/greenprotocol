@@ -73,7 +73,7 @@ def fixture_assets(tmp_path):
     _write_dataset(
         raw_dir, manifests_dir, "bigsoldb", "single.csv", SINGLE_COLUMNS,
         {
-            "SMILES_Solute": "CCO", "Temperature_K": "298.15", "Solvent": "ethanol",
+            "SMILES_Solute": "C(C)O", "Temperature_K": "298.15", "Solvent": "ethanol",
             "SMILES_Solvent": "CCO", "Solubility(mole_fraction)": "0.1",
             "Solubility(mol/L)": "1.0", "LogS(mol/L)": "0.0", "Compound_Name": "ethanol",
             "CAS": "64-17-5", "PubChem_CID": "702", "FDA_Approved": "true",
@@ -110,9 +110,19 @@ def test_build_index_is_transactional_and_queries_all_measurement_kinds(tmp_path
     assert store.lookup_chem21("DMF")["scores"] == {
         "safety": 3, "health": 9, "environment": 5, "overall": 9,
     }
-    assert store.single_solubility("CCO", "ethanol", 298.15)[0]["source"] == "10.1007/example"
+    assert store.single_solubility("C(C)O", "ethanol", 298.15)[0]["source"] == "10.1007/example"
     assert store.mixture_solubility("CCO", "ethanol", "water", 0.5, "mole")
     assert store.density("ethanol", 298.15)[0]["density_g_per_cm3"] > 0
+
+
+def test_screening_query_matches_normalized_solute_within_temperature_window(tmp_path, fixture_assets):
+    fixture_raw, fixture_manifests = fixture_assets
+    store = SolventEvidenceStore(build_index(fixture_raw, fixture_manifests, tmp_path / "evidence.sqlite").index_path)
+
+    rows, truncated = store.screening_solubility("CCO", "ethanol", 298.159, limit=21)
+
+    assert truncated is False
+    assert [row["solute_smiles"] for row in rows] == ["C(C)O"]
 
 
 def test_failed_rebuild_leaves_prior_valid_index_untouched(tmp_path, fixture_assets):

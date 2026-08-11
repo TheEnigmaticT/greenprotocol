@@ -119,48 +119,77 @@ class SolventEvidenceStore:
             state=payload["state"],
         )
 
-    def single_solubility(self, solute_smiles: str, solvent: str, temperature_k: float) -> list[dict[str, Any]]:
-        return self._query_measurements(
-            """SELECT solute_smiles, solvent, solvent_smiles, compound_name, cas, pubchem_id,
-                      temperature_k, solubility_mole_fraction, solubility_mol_per_l,
-                      log_s_mol_per_l, source_doi, measurements_json, units_json, raw_values_json
-               FROM single_solubility
-               WHERE solute_smiles = ? AND normalized_solvent = ? AND temperature_k IS ?""",
-            (solute_smiles, normalize_identity(solvent), temperature_k),
-            self._single_result,
-        )
+    def single_solubility(
+        self, solute_smiles: str, solvent: str, temperature_k: float, *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        query = """SELECT solute_smiles, solvent, solvent_smiles, compound_name, cas, pubchem_id,
+                          temperature_k, solubility_mole_fraction, solubility_mol_per_l,
+                          log_s_mol_per_l, source_doi, measurements_json, units_json, raw_values_json
+                   FROM single_solubility
+                   WHERE solute_smiles = ? AND normalized_solvent = ? AND temperature_k IS ?"""
+        parameters: tuple[Any, ...] = (solute_smiles, normalize_identity(solvent), temperature_k)
+        if limit is not None:
+            query += " LIMIT ?"
+            parameters += (limit,)
+        return self._query_measurements(query, parameters, self._single_result)
+
+    def screening_solubility(
+        self, normalized_solute_smiles: str, solvent: str, temperature_k: float, *, limit: int
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Return bounded pure-solvent screening rows in the required temperature window."""
+        with self._connect() as connection:
+            rows = [
+                self._single_result(row)
+                for row in connection.execute(
+                    """SELECT solute_smiles, solvent, solvent_smiles, compound_name, cas, pubchem_id,
+                              temperature_k, solubility_mole_fraction, solubility_mol_per_l,
+                              log_s_mol_per_l, source_doi, measurements_json, units_json, raw_values_json
+                       FROM single_solubility
+                       WHERE normalized_solute_smiles = ? AND normalized_solvent = ?
+                         AND abs(temperature_k - ?) <= 0.01
+                       LIMIT ?""",
+                    (normalized_solute_smiles, normalize_identity(solvent), temperature_k, limit + 1),
+                )
+            ]
+        return rows[:limit], len(rows) > limit
 
     def mixture_solubility(
         self, solute_smiles: str, solvent_1: str, solvent_2: str,
-        fraction_solvent_1: float, fraction_type: str,
+        fraction_solvent_1: float, fraction_type: str, *, temperature_k: float | None = None,
+        limit: int | None = None,
     ) -> list[dict[str, Any]]:
-        return self._query_measurements(
-            """SELECT solute_smiles, solvent_1, solvent_2, solvent_1_smiles, solvent_2_smiles,
-                      compound_name, cas, pubchem_id, temperature_k, solubility_mole_fraction,
-                      log_s_mole_fraction, solubility_g_per_g100, log_s_g_per_g100,
-                      fraction_solvent_1, fraction_type, source_doi, measurements_json,
-                      units_json, raw_values_json
-               FROM mixture_solubility
-               WHERE solute_smiles = ? AND normalized_solvent_1 = ?
-                 AND normalized_solvent_2 = ? AND fraction_solvent_1 IS ?
-                 AND fraction_type IS ?""",
-            (
-                solute_smiles, normalize_identity(solvent_1), normalize_identity(solvent_2),
-                fraction_solvent_1, normalize_identity(fraction_type),
-            ),
-            self._mixture_result,
+        query = """SELECT solute_smiles, solvent_1, solvent_2, solvent_1_smiles, solvent_2_smiles,
+                          compound_name, cas, pubchem_id, temperature_k, solubility_mole_fraction,
+                          log_s_mole_fraction, solubility_g_per_g100, log_s_g_per_g100,
+                          fraction_solvent_1, fraction_type, source_doi, measurements_json,
+                          units_json, raw_values_json
+                   FROM mixture_solubility
+                   WHERE solute_smiles = ? AND normalized_solvent_1 = ?
+                     AND normalized_solvent_2 = ? AND fraction_solvent_1 IS ?
+                     AND fraction_type IS ?"""
+        parameters: tuple[Any, ...] = (
+            solute_smiles, normalize_identity(solvent_1), normalize_identity(solvent_2),
+            fraction_solvent_1, normalize_identity(fraction_type),
         )
-
-    def density(self, solvent: str, temperature_k: float) -> list[dict[str, Any]]:
-        return self._query_measurements(
-            """SELECT solvent, temperature_k, density_g_per_cm3, source_doi,
-                      measurements_json, units_json, raw_values_json
-               FROM density
-               WHERE normalized_solvent = ? AND temperature_k IS ?""",
-            (normalize_identity(solvent), temperature_k),
-            self._density_result,
-        )
-
+        if temperature_k is not None:
+            query += " AND abs(temperature_k - ?) <= 0.01"
+            parameters += (temperature_k,)
+        if limit is not None:
+            query += " LIMIT ?"
+            parameters += (limit,)
+        return self._query_measurements(query, parameters, self._mixture_result)
+    def density(
+        self, solvent: str, temperature_k: float, *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        query = """SELECT solvent, temperature_k, density_g_per_cm3, source_doi,
+                          measurements_json, units_json, raw_values_json
+                   FROM density
+                   WHERE normalized_solvent = ? AND temperature_k IS ?"""
+        parameters: tuple[Any, ...] = (normalize_identity(solvent), temperature_k)
+        if limit is not None:
+            query += " LIMIT ?"
+            parameters += (limit,)
+        return self._query_measurements(query, parameters, self._density_result)
     def _query_measurements(self, query: str, parameters: tuple[Any, ...], convert: Any) -> list[dict[str, Any]]:
         with self._connect() as connection:
             return [convert(row) for row in connection.execute(query, parameters)]
