@@ -78,14 +78,15 @@ describe('createOpenAICompatibleChatProvider', () => {
       // Drain the stream to inspect the provider request.
     }
 
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+    const request = create.mock.calls[0][0]
+    expect(request).toMatchObject({
       model: 'qwen/qwen3.8-max',
       provider: {
         data_collection: 'deny',
         zdr: true,
         allow_fallbacks: false,
       },
-      max_tokens: 1024,
       reasoning: { effort: 'minimal' },
-    }))
+    })
+    expect(request).toHaveProperty('max_tokens', 4096)
   })

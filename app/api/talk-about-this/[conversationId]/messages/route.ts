@@ -86,8 +86,9 @@ export async function POST(
             answer += event.text
             send('delta', { text: event.text })
           }
-        } catch {
+        } catch (error) {
           status = abortController.signal.aborted ? 'cancelled' : 'failed'
+          console.error('Chat response failed', error)
           send('error', {
             error: status === 'cancelled' ? 'Response cancelled' : 'Chat response failed',
           })

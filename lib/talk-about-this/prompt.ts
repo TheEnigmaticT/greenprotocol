@@ -14,5 +14,13 @@ export function buildTalkAboutSystemPrompt(context: TalkAboutContext): string {
     'State experimental uncertainty and compatibility caveats plainly.',
     evidenceState,
     `Context hash: ${context.contextHash}`,
+    `Frozen scoped analysis context (authoritative facts for this answer):\n${JSON.stringify({
+      protocolTitle: context.protocolTitle,
+      protocolText: context.protocolText,
+      steps: context.steps,
+      recommendations: context.recommendations,
+      scores: context.scores,
+      citations: context.citations,
+    })}`,
   ].join('\n\n')
 }

@@ -120,7 +120,7 @@ export function createOpenAICompatibleChatProvider(
       const completionRequest: ChatCompletionStreamRequest = {
         model: config.model,
         stream: true,
-        max_tokens: 1024,
+        max_tokens: 4096,
         messages: [
           { role: 'system', content: request.system },
           ...request.messages,
