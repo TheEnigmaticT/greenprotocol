@@ -80,8 +80,9 @@ describe('activityForEvent', () => {
 })
 
 describe('activityData', () => {
-  it('flattens screening candidate measurements and citations into activity metadata', () => {
-    expect(activityData(
+  it('flattens screening candidate measurements, citations, and warnings into activity metadata', () => {
+    const candidateWarning = 'Laboratory validation required: confirm catalyst effects before any solvent change.'
+    const metadata = activityData(
       { id: 'screen-1', name: 'screen_solvent_candidates', arguments: '{}' },
       {
         operation: 'solvent_screening',
@@ -93,15 +94,20 @@ describe('activityData', () => {
             current_measurements: [{ source: 'BigSolDB v2.0' }],
             candidate_measurements: [{ source: 'BigSolDB v2.0' }],
             citations: [{ source: 'MixtureSolDB' }],
+            warnings: [candidateWarning],
           }],
         },
         citations: [{ source: 'PubChem GHS' }],
         warnings: [],
       },
-    )).toMatchObject({
+    )
+
+    expect(metadata).toMatchObject({
       measurementCount: 2,
       datasetSources: ['BigSolDB v2.0', 'MixtureSolDB', 'PubChem GHS'],
+      warnings: [candidateWarning],
     })
+    expect(activityForEvent('tool-complete', metadata)?.detail).toContain(candidateWarning)
   })
 })
 

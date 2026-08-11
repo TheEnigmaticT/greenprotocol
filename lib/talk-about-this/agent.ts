@@ -234,6 +234,14 @@ export function activityData(call: ChatToolCall, result: ToolResult): Record<str
     return [...sourceValues(measurement), ...(dataset ? [dataset] : [])]
   })
   const sources = [...measurementSources, ...citations.flatMap(sourceValues)]
+  const warnings = [...new Set([
+    ...result.warnings,
+    ...candidates.flatMap(candidate => (
+      Array.isArray(candidate.warnings)
+        ? candidate.warnings.filter((warning): warning is string => typeof warning === 'string')
+        : []
+    )),
+  ])]
   return {
     callId: call.id,
     tool: call.name,
@@ -243,7 +251,7 @@ export function activityData(call: ChatToolCall, result: ToolResult): Record<str
     classification: typeof result.data.classification === 'string' ? result.data.classification : undefined,
     measurementCount: measurements.length || undefined,
     datasetSources: [...new Set(sources)],
-    warnings: result.warnings,
+    warnings,
   }
 }
 
