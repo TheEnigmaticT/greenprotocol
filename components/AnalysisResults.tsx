@@ -114,10 +114,12 @@ function RecommendationCard({
   rec, 
   onToggleAccept,
   analysisId,
-}: { 
-  rec: Recommendation; 
+  recommendationIndex,
+}: {
+  rec: Recommendation;
   onToggleAccept: () => void;
   analysisId?: string;
+  recommendationIndex: number;
 }) {
   const isAccepted = !!rec.isAccepted
   const [showEvidence, setShowEvidence] = useState(false)
@@ -150,14 +152,14 @@ function RecommendationCard({
         </div>
         
         <div className="flex flex-wrap gap-2 self-start sm:self-auto">
-          {rec.id && (
-            <TalkAboutThis
-              analysisId={analysisId}
-              scope={{ kind: 'recommendation', recommendationId: rec.id }}
-              title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
-              evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
-            />
-          )}
+          <TalkAboutThis
+            analysisId={analysisId}
+            scope={rec.id
+              ? { kind: 'recommendation', recommendationId: rec.id }
+              : { kind: 'recommendation', recommendationIndex }}
+            title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
+            evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
+          />
           <button
             onClick={onToggleAccept}
             className={`text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border ${
@@ -411,6 +413,7 @@ export default function AnalysisResults({
                     rec={rec}
                     onToggleAccept={() => toggleRecommendation(originalIndex)}
                     analysisId={analysisId}
+                    recommendationIndex={originalIndex}
                   />
                 ))
               )}

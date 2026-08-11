@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTalkAboutContext } from '@/lib/talk-about-this/context'
+import { buildTalkAboutContext, parseTalkAboutScope } from '@/lib/talk-about-this/context'
 import type { AnalysisResult } from '@/lib/types'
 
 const analysis: AnalysisResult = {
@@ -56,6 +56,26 @@ describe('buildTalkAboutContext', () => {
     expect(context.citations).toEqual([expect.objectContaining({ id: 'doi:10.1/test' })])
     expect(context.noDirectEvidence).toBe(false)
     expect(context.contextHash).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('resolves a legacy recommendation without an ID by its frozen index', () => {
+    const legacyAnalysis = {
+      ...analysis,
+      recommendations: analysis.recommendations.map(({ id: _id, ...recommendation }) => recommendation),
+    }
+
+    expect(parseTalkAboutScope({ kind: 'recommendation', recommendationIndex: 0 }))
+      .toEqual({ kind: 'recommendation', recommendationIndex: 0 })
+
+    const context = buildTalkAboutContext({
+      analysisId: 'analysis-legacy',
+      protocolText: 'Couple acid and amine in DMF.',
+      analysis: legacyAnalysis,
+      scope: { kind: 'recommendation', recommendationIndex: 0 },
+    })
+
+    expect(context.scope).toEqual({ kind: 'recommendation', recommendationIndex: 0 })
+    expect(context.recommendations).toHaveLength(1)
   })
 
   it('rejects scopes that do not resolve to this frozen analysis', () => {
