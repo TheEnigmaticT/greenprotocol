@@ -14,6 +14,8 @@ try:
 except ImportError:
     RDKIT_AVAILABLE = False
 from chem21 import lookup_solvent_with_evidence
+from solvent_evidence_store import SolventEvidenceUnavailableError
+
 
 
 class AssistantToolRequest(BaseModel):
@@ -33,7 +35,16 @@ class AssistantToolResponse(BaseModel):
 
 async def execute_assistant_tool(request: AssistantToolRequest) -> AssistantToolResponse:
     if request.operation == "chem21":
-        assessment = lookup_solvent_with_evidence(request.chemical_name)
+        try:
+            assessment = lookup_solvent_with_evidence(request.chemical_name)
+        except SolventEvidenceUnavailableError as error:
+            return AssistantToolResponse(
+                operation="chem21",
+                chemical_name=request.chemical_name,
+                status="unavailable",
+                source="CHEM21",
+                warnings=[f"CHEM21 data is unavailable: {error}"],
+            )
         if assessment is None:
             return AssistantToolResponse(
                 operation="chem21",

@@ -1,3 +1,9 @@
+import asyncio
+
+import assistant_tools
+from assistant_tools import AssistantToolRequest, execute_assistant_tool
+from solvent_evidence_store import SolventEvidenceUnavailableError
+
 from fastapi.testclient import TestClient
 
 from main import app
@@ -70,3 +76,29 @@ def test_configured_service_rejects_tool_request_without_token(monkeypatch):
         )
 
     assert response.status_code == 401
+
+
+def test_chem21_tool_preserves_dmso_compatibility_alias():
+    with TestClient(app) as client:
+        response = client.post(
+            "/assistant-tools",
+            json={"operation": "chem21", "chemical_name": "dmso"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert response.json()["chemical_name"] == "Dimethyl sulfoxide"
+
+
+def test_chem21_tool_reports_unavailable_index(monkeypatch):
+    def unavailable(_: str):
+        raise SolventEvidenceUnavailableError("CHEM21 index is unavailable")
+
+    monkeypatch.setattr(assistant_tools, "lookup_solvent_with_evidence", unavailable)
+    result = asyncio.run(
+        execute_assistant_tool(AssistantToolRequest(operation="chem21", chemical_name="DMF"))
+    )
+
+    assert result.status == "unavailable"
+    assert result.source == "CHEM21"
+    assert result.warnings == ["CHEM21 data is unavailable: CHEM21 index is unavailable"]

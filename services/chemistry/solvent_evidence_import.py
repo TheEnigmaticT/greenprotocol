@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,9 +52,13 @@ def build_index(raw_dir: Path, manifests_dir: Path, output: Path) -> ImportRepor
     manifests = _load_manifests(raw_dir, manifests_dir)
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_name(f"{output.name}.tmp")
-    temporary.unlink(missing_ok=True)
+    temporary: Path | None = None
     try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f"{output.name}.", suffix=".tmp", dir=output.parent
+        )
+        os.close(descriptor)
+        temporary = Path(temporary_name)
         connection = sqlite3.connect(temporary)
         try:
             _create_schema(connection)
@@ -65,7 +72,8 @@ def build_index(raw_dir: Path, manifests_dir: Path, output: Path) -> ImportRepor
             connection.close()
         temporary.replace(output)
     except Exception:
-        temporary.unlink(missing_ok=True)
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
         raise
 
     return ImportReport(output, MappingProxyType(counts))

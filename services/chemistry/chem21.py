@@ -33,6 +33,7 @@ _COMPATIBILITY_ALIASES = {
     "acoh": "Acetic acid",
     "n-heptane": "Heptane",
     "dimethyl sulfoxide": "Dimethyl sulfoxide",
+    "dmso": "Dimethyl sulfoxide",
     "acn": "Acetonitrile",
     "mecn": "Acetonitrile",
     "thf": "Tetrahydrofuran",

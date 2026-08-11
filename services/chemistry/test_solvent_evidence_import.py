@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -141,3 +142,34 @@ def test_p5_reports_chem21_unavailable_without_reclassifying_solvents(monkeypatc
     assert result.normalized == -1.0
     assert result.confidence == "unavailable"
     assert result.details["error"] == "CHEM21 data unavailable: CHEM21 index is unavailable"
+
+
+def test_concurrent_builds_use_independent_temp_files(tmp_path, fixture_assets, monkeypatch):
+    raw_dir, manifests_dir = fixture_assets
+    index = tmp_path / "evidence.sqlite"
+    replace_barrier = threading.Barrier(2)
+    original_replace = Path.replace
+    errors: list[Exception] = []
+
+    def synchronized_replace(self: Path, target: Path):
+        if self.name.startswith(f"{index.name}.") and self.name.endswith(".tmp"):
+            replace_barrier.wait(timeout=5)
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", synchronized_replace)
+
+    def rebuild() -> None:
+        try:
+            build_index(raw_dir, manifests_dir, index)
+        except Exception as error:
+            errors.append(error)
+
+    workers = [threading.Thread(target=rebuild) for _ in range(2)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(timeout=10)
+
+    assert not any(worker.is_alive() for worker in workers)
+    assert errors == []
+    assert SolventEvidenceStore(index).lookup_chem21("DMF") is not None
