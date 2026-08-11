@@ -1,5 +1,7 @@
 'use client'
 
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
 
@@ -7,6 +9,115 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   citations?: string[]
+}
+
+interface ChatActivity {
+  callId: string
+  label: string
+  state: 'thinking' | 'running' | 'complete' | 'failed'
+  detail?: string
+}
+
+type TerminalStatus = 'complete' | 'failed' | 'cancelled'
+
+function showReadyNotification(title: string, status: TerminalStatus) {
+  if (
+    document.visibilityState !== 'hidden'
+    || typeof Notification === 'undefined'
+    || Notification.permission !== 'granted'
+  ) return
+  new Notification('GC.ai response ready', {
+    body: status === 'complete' ? `Your scoped discussion about ${title} is ready.` : `Your scoped discussion about ${title} did not complete.`,
+  })
+}
+
+function sourceLabels(tool: string, data: Record<string, unknown>): string {
+  const values = [
+    typeof data.source === 'string' ? data.source : '',
+    ...(Array.isArray(data.datasetSources)
+      ? data.datasetSources.filter((source): source is string => typeof source === 'string')
+      : []),
+  ].join(' ').toLowerCase()
+  const labels: string[] = []
+
+  if (values.includes('chem21')) labels.push('CHEM21')
+  if (values.includes('mixturesoldb')) labels.push('MixtureSolDB')
+  if (values.includes('densit')) labels.push('density')
+  else if (values.includes('bigsoldb')) labels.push('BigSolDB')
+  if (values.includes('pubchem') || values.includes('ghs') || tool === 'lookup_solvent_hazard_profile') {
+    labels.push('PubChem GHS')
+  }
+
+  return labels.length > 0 ? labels.join(' · ') : 'local evidence'
+}
+
+function labelForTool(tool: string, source: string, status: string): string {
+  if (tool === 'screen_solvent_candidates') return 'Received local solvent screening evidence'
+  if (tool === 'lookup_chem21_solvent') return 'Received CHEM21 solvent evidence'
+  if (tool === 'lookup_experimental_solvent_evidence') return 'Received local solvent measurement evidence'
+  if (tool === 'lookup_solvent_hazard_profile') {
+    return status === 'ok' ? 'Received PubChem GHS hazard profile' : `${source} profile unavailable`
+  }
+  if (tool === 'lookup_pubchem_profile') return 'Received PubChem profile'
+  if (tool === 'calculate_rdkit_properties') return 'Received calculated molecular properties'
+  return `Received ${tool.replaceAll('_', ' ')}`
+}
+
+function statusLabel(status: string): string {
+  if (status === 'ok') return 'available'
+  if (status === 'not_found') return 'not found'
+  if (status === 'unavailable') return 'unavailable'
+  return 'reported'
+}
+
+function measurementSummary(data: Record<string, unknown>): string | null {
+  const count = data.measurementCount
+  if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) return null
+  return `${count} measurement${count === 1 ? '' : 's'}`
+}
+
+export function activityForEvent(event: string, data: Record<string, unknown>): ChatActivity | null {
+  const callId = typeof data.callId === 'string' ? data.callId : `activity-${event}`
+  const tool = typeof data.tool === 'string' ? data.tool : 'scientific_source'
+  if (event === 'activity') return { callId, state: 'thinking', label: 'Thinking with the scoped evidence' }
+  if (event === 'tool-start') return { callId, state: 'running', label: `Looking up ${tool.replaceAll('_', ' ')}` }
+  if (event === 'tool-complete') {
+    const status = typeof data.status === 'string' ? data.status : 'reported'
+    const source = sourceLabels(tool, data)
+    const details = [`Source: ${source}`, `Status: ${statusLabel(status)}`]
+    const measurement = measurementSummary(data)
+    if (measurement) details.push(measurement)
+    if (typeof data.classification === 'string' && data.classification) {
+      details.push(`Classification: ${data.classification}`)
+    }
+    if (tool === 'screen_solvent_candidates' && status === 'ok') {
+      details.push('Laboratory compatibility validation required.')
+    }
+    if (source.includes('PubChem GHS') && status !== 'ok') {
+      details.push('GHS information is unknown, not safe.')
+    }
+    const warning = Array.isArray(data.warnings) && typeof data.warnings[0] === 'string'
+      ? data.warnings[0]
+      : null
+    if (warning) details.push(`Warning: ${warning}`)
+
+    return {
+      callId,
+      state: status === 'ok' ? 'complete' : 'failed',
+      label: labelForTool(tool, source, status),
+      detail: details.join(' · '),
+    }
+  }
+  if (event === 'tool-failed') {
+    const source = sourceLabels(tool, data)
+    return {
+      callId,
+      state: 'failed',
+      label: `${tool.replaceAll('_', ' ')} unavailable`,
+      detail: `Source: ${source} · Status: unavailable · ${typeof data.reason === 'string' ? data.reason : 'The lookup could not be completed.'}`,
+    }
+  }
+  return null
 }
 
 interface TalkAboutThisProps {
@@ -39,6 +150,8 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
   const [error, setError] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
+  const [activities, setActivities] = useState<ChatActivity[]>([])
+  const [notifyOnReady, setNotifyOnReady] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -73,6 +186,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
     if (!conversationId || !content || isSending) return
 
     setDraft('')
+    setActivities([])
     setError(null)
     setIsSending(true)
     setMessages(current => [...current, { role: 'user', content }, { role: 'assistant', content: '' }])
@@ -91,6 +205,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
         throw new Error(body.error || 'Unable to start chat')
       }
 
+      let terminalStatus: TerminalStatus | null = null
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -108,9 +223,20 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
               index === current.length - 1 ? { ...message, content: message.content + parsed.data.text } : message,
             ))
           }
+          const activity = activityForEvent(parsed.event, parsed.data)
+          if (activity) {
+            setActivities(current => {
+              const existingIndex = current.findIndex(item => item.callId === activity.callId)
+              if (existingIndex === -1) return [...current, activity]
+              return current.map((item, index) => index === existingIndex ? activity : item)
+            })
+          }
           const citationIds = parsed.data.citationIds
           if (parsed.event === 'done' && Array.isArray(citationIds)) {
             const validatedCitationIds = citationIds.filter((id): id is string => typeof id === 'string')
+            terminalStatus = parsed.data.status === 'failed' || parsed.data.status === 'cancelled'
+              ? parsed.data.status
+              : 'complete'
             setMessages(current => current.map((message, index) =>
               index === current.length - 1
                 ? { ...message, citations: validatedCitationIds }
@@ -118,10 +244,25 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
             ))
           }
           if (parsed.event === 'error' && typeof parsed.data.error === 'string') {
-            setError(parsed.data.error)
+            const errorMessage = parsed.data.error
+            setError(errorMessage)
+            setActivities(current => {
+              const failed: ChatActivity = {
+                callId: 'response-error',
+                state: 'failed',
+                label: 'Response unavailable',
+                detail: errorMessage,
+              }
+              return current.length === 0
+                ? [failed]
+                : current.map(activity => activity.state === 'thinking' || activity.state === 'running'
+                  ? { ...activity, state: 'failed', detail: errorMessage }
+                  : activity)
+            })
           }
         }
       }
+      if (terminalStatus && notifyOnReady) showReadyNotification(title, terminalStatus)
     } catch (caught) {
       if (!abortController.signal.aborted) {
         setError(caught instanceof Error ? caught.message : 'Unable to send message')
@@ -170,14 +311,63 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
               {messages.length === 0 && <p className="text-sm" style={{ color: '#57534E' }}>Ask why this was recommended, challenge an assumption, or describe a laboratory constraint.</p>}
               {messages.map((message, index) => (
                 <article key={`${message.role}-${index}`} className="rounded-lg p-3 text-sm" style={{ background: message.role === 'user' ? '#1C3822' : '#FFFFFF', color: message.role === 'user' ? '#F6F3EB' : '#1C1917', border: message.role === 'assistant' ? '1px solid #E7E5E4' : undefined }}>
-                  <p className="whitespace-pre-wrap">{message.content || 'Thinking…'}</p>
+                  {message.role === 'assistant'
+                    ? (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        skipHtml
+                        components={{
+                          a: ({ children }) => <span>{children}</span>,
+                          img: ({ alt }) => <span>{alt}</span>,
+                        }}
+                      >
+                        {message.content || 'Thinking…'}
+                      </ReactMarkdown>
+                    )
+                    : <p className="whitespace-pre-wrap">{message.content}</p>}
                   {message.citations && message.citations.length > 0 && <p className="mt-2 text-[10px]" style={{ color: '#78716C' }}>Sources: {message.citations.join(' · ')}</p>}
                 </article>
               ))}
+              {(isSending || activities.length > 0) && (
+                <section aria-label="Scientific lookup activity" className="rounded-lg border p-3 text-xs" style={{ borderColor: '#D6D0C4', background: '#F6F3EB', color: '#57534E' }}>
+                  {isSending && activities.length === 0 && <p><span className="inline-block animate-pulse" aria-hidden="true">●</span> Preparing the scoped response…</p>}
+                  {activities.map(activity => (
+                    <p key={activity.callId} className="mt-1">
+                      <span className={activity.state === 'thinking' || activity.state === 'running' ? 'inline-block animate-pulse' : ''} aria-hidden="true">
+                        {activity.state === 'complete' ? '✓' : activity.state === 'failed' ? '!' : '●'}
+                      </span>
+                      {' '}{activity.label}{activity.detail ? ` — ${activity.detail}` : ''}
+                    </p>
+                  ))}
+                </section>
+              )}
               {error && <p className="text-xs" style={{ color: '#B45309' }}>{error}</p>}
             </div>
             <form onSubmit={sendMessage} className="border-t p-4" style={{ borderColor: '#D6D0C4' }}>
               <label className="sr-only" htmlFor="talk-about-this-message">Message</label>
+              {typeof Notification !== 'undefined' && (
+                <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs" style={{ color: '#57534E' }}>
+                  <input
+                    type="checkbox"
+                    checked={notifyOnReady}
+                    onChange={async event => {
+                      if (!event.target.checked) {
+                        setNotifyOnReady(false)
+                        return
+                      }
+                      const permission = Notification.permission === 'default'
+                        ? await Notification.requestPermission()
+                        : Notification.permission
+                      if (permission !== 'granted') {
+                        setError('Response notifications were not enabled.')
+                        return
+                      }
+                      setNotifyOnReady(true)
+                    }}
+                  />
+                  Notify me when a background response is ready
+                </label>
+              )}
               <textarea id="talk-about-this-message" value={draft} onChange={event => setDraft(event.target.value)} maxLength={4000} rows={3} placeholder="Ask about this recommendation…" className="w-full rounded border p-3 text-sm" style={{ borderColor: '#D6D0C4', color: '#1C1917' }} disabled={isSending} />
               <div className="mt-2 flex items-center justify-between gap-3">
                 <button type="button" onClick={() => abortRef.current?.abort()} disabled={!isSending} className="text-xs font-bold uppercase tracking-wider disabled:opacity-50" style={{ color: '#78716C' }}>Stop</button>

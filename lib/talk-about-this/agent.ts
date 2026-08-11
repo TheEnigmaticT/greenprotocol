@@ -198,16 +198,42 @@ export function parseScopedToolCall(
   }
 }
 
-function activityData(call: ChatToolCall, result: ToolResult): Record<string, unknown> {
-  const measurements = Array.isArray(result.data.measurements) ? result.data.measurements : []
-  const sources = [
-    ...measurements.flatMap(measurement => (
-      measurement && typeof measurement === 'object' && typeof (measurement as Record<string, unknown>).source === 'string'
-        ? [(measurement as Record<string, unknown>).source]
-        : []
-    )),
-    ...result.citations.flatMap(citation => typeof citation.source === 'string' ? [citation.source] : []),
+function objectRecords(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object')
+    : []
+}
+
+function sourceValues(record: Record<string, unknown>): string[] {
+  return ['source', 'source_id', 'source_name', 'source_url'].flatMap(field => (
+    typeof record[field] === 'string' ? [record[field]] : []
+  ))
+}
+
+function datasetForMeasurement(measurement: Record<string, unknown>): string | null {
+  if (typeof measurement.density_g_per_cm3 === 'number') return 'density'
+  if (typeof measurement.fraction_solvent_1 === 'number') return 'MixtureSolDB'
+  if (typeof measurement.solubility_mole_fraction === 'number') return 'BigSolDB'
+  return null
+}
+
+export function activityData(call: ChatToolCall, result: ToolResult): Record<string, unknown> {
+  const directMeasurements = objectRecords(result.data.measurements)
+  const candidates = objectRecords(result.data.candidates)
+  const candidateMeasurements = candidates.flatMap(candidate => [
+    ...objectRecords(candidate.current_measurements),
+    ...objectRecords(candidate.candidate_measurements),
+  ])
+  const measurements = [...directMeasurements, ...candidateMeasurements]
+  const citations = [
+    ...candidates.flatMap(candidate => objectRecords(candidate.citations)),
+    ...result.citations,
   ]
+  const measurementSources = measurements.flatMap(measurement => {
+    const dataset = datasetForMeasurement(measurement)
+    return [...sourceValues(measurement), ...(dataset ? [dataset] : [])]
+  })
+  const sources = [...measurementSources, ...citations.flatMap(sourceValues)]
   return {
     callId: call.id,
     tool: call.name,

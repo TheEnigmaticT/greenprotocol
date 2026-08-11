@@ -1,9 +1,28 @@
-import { createConfiguredChatProvider } from '@/lib/talk-about-this/chat-provider'
-import { buildTalkAboutSystemPrompt } from '@/lib/talk-about-this/prompt'
+import { runScopedToolChat } from '@/lib/talk-about-this/agent'
+import { createConfiguredChatProvider, type ChatMessage } from '@/lib/talk-about-this/chat-provider'
+import { executeScopedTool } from '@/lib/talk-about-this/tools'
 import { createMessage, listConversationMessages, loadOwnedConversation } from '@/lib/talk-about-this/repository'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
+
+function activityPayload(data: Record<string, unknown>): Record<string, unknown> {
+  return {
+    callId: typeof data.callId === 'string' ? data.callId : undefined,
+    tool: typeof data.tool === 'string' ? data.tool : undefined,
+    status: typeof data.status === 'string' ? data.status : undefined,
+    source: typeof data.source === 'string' ? data.source : undefined,
+    classification: typeof data.classification === 'string' ? data.classification : undefined,
+    measurementCount: typeof data.measurementCount === 'number' ? data.measurementCount : undefined,
+    datasetSources: Array.isArray(data.datasetSources)
+      ? data.datasetSources.filter((source): source is string => typeof source === 'string')
+      : undefined,
+    warnings: Array.isArray(data.warnings)
+      ? data.warnings.filter((warning): warning is string => typeof warning === 'string')
+      : undefined,
+  }
+}
+
 
 export async function POST(
   request: Request,
@@ -72,20 +91,23 @@ export async function POST(
 
         try {
           send('conversation', { conversationId })
-          for await (const event of provider.stream({
-            system: buildTalkAboutSystemPrompt(conversation.context_snapshot),
-            messages: [
-              ...previousMessages.slice(-12).map(message => ({ role: message.role, content: message.content })),
-              { role: 'user', content },
-            ],
+          const messages: ChatMessage[] = [
+            ...previousMessages
+              .slice(-12)
+              .map(message => ({ role: message.role, content: message.content }) as ChatMessage),
+            { role: 'user', content },
+          ]
+          answer = await runScopedToolChat({
+            provider,
+            context: conversation.context_snapshot,
+            messages,
             signal: abortController.signal,
-          })) {
-            if (ttftMs === null) {
-              ttftMs = Date.now() - startedAt
-            }
-            answer += event.text
-            send('delta', { text: event.text })
-          }
+            executeTool: (call, signal) => executeScopedTool(conversation.context_snapshot, call, signal),
+            onEvent: (event, data) => {
+              if (event === 'delta' && ttftMs === null) ttftMs = Date.now() - startedAt
+              send(event, event === 'tool-complete' ? activityPayload(data) : data)
+            },
+          })
         } catch (error) {
           status = abortController.signal.aborted ? 'cancelled' : 'failed'
           console.error('Chat response failed', error)
