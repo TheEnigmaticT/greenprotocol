@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import type { ChatCompletionCreateParamsStreaming } from 'openai/resources/chat/completions'
 
 export interface ChatProviderConfig {
   baseUrl: string
@@ -30,15 +31,25 @@ export interface ChatCompletionStreamChunk {
   }>
 }
 
+export interface ChatCompletionStreamRequest {
+  model: string
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+  stream: true
+  provider?: {
+    data_collection: 'deny'
+    zdr: true
+    allow_fallbacks: false
+  }
+  reasoning?: {
+    effort: 'minimal'
+  }
+}
+
 export interface ChatCompletionStreamClient {
   chat: {
     completions: {
       create(
-        request: {
-          model: string
-          messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
-          stream: true
-        },
+        request: ChatCompletionStreamRequest,
         options?: { signal?: AbortSignal },
       ): PromiseLike<AsyncIterable<ChatCompletionStreamChunk>>
     }
@@ -85,11 +96,10 @@ function createDefaultClient(config: ChatProviderConfig): ChatCompletionStreamCl
     chat: {
       completions: {
         create(request, options) {
-          return client.chat.completions.create({
-            model: request.model,
-            messages: request.messages,
-            stream: true,
-          }, options) as unknown as PromiseLike<AsyncIterable<ChatCompletionStreamChunk>>
+          return client.chat.completions.create(
+            request as unknown as ChatCompletionCreateParamsStreaming,
+            options,
+          ) as unknown as PromiseLike<AsyncIterable<ChatCompletionStreamChunk>>
         },
       },
     },
@@ -106,13 +116,22 @@ export function createOpenAICompatibleChatProvider(
 
   return {
     async *stream(request) {
-      const completionRequest = {
+      const completionRequest: ChatCompletionStreamRequest = {
         model: config.model,
-        stream: true as const,
+        stream: true,
         messages: [
-          { role: 'system' as const, content: request.system },
+          { role: 'system', content: request.system },
           ...request.messages,
         ],
+      }
+
+      if (new URL(config.baseUrl).hostname === 'openrouter.ai') {
+        completionRequest.provider = {
+          data_collection: 'deny',
+          zdr: true,
+          allow_fallbacks: false,
+        }
+        completionRequest.reasoning = { effort: 'minimal' }
       }
       const response = request.signal
         ? await client.chat.completions.create(completionRequest, { signal: request.signal })

@@ -59,3 +59,32 @@ describe('createOpenAICompatibleChatProvider', () => {
     }))
   })
 })
+
+  it('enforces privacy routing and minimal reasoning for OpenRouter Qwen 3.8', async () => {
+    const create = vi.fn().mockResolvedValue((async function* () {
+      yield { choices: [{ delta: { content: 'Scoped response.' } }] }
+    })())
+    const provider = createOpenAICompatibleChatProvider({
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'test-key',
+      model: 'qwen/qwen3.8-max',
+      allowedModels: ['qwen/qwen3.8-max'],
+    }, { chat: { completions: { create } } })
+
+    for await (const _event of provider.stream({
+      system: 'Use only supplied evidence.',
+      messages: [{ role: 'user', content: 'Why was this recommendation made?' }],
+    })) {
+      // Drain the stream to inspect the provider request.
+    }
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'qwen/qwen3.8-max',
+      provider: {
+        data_collection: 'deny',
+        zdr: true,
+        allow_fallbacks: false,
+      },
+      reasoning: { effort: 'minimal' },
+    }))
+  })
