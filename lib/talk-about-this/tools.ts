@@ -118,6 +118,11 @@ type ToolParameter =
   | { type: 'string'; enum?: readonly string[] }
   | { type: 'number' }
 
+interface ToolSchemaVariant {
+  properties: Record<string, ToolParameter>
+  required: string[]
+}
+
 export interface ChatToolDefinition {
   type: 'function'
   function: {
@@ -128,6 +133,7 @@ export interface ChatToolDefinition {
       additionalProperties: false
       properties: Record<string, ToolParameter>
       required: string[]
+      oneOf?: ToolSchemaVariant[]
     }
   }
 }
@@ -142,12 +148,17 @@ export function scopedChemicals(context: TalkAboutContext): string[] {
   ].filter(Boolean))].sort((left, right) => left.localeCompare(right))
 }
 
-function parameters(properties: Record<string, ToolParameter>, required: string[]) {
+function parameters(
+  properties: Record<string, ToolParameter>,
+  required: string[],
+  oneOf?: ToolSchemaVariant[],
+) {
   return {
     type: 'object' as const,
     additionalProperties: false as const,
     properties,
     required,
+    ...(oneOf ? { oneOf } : {}),
   }
 }
 
@@ -189,12 +200,39 @@ export function buildChatTools(context: TalkAboutContext): ChatToolDefinition[] 
         parameters: parameters({
           mode: { type: 'string', enum: ['single_solubility', 'mixture_solubility', 'density'] },
           solute: scopedChemical,
-          solvent: scopedChemical,
+          solvent: { type: 'string', enum: [...scoped, ...LOCAL_INDEXED_SOLVENTS] },
           coSolvent: scopedChemical,
           fractionSolvent: { type: 'number' },
           fractionType: { type: 'string' },
           temperatureK: { type: 'number' },
-        }, ['mode', 'solvent', 'temperatureK']),
+        }, ['mode', 'solvent', 'temperatureK'], [
+          {
+            properties: {
+              mode: { type: 'string', enum: ['density'] },
+              solvent: localSolvent,
+            },
+            required: ['mode', 'solvent', 'temperatureK'],
+          },
+          {
+            properties: {
+              mode: { type: 'string', enum: ['single_solubility'] },
+              solute: scopedChemical,
+              solvent: scopedChemical,
+            },
+            required: ['mode', 'solute', 'solvent', 'temperatureK'],
+          },
+          {
+            properties: {
+              mode: { type: 'string', enum: ['mixture_solubility'] },
+              solute: scopedChemical,
+              solvent: scopedChemical,
+              coSolvent: scopedChemical,
+              fractionSolvent: { type: 'number' },
+              fractionType: { type: 'string' },
+            },
+            required: ['mode', 'solute', 'solvent', 'coSolvent', 'fractionSolvent', 'fractionType', 'temperatureK'],
+          },
+        ]),
       },
     },
     {

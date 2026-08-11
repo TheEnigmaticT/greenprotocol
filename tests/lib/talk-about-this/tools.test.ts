@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { buildChatTools, executeScopedTool } from '@/lib/talk-about-this/tools'
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
 
@@ -45,11 +45,34 @@ describe('buildChatTools', () => {
     expect(byName.lookup_experimental_solvent_evidence.parameters).toMatchObject({
       additionalProperties: false,
       properties: {
-        mode: { type: 'string', enum: ['single_solubility', 'mixture_solubility', 'density'] },
+        mode: { type: 'string' },
         solute: { type: 'string', enum: expect.arrayContaining(['DMF', 'Cyrene']) },
-        solvent: { type: 'string', enum: expect.arrayContaining(['DMF', 'Cyrene']) },
+        solvent: { type: 'string', enum: expect.arrayContaining(['DMF', 'Cyrene', 'Ethyl acetate']) },
         temperatureK: { type: 'number' },
       },
+      oneOf: expect.arrayContaining([
+        expect.objectContaining({
+          required: ['mode', 'solvent', 'temperatureK'],
+          properties: expect.objectContaining({
+            mode: { type: 'string', enum: ['density'] },
+            solvent: { type: 'string', enum: expect.arrayContaining(['Ethyl acetate']) },
+          }),
+        }),
+        expect.objectContaining({
+          required: ['mode', 'solute', 'solvent', 'temperatureK'],
+          properties: expect.objectContaining({
+            mode: { type: 'string', enum: ['single_solubility'] },
+            solvent: { type: 'string', enum: expect.arrayContaining(['DMF', 'Cyrene']) },
+          }),
+        }),
+        expect.objectContaining({
+          required: ['mode', 'solute', 'solvent', 'coSolvent', 'fractionSolvent', 'fractionType', 'temperatureK'],
+          properties: expect.objectContaining({
+            mode: { type: 'string', enum: ['mixture_solubility'] },
+            solvent: { type: 'string', enum: expect.arrayContaining(['DMF', 'Cyrene']) },
+          }),
+        }),
+      ]),
     })
     expect(byName.screen_solvent_candidates.parameters).toMatchObject({
       additionalProperties: false,
@@ -81,5 +104,54 @@ it('rejects screening with an out-of-scope solute', async () => {
       currentSolvent: 'DMF',
       temperatureK: 298.15,
     } as never,
+  )).rejects.toThrow('outside this scoped discussion')
+})
+
+it('permits a locally indexed density solvent but rejects it for scoped solubility', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    operation: 'solvent_evidence',
+    chemical_name: 'Ethyl acetate',
+    status: 'ok',
+    source: 'Local solvent evidence',
+    data: { measurements: [] },
+    citations: [],
+    warnings: [],
+  })))
+  vi.stubGlobal('fetch', fetchMock)
+
+  try {
+    await expect(executeScopedTool(
+      context,
+      {
+        id: 'density-1',
+        name: 'lookup_experimental_solvent_evidence',
+        mode: 'density',
+        solvent: 'Ethyl acetate',
+        temperatureK: 298.15,
+      },
+    )).resolves.toMatchObject({ status: 'ok' })
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: JSON.stringify({
+        operation: 'solvent_evidence',
+        mode: 'density',
+        solvent: 'Ethyl acetate',
+        temperature_k: 298.15,
+      }),
+    }))
+  } finally {
+    vi.unstubAllGlobals()
+  }
+
+  await expect(executeScopedTool(
+    context,
+    {
+      id: 'solubility-1',
+      name: 'lookup_experimental_solvent_evidence',
+      mode: 'single_solubility',
+      solute: 'DMF',
+      solvent: 'Ethyl acetate',
+      temperatureK: 298.15,
+      canonicalSoluteSmiles: 'CN(C)C=O',
+    },
   )).rejects.toThrow('outside this scoped discussion')
 })
