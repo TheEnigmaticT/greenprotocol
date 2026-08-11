@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from rdkit import Chem
 
-from solvent_evidence_schema import normalize_identity
+from solvent_evidence_schema import canonical_solvent_identity, normalize_identity, solvent_identity_keys
 
 
 class SolventEvidenceUnavailableError(RuntimeError):
@@ -63,7 +63,7 @@ class SolventEvidenceStore:
                    FROM chem21_aliases AS a
                    JOIN chem21 AS c ON c.id = a.chem21_id
                    WHERE a.normalized_alias = ?""",
-                (normalize_identity(name),),
+                (canonical_solvent_identity(name),),
             ).fetchone()
         if row is None:
             return None
@@ -84,20 +84,15 @@ class SolventEvidenceStore:
 
     def hazard_profile(self, solvent: str) -> HazardProfile | None:
         """Return a complete local PubChem GHS profile for a catalogued solvent."""
-        normalized = normalize_identity(solvent)
+        keys = solvent_identity_keys(solvent)
+        placeholders = ", ".join("?" for _ in keys)
         with self._connect() as connection:
             row = connection.execute(
-                """SELECT h.profile_json
-                   FROM hazard_profiles AS h
-                   WHERE h.normalized_name = COALESCE(
-                       (SELECT c.normalized_name
-                        FROM chem21_aliases AS a
-                        JOIN chem21 AS c ON c.id = a.chem21_id
-                        WHERE a.normalized_alias = ?),
-                       ?
-                   )
-                   LIMIT 1""",
-                (normalized, normalized),
+                f"""SELECT h.profile_json
+                    FROM hazard_profiles AS h
+                    WHERE h.normalized_name IN ({placeholders})
+                    LIMIT 1""",
+                keys,
             ).fetchone()
         if row is None:
             return None
@@ -130,7 +125,7 @@ class SolventEvidenceStore:
                           log_s_mol_per_l, source_doi, measurements_json, units_json, raw_values_json
                    FROM single_solubility
                    WHERE solute_smiles = ? AND normalized_solvent = ? AND temperature_k IS ?"""
-        parameters: tuple[Any, ...] = (solute_smiles, normalize_identity(solvent), temperature_k)
+        parameters: tuple[Any, ...] = (solute_smiles, canonical_solvent_identity(solvent), temperature_k)
         if limit is not None:
             query += " LIMIT ?"
             parameters += (limit,)
@@ -157,7 +152,7 @@ class SolventEvidenceStore:
                        ORDER BY id
                        LIMIT ? OFFSET ?""",
                     (
-                        normalized_solute_smiles, normalize_identity(solvent), temperature_k,
+                        normalized_solute_smiles, canonical_solvent_identity(solvent), temperature_k,
                         page_size, offset,
                     ),
                 ).fetchall()
@@ -186,8 +181,11 @@ class SolventEvidenceStore:
                      AND normalized_solvent_2 = ? AND fraction_solvent_1 IS ?
                      AND fraction_type IS ?"""
         parameters: tuple[Any, ...] = (
-            solute_smiles, normalize_identity(solvent_1), normalize_identity(solvent_2),
-            fraction_solvent_1, normalize_identity(fraction_type),
+            solute_smiles,
+            canonical_solvent_identity(solvent_1),
+            canonical_solvent_identity(solvent_2),
+            fraction_solvent_1,
+            normalize_identity(fraction_type),
         )
         if temperature_k is not None:
             query += " AND abs(temperature_k - ?) <= 0.01"
@@ -203,7 +201,7 @@ class SolventEvidenceStore:
                           measurements_json, units_json, raw_values_json
                    FROM density
                    WHERE normalized_solvent = ? AND temperature_k IS ?"""
-        parameters: tuple[Any, ...] = (normalize_identity(solvent), temperature_k)
+        parameters: tuple[Any, ...] = (canonical_solvent_identity(solvent), temperature_k)
         if limit is not None:
             query += " LIMIT ?"
             parameters += (limit,)

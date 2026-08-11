@@ -12,6 +12,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN python solvent_evidence_import.py \
+    --raw data/solvent-evidence/raw \
+    --manifests data/solvent-evidence/manifests \
+    --output data/solvent-evidence/solvent-evidence.sqlite
+
 EXPOSE 8000
 
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]

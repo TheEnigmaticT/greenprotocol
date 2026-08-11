@@ -100,6 +100,44 @@ def fixture_assets(tmp_path):
     )
     return raw_dir, manifests_dir
 
+def _append_dataset_row(
+    raw_dir: Path, manifests_dir: Path, dataset_id: str, row: dict[str, str]
+) -> None:
+    manifest_path = manifests_dir / f"{dataset_id}.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    asset_path = raw_dir / manifest["asset_filename"]
+    with asset_path.open(newline="", encoding="utf-8") as handle:
+        columns = csv.DictReader(handle).fieldnames
+    assert columns is not None
+    with asset_path.open("a", newline="", encoding="utf-8") as handle:
+        csv.DictWriter(handle, fieldnames=columns).writerow(row)
+    manifest["record_count"] += 1
+    manifest["sha256"] = hashlib.sha256(asset_path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def _write_snapshot(raw_dir: Path, cid: int, payload: dict) -> None:
+    snapshots = raw_dir / "pubchem-ghs"
+    snapshots.mkdir()
+    encoded = json.dumps(payload, sort_keys=True, indent=2).encode("utf-8") + b"\n"
+    (snapshots / f"{cid}.json").write_bytes(encoded)
+    (snapshots / f"{cid}.manifest.json").write_text(
+        json.dumps(
+            {
+                "parser_version": "1",
+                "query_url": (
+                    "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/"
+                    f"{cid}/JSON?heading=GHS+Classification"
+                ),
+                "retrieved_at": "2026-08-11T00:00:00Z",
+                "http_status": 200,
+                "sha256": hashlib.sha256(encoded).hexdigest(),
+                "byte_size": len(encoded),
+            }
+        ),
+        encoding="utf-8",
+    )
+
 
 def test_build_index_is_transactional_and_queries_all_measurement_kinds(tmp_path, fixture_assets):
     fixture_raw, fixture_manifests = fixture_assets
@@ -252,3 +290,166 @@ def test_concurrent_builds_use_independent_temp_files(tmp_path, fixture_assets, 
     assert not any(worker.is_alive() for worker in workers)
     assert errors == []
     assert SolventEvidenceStore(index).lookup_chem21("DMF") is not None
+
+
+def test_rebuild_restores_validated_raw_ghs_profiles_and_complete_checkpoints(
+    tmp_path, fixture_assets
+):
+    raw_dir, manifests_dir = fixture_assets
+    _write_snapshot(
+        raw_dir,
+        6228,
+        {
+            "Record": {
+                "RecordNumber": 6228,
+                "RecordTitle": "N,N-Dimethylformamide",
+                "Section": [
+                    {
+                        "Section": [
+                            {
+                                "TOCHeading": "GHS Classification",
+                                "Information": [
+                                    {
+                                        "Name": "GHS Hazard Statements",
+                                        "Value": {
+                                            "StringWithMarkup": [
+                                                {"String": "H360: May damage fertility"}
+                                            ]
+                                        },
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                ],
+            }
+        },
+    )
+
+    index = build_index(raw_dir, manifests_dir, tmp_path / "evidence.sqlite").index_path
+
+    profile = SolventEvidenceStore(index).hazard_profile("DMF")
+    assert profile is not None
+    assert profile.cmr is True
+    assert profile.snapshot_path == "6228.json"
+    with sqlite3.connect(index) as connection:
+        assert connection.execute(
+            """SELECT state, cid FROM hazard_harvest_state
+               WHERE normalized_name = 'n,n-dimethylformamide'"""
+        ).fetchone() == ("complete", 6228)
+
+
+def test_store_resolves_chem21_bigsoldb_and_hazard_aliases_consistently(
+    tmp_path, fixture_assets
+):
+    raw_dir, manifests_dir = fixture_assets
+    identities = (
+        ("DMF", "N,N-Dimethylformamide", "68-12-2", "6228"),
+        ("DMAc", "N,N-Dimethylacetamide", "127-19-5", "31374"),
+        ("DMSO", "Dimethyl sulfoxide", "67-68-5", "679"),
+        ("NMP", "N-Methyl-2-pyrrolidinone", "872-50-4", "13387"),
+        ("THF", "Tetrahydrofuran", "109-99-9", "8028"),
+    )
+    for abbreviation, name, cas, pubchem_id in identities[1:]:
+        _append_dataset_row(
+            raw_dir,
+            manifests_dir,
+            "chem21",
+            {
+                "PubChem ID": pubchem_id,
+                "CAS": cas,
+                "Solvent": name,
+                "Solvent Alternative Name": name.replace(" ", ""),
+                "Safety": "3",
+                "Health": "9",
+                "Env": "5",
+                "Ranking Default": "Hazardous",
+                "Replacement 1": "",
+                "Replacement 2": "",
+            },
+        )
+    for abbreviation, _, _, _ in identities:
+        _append_dataset_row(
+            raw_dir,
+            manifests_dir,
+            "bigsoldb",
+            {
+                "SMILES_Solute": "CCO",
+                "Temperature_K": "298.15",
+                "Solvent": abbreviation,
+                "SMILES_Solvent": "CCO",
+                "Solubility(mole_fraction)": "0.1",
+                "Solubility(mol/L)": "1.0",
+                "LogS(mol/L)": "0.0",
+                "Compound_Name": "ethanol",
+                "CAS": "64-17-5",
+                "PubChem_CID": "702",
+                "FDA_Approved": "true",
+                "Source": "10.1007/example",
+            },
+        )
+
+    index = build_index(raw_dir, manifests_dir, tmp_path / "evidence.sqlite").index_path
+    store = SolventEvidenceStore(index)
+    for abbreviation, name, _, _ in identities:
+        assert store.lookup_chem21(abbreviation)["name"] == name
+        assert store.lookup_chem21(name)["name"] == name
+        assert store.single_solubility("CCO", name, 298.15)[0]["solvent"] == abbreviation
+        rows, truncated = store.screening_solubility("CCO", name, 298.15, limit=20)
+        assert truncated is False
+        assert rows[0]["solvent"] == abbreviation
+
+    profile = {
+        "solvent": "DMSO",
+        "cid": 679,
+        "hcodes": [],
+        "cmr": False,
+        "acute": False,
+        "organ": False,
+        "health": False,
+        "environmental": False,
+        "physical": False,
+        "source_url": "https://pubchem.example/679",
+        "snapshot": {
+            "path": "679.json",
+            "sha256": "snapshot-sha",
+            "retrieved_at": "2026-08-11T00:00:00Z",
+        },
+        "state": "complete",
+    }
+    with sqlite3.connect(index) as connection:
+        connection.execute(
+            "INSERT INTO hazard_profiles (normalized_name, profile_json) VALUES (?, ?)",
+            ("dmso", json.dumps(profile)),
+        )
+
+    assert store.hazard_profile("Dimethyl sulfoxide").solvent == "DMSO"
+
+
+
+def test_rebuild_rejects_tampered_raw_ghs_snapshot(tmp_path, fixture_assets):
+    raw_dir, manifests_dir = fixture_assets
+    _write_snapshot(
+        raw_dir,
+        6228,
+        {"Record": {"RecordNumber": 6228, "RecordTitle": "N,N-Dimethylformamide"}},
+    )
+    (raw_dir / "pubchem-ghs" / "6228.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid PubChem GHS snapshot"):
+        build_index(raw_dir, manifests_dir, tmp_path / "evidence.sqlite")
+
+
+def test_index_builder_command_rebuilds_from_versioned_assets(tmp_path, fixture_assets):
+    from solvent_evidence_import import main
+
+    raw_dir, manifests_dir = fixture_assets
+    output = tmp_path / "evidence.sqlite"
+
+    main([
+        "--raw", str(raw_dir),
+        "--manifests", str(manifests_dir),
+        "--output", str(output),
+    ])
+
+    assert SolventEvidenceStore(output).lookup_chem21("DMF") is not None

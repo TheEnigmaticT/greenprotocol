@@ -23,6 +23,8 @@ from ghs import (
     is_cmr,
     parse_hcodes_with_details,
 )
+from solvent_evidence_schema import canonical_solvent_identity, normalize_identity
+
 
 
 PUBCHEM_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
@@ -115,6 +117,91 @@ def harvest_hazards(
                     if index + 1 < len(candidates):
                         sleep(_throttle_interval(report.throttle, minimum_interval))
             return report
+
+
+def restore_hazard_snapshots(connection: sqlite3.Connection, snapshot_dir: Path | str) -> int:
+    """Validate versioned snapshots and restore their complete local profiles."""
+    snapshots = Path(snapshot_dir)
+    if not snapshots.exists():
+        return 0
+    _create_harvest_tables(connection)
+    payload_paths = {
+        path.name.removesuffix(".manifest.json"): path
+        for path in snapshots.glob("*.manifest.json")
+    }
+    snapshot_paths = {
+        path.stem: path
+        for path in snapshots.glob("*.json")
+        if not path.name.endswith(".manifest.json")
+    }
+    if payload_paths.keys() != snapshot_paths.keys():
+        raise ValueError("PubChem GHS snapshots and manifests must be paired")
+
+    restored = 0
+    for cid_text in sorted(snapshot_paths, key=int):
+        try:
+            cid = int(cid_text)
+        except ValueError as exc:
+            raise ValueError(f"invalid PubChem GHS snapshot filename: {snapshot_paths[cid_text].name}") from exc
+        loaded = _load_snapshot(snapshots, cid)
+        if loaded is None:
+            raise ValueError(f"invalid PubChem GHS snapshot: {snapshot_paths[cid_text].name}")
+        payload, snapshot = loaded
+        normalized_name, solvent_name = _snapshot_candidate(connection, payload, cid)
+        connection.execute(
+            """INSERT INTO hazard_harvest_state (
+                normalized_name, solvent_name, cid, state, retry_attempt, last_http_status, updated_at
+            ) VALUES (?, ?, ?, 'complete', 0, 200, ?)
+            ON CONFLICT(normalized_name) DO UPDATE SET
+                solvent_name = excluded.solvent_name, cid = excluded.cid, state = excluded.state,
+                retry_attempt = excluded.retry_attempt, last_http_status = excluded.last_http_status,
+                updated_at = excluded.updated_at""",
+            (normalized_name, solvent_name, cid, snapshot["retrieved_at"]),
+        )
+        _store_profile(connection, normalized_name, solvent_name, cid, payload, snapshot)
+        restored += 1
+    return restored
+
+
+def _snapshot_candidate(
+    connection: sqlite3.Connection, payload: dict, cid: int
+) -> tuple[str, str]:
+    candidates = connection.execute(
+        """SELECT normalized_name, MIN(name) AS name
+           FROM (
+               SELECT normalized_name, name FROM chem21
+               UNION ALL
+               SELECT normalized_solvent AS normalized_name, solvent AS name FROM single_solubility
+               UNION ALL
+               SELECT normalized_solvent_1 AS normalized_name, solvent_1 AS name FROM mixture_solubility
+               UNION ALL
+               SELECT normalized_solvent_2 AS normalized_name, solvent_2 AS name FROM mixture_solubility
+           )
+           GROUP BY normalized_name"""
+    ).fetchall()
+    title = payload.get("Record", {}).get("RecordTitle")
+    title_key = canonical_solvent_identity(title) if isinstance(title, str) else ""
+    direct = [row for row in candidates if row[0] == title_key]
+    matches = direct or [
+        row
+        for row in candidates
+        if len(row[0]) >= 6
+        and any(row[0] in canonical_solvent_identity(text) for text in _snapshot_strings(payload))
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"cannot uniquely associate PubChem GHS snapshot CID {cid} with an indexed solvent"
+        )
+    return matches[0][0], matches[0][1]
+def _snapshot_strings(value: object) -> Iterator[str]:
+    if isinstance(value, dict):
+        for child in value.values():
+            yield from _snapshot_strings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _snapshot_strings(child)
+    elif isinstance(value, str):
+        yield value
 
 
 def _candidates(connection: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -296,7 +383,13 @@ def _load_snapshot(snapshots: Path, cid: int) -> tuple[dict, dict[str, str]] | N
         return None
     if not isinstance(payload, dict) or not isinstance(manifest, dict):
         return None
-    if manifest.get("http_status") != 200 or manifest.get("sha256") != hashlib.sha256(content).hexdigest():
+    expected_url = f"{PUBCHEM_VIEW_BASE}/{cid}/JSON?heading=GHS+Classification"
+    if (
+        manifest.get("parser_version") != PARSER_VERSION
+        or manifest.get("http_status") != 200
+        or manifest.get("query_url") != expected_url
+        or manifest.get("sha256") != hashlib.sha256(content).hexdigest()
+    ):
         return None
     retrieved_at = manifest.get("retrieved_at")
     if not isinstance(retrieved_at, str):

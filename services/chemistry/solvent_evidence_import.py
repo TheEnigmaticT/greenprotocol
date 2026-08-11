@@ -1,6 +1,8 @@
 """Build the local, queryable solvent evidence SQLite catalogue."""
 
 from __future__ import annotations
+import argparse
+
 
 import json
 import os
@@ -19,6 +21,7 @@ from solvent_evidence_schema import (
     DensityRecord,
     MixtureSolubilityRecord,
     SingleSolubilityRecord,
+    canonical_solvent_identity,
     normalize_identity,
     read_chem21_csv,
     read_density_csv,
@@ -26,6 +29,8 @@ from solvent_evidence_schema import (
     read_single_solubility_csv,
     validate_manifest,
 )
+from solvent_hazard_harvest import restore_hazard_snapshots
+
 
 
 @dataclass(frozen=True)
@@ -64,6 +69,7 @@ def build_index(raw_dir: Path, manifests_dir: Path, output: Path) -> ImportRepor
         try:
             _create_schema(connection)
             counts = _insert_records(connection, raw_dir, manifests)
+            restore_hazard_snapshots(connection, raw_dir / "pubchem-ghs")
             _insert_metadata(connection, manifests)
             connection.commit()
             integrity = connection.execute("PRAGMA integrity_check").fetchone()
@@ -236,14 +242,14 @@ def _insert_chem21(connection: sqlite3.Connection, records: object) -> int:
                 overall, classification, replacements_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                record.name, normalize_identity(record.name), record.cas, record.pubchem_id,
+                record.name, canonical_solvent_identity(record.name), record.cas, record.pubchem_id,
                 *record.scores, max(record.scores), record.classification,
                 _json(record.replacements),
             ),
         )
         chem21_id = cursor.lastrowid
         for alias in (record.name, *record.aliases):
-            normalized_alias = normalize_identity(alias)
+            normalized_alias = canonical_solvent_identity(alias)
             existing = connection.execute(
                 "SELECT chem21_id FROM chem21_aliases WHERE normalized_alias = ?", (normalized_alias,)
             ).fetchone()
@@ -271,7 +277,7 @@ def _insert_single_solubility(connection: sqlite3.Connection, records: object) -
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 record.solute_smiles, _normalized_smiles(record.solute_smiles), record.solvent,
-                normalize_identity(record.solvent), record.solvent_smiles, record.compound_name,
+                canonical_solvent_identity(record.solvent), record.solvent_smiles, record.compound_name,
                 record.cas, record.pubchem_id, _number(measurement["Temperature_K"]),
                 _number(measurement["Solubility(mole_fraction)"]), _number(measurement["Solubility(mol/L)"]),
                 _number(measurement["LogS(mol/L)"]), record.source_doi, _json(measurement), _json(record.units),
@@ -296,8 +302,8 @@ def _insert_mixture_solubility(connection: sqlite3.Connection, records: object) 
                 measurements_json, units_json, raw_values_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                record.solute_smiles, record.solvent_1, normalize_identity(record.solvent_1), record.solvent_2,
-                normalize_identity(record.solvent_2), record.solvent_1_smiles, record.solvent_2_smiles,
+                record.solute_smiles, record.solvent_1, canonical_solvent_identity(record.solvent_1), record.solvent_2,
+                canonical_solvent_identity(record.solvent_2), record.solvent_1_smiles, record.solvent_2_smiles,
                 record.compound_name, record.cas, record.pubchem_id, _number(measurement["Temperature_K"]),
                 _number(measurement["Solubility(mole_fraction)"]), _number(measurement["LogS(mole_fraction)"]),
                 _number(measurement["Solubility(g/g100)"]), _number(measurement["LogS(g/g100)"]),
@@ -320,7 +326,7 @@ def _insert_density(connection: sqlite3.Connection, records: object) -> int:
                 measurements_json, units_json, raw_values_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                record.solvent, normalize_identity(record.solvent), _number(measurement["Temperature_K"]),
+                record.solvent, canonical_solvent_identity(record.solvent), _number(measurement["Temperature_K"]),
                 _number(measurement["Density_g/cm^3"]), record.source_doi, _json(measurement),
                 _json(record.units), _json(record.raw_values),
             ),
@@ -368,3 +374,22 @@ def _number(value: str | None) -> float | None:
 def _json(value: object) -> str:
     serializable = dict(value) if isinstance(value, Mapping) else value
     return json.dumps(serializable, sort_keys=True, separators=(",", ":"))
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Build the generated index from the versioned service assets."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--raw", required=True, type=Path)
+    parser.add_argument("--manifests", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args(argv)
+    report = build_index(args.raw, args.manifests, args.output)
+    print(f"Built solvent evidence index: {report.index_path}")
+    print(f"CHEM21 records: {report.record_counts['chem21']}")
+    print(f"Single-solubility records: {report.record_counts['single_solubility']}")
+    print(f"Mixture-solubility records: {report.record_counts['mixture_solubility']}")
+    print(f"Density records: {report.record_counts['density']}")
+
+
+if __name__ == "__main__":
+    main()

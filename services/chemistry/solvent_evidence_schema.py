@@ -136,6 +136,51 @@ def normalize_identity(value: str) -> str:
     return " ".join(value.casefold().replace("_", " ").split())
 
 
+_SOLVENT_IDENTITY_ALIASES = {
+    "n,n-dimethylformamide": (
+        "dmf",
+        "dimethylformamide",
+        "n,n dimethylformamide",
+    ),
+    "n,n-dimethylacetamide": (
+        "dmac",
+        "dimethylacetamide",
+        "n,n dimethylacetamide",
+    ),
+    "dimethyl sulfoxide": ("dmso", "dimethylsulfoxide"),
+    "n-methyl-2-pyrrolidinone": (
+        "nmp",
+        "n-methyl-2-pyrrolidone",
+        "n methyl 2 pyrrolidone",
+        "n methyl 2 pyrrolidinone",
+        "1-methyl-2-pyrrolidinone",
+    ),
+    "tetrahydrofuran": ("thf",),
+}
+_CANONICAL_SOLVENT_IDENTITIES = {
+    normalize_identity(alias): canonical
+    for canonical, aliases in _SOLVENT_IDENTITY_ALIASES.items()
+    for alias in (canonical, *aliases)
+}
+
+
+def canonical_solvent_identity(value: str) -> str:
+    """Return one supported solvent key while preserving ordinary identities."""
+    normalized = normalize_identity(value)
+    return _CANONICAL_SOLVENT_IDENTITIES.get(normalized, normalized)
+
+
+
+def solvent_identity_keys(value: str) -> tuple[str, ...]:
+    """Return every supported stored key for one solvent identity."""
+    canonical = canonical_solvent_identity(value)
+    keys = [canonical]
+    keys.extend(
+        key for key, mapped_canonical in _CANONICAL_SOLVENT_IDENTITIES.items()
+        if mapped_canonical == canonical and key != canonical
+    )
+    return tuple(keys)
+
 def validate_manifest(path: str | Path, asset_path: str | Path) -> DatasetManifest:
     """Validate a manifest's shape and bind it to the exact asset bytes."""
     manifest_path = Path(path)
