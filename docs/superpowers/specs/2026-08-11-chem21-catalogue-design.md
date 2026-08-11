@@ -4,7 +4,7 @@
 
 ## Goal
 
-Replace GC.ai's incomplete hand-maintained CHEM21 map with a validated 53-record catalogue, provide locally stored experimental solvent evidence in the read-only scientific chat, and expose a complete local PubChem GHS hazard snapshot for every solvent represented by the imported evidence sources. The system must never conflate hazard classifications, physical measurements, and reaction suitability.
+Replace GC.ai's incomplete hand-maintained CHEM21 map with a validated 53-record catalogue, provide locally stored experimental solvent evidence in the read-only scientific chat, expose a complete local PubChem GHS hazard snapshot for every solvent represented by the imported evidence sources, and support tightly gated laboratory-screening recommendations. The system must never conflate hazard classifications, physical measurements, and reaction suitability.
 
 ## Problem
 
@@ -104,6 +104,20 @@ The prompt and chat UI label evidence by source:
 
 The assistant must state that none of these records alone demonstrates reaction compatibility, yield, selectivity, scale-up safety, or a suitable replacement for the user's process. It must not invent CHEM21 scores, substitute relationships, measurements, citations, unmeasured mixture behavior, or an absence-of-hazard conclusion from a missing profile.
 
+### Evidence-backed screening recommendations
+
+GC.ai may issue an “evidence-backed screening recommendation” only when every gate below passes:
+
+1. the procedure’s target solute and each BigSolDB record have the same normalized molecular structure, not merely similar names, related scaffolds, alternate salt forms, or ambiguous stereochemistry;
+2. current and candidate solvents have pure-solvent BigSolDB measurements at the same stated temperature and the candidate’s reported mole-fraction solubility is equal to or greater than the current solvent’s;
+3. both solvents have complete local PubChem GHS profiles;
+4. the candidate improves the targeted hazard category and introduces no more-severe CMR, acute-toxicity, organ-toxicity, environmental, or physical-hazard category;
+5. every cited measurement and hazard profile is locally available with its source DOI or PubChem snapshot provenance.
+
+The hazard comparison is a category-by-category partial order, not a composite toxicity score. Missing, unresolved, or incomplete GHS data fails the gate. A measurement at a merely nearby temperature can be displayed as a candidate, but cannot qualify for a recommendation. Mixture measurements are evidence only for their exact binary solvent pair and stated composition; they do not qualify a pure-solvent recommendation.
+
+Recommendation copy must state that laboratory compatibility validation is required and must name the remaining uncertainty: reaction rate, selectivity, catalyst compatibility, workup, crystallization, and scale-up safety are not established by the evidence. If the CHEM21 CSV lists the candidate as an explicit replacement, the response may additionally say so. Otherwise it must not imply CHEM21 endorsement.
+
 ## Import and synchronization
 
 The project provides an idempotent source import/validation command. It reports manifest/hash validation, input/output record counts, duplicate/invalid records, source attribution coverage, index metadata, and SQLite integrity status. It does not alter raw LFS assets.
@@ -153,6 +167,7 @@ Tests must cover:
 - prompt/UI source labels and warnings distinguishing measurement, classification, hazard screening, and reaction suitability;
 - no external HTTP request during CHEM21, measurement, or hazard-profile lookup;
 - authenticated browser smoke proving a scoped-substrate/candidate-solvent question shows raw measured conditions, local hazard evidence, and provenance without mutating the analysis.
+- positive and negative screening-recommendation gates, including exact-structure mismatch, temperature mismatch, lower candidate solubility, incomplete GHS profile, hazard tradeoff, explicit CHEM21 replacement, and required laboratory-validation wording;
 
 ## Non-goals
 
@@ -161,4 +176,5 @@ Tests must cover:
 - Treating SSG data as CHEM21 data.
 - Solv@TUM partition/free-energy ingestion.
 - Predicting solubility, reaction outcome, yield, selectivity, or scale-up safety from these references.
+- Automatic procedural solvent substitution or an unqualified “use this solvent” recommendation.
 - Mutating the saved analysis, protocol, recommendation, or acceptance state from chat.
