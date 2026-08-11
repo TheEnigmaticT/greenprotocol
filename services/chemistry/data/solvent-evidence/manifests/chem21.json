@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "dataset_id": "chem21",
+  "asset_filename": "CHEM21_full.csv",
+  "sha256": "1f8211f9ebac717d850c33394c55684e36c1c5a216d9f0b7ca558800f3ca9727",
+  "record_count": 53,
+  "license": "unverified",
+  "attribution": "Prat, A.; Wells, A.; Hayler, J.; Sneddon, H.; McElroy, C. R.; Abou-Shehada, S.; Dunn, P. J. CHEM21 selection guide of classical- and less classical-solvents. Green Chemistry 2016, 18, 288-296.",
+  "source": {
+    "name": "CHEM21 solvent selection guide",
+    "doi": "10.1039/C5GC01008J",
+    "acquisition_method": "manual_acquisition",
+    "reuse_status": "unverified",
+    "source_location": "/Users/ct-mac-mini/Downloads/Solvent DBs/CHEM21_full.csv"
+  }
+}

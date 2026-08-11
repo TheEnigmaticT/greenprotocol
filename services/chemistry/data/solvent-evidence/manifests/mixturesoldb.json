@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "dataset_id": "mixturesoldb",
+  "asset_filename": "MixtureSolDB.csv",
+  "sha256": "d0f9e38687a69c4b94c998c5b265a5304e0f7a5c0637243c3a84f2375506a58e",
+  "record_count": 175626,
+  "license": "CC-BY-4.0",
+  "attribution": "MixtureSolDB, Zenodo record 18660057.",
+  "source": {
+    "name": "MixtureSolDB",
+    "doi": "10.5281/zenodo.18660057",
+    "acquisition_method": "download",
+    "reuse_status": "verified"
+  }
+}

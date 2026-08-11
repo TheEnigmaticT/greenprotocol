@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "dataset_id": "bigsoldb_densities",
+  "asset_filename": "BigSolDBv2.0_densities.csv",
+  "sha256": "02226420d9fb3294cb32211dac7f6ff7fa067511924afdb9f1893af1e334aac6",
+  "record_count": 2209,
+  "license": "CC-BY-4.0",
+  "attribution": "BigSolDB v2.0 densities, Zenodo record 15094979; Vandaele et al., Scientific Data 2025.",
+  "source": {
+    "name": "BigSolDB v2.0 densities",
+    "doi": "10.5281/zenodo.15094979",
+    "paper_doi": "10.1038/s41597-025-05559-8",
+    "acquisition_method": "download",
+    "reuse_status": "verified"
+  }
+}

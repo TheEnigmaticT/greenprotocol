@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "dataset_id": "bigsoldb",
+  "asset_filename": "BigSolDBv2.0.csv",
+  "sha256": "879f55f39db977e295c705e304d011d89d6e10da1daaa3f069181108c1de38b0",
+  "record_count": 103944,
+  "license": "CC-BY-4.0",
+  "attribution": "BigSolDB v2.0, Zenodo record 15094979; Vandaele et al., Scientific Data 2025.",
+  "source": {
+    "name": "BigSolDB v2.0",
+    "doi": "10.5281/zenodo.15094979",
+    "paper_doi": "10.1038/s41597-025-05559-8",
+    "acquisition_method": "download",
+    "reuse_status": "verified"
+  }
+}

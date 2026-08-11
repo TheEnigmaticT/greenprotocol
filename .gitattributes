@@ -1,0 +1,2 @@
+/services/chemistry/data/solvent-evidence/raw/*.csv filter=lfs diff=lfs merge=lfs -text
+/services/chemistry/data/solvent-evidence/raw/pubchem-ghs/*.json filter=lfs diff=lfs merge=lfs -text
