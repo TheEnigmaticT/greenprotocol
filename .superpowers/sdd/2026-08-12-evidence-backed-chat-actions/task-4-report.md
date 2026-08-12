@@ -73,7 +73,7 @@ Focused tests cover the tool boundary, evidence propagation, abort failure handl
 
 ## Repair commit
 
-`PENDING`
+`6b39a5e fix: preserve scoped chat evidence`
 
 ## Repair RED/GREEN evidence
 
