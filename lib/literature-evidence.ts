@@ -48,8 +48,8 @@ function throwIfAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw abortError()
 }
 
-function awaitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return operation
+function awaitWithAbort<T>(operation: PromiseLike<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return Promise.resolve(operation)
   throwIfAborted(signal)
 
   return new Promise<T>((resolve, reject) => {
