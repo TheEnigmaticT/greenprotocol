@@ -336,3 +336,20 @@ export interface CumulativeImpact {
   waterSavedL: number
   energySavedKwh: number
 }
+
+export type EvidenceSignalGroup = 'comparison' | 'process' | 'outcome' | 'hazard'
+
+export interface LiteratureEvidenceMatch {
+  id: string
+  sourceDocumentId: string
+  doi?: string
+  title: string
+  pageStart: number
+  pageEnd: number
+  quote: string
+  evidenceType?: string
+  applicability?: string
+  limitations?: string
+  candidateStatus: string
+  similarity: number
+}
