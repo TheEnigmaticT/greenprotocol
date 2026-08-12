@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatProvider, ChatToolCall } from '@/lib/talk-about-this/chat-provider'
+import { telemetryForActivity } from '@/lib/talk-about-this/latency'
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
 import { buildTalkAboutSystemPrompt } from '@/lib/talk-about-this/prompt'
 import {
@@ -8,6 +9,7 @@ import {
   type ToolName,
   type ToolResult,
 } from '@/lib/talk-about-this/tools'
+import type { LiteratureEvidenceTiming } from '@/lib/literature-evidence'
 import type { Citation, EvidenceSignalGroup, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const MAX_TOOL_ROUNDS = 4
@@ -23,12 +25,19 @@ export interface ScopedToolChatRequest {
   signal?: AbortSignal
   executeTool: (call: ScopedToolCall, signal?: AbortSignal) => Promise<ToolResult>
   onEvent: (event: ChatLifecycleEvent, data: Record<string, unknown>) => void
+  now?: () => number
 }
 
 export interface ChatRunResult {
+  telemetry: ChatLatencyTelemetry
   answer: string
   citations: Citation[]
   evidence: LiteratureEvidenceMatch[]
+}
+
+export interface ChatLatencyTelemetry extends LiteratureEvidenceTiming {
+  initialProviderFirstTextAt?: number
+  finalProviderFirstTextAt?: number
 }
 
 function isToolName(name: string): name is ToolName {
@@ -300,14 +309,16 @@ export async function runScopedToolChat({
   signal,
   executeTool,
   onEvent,
+  now = performance.now.bind(performance),
 }: ScopedToolChatRequest): Promise<ChatRunResult> {
   const conversation = [...messages]
   const canonicalSmilesByChemical = new Map<string, string>()
   const toolLoopDeadline = Date.now() + TOOL_LOOP_TIMEOUT_MS
-
   const citationsById = new Map<string, Citation>()
   const evidenceById = new Map<string, LiteratureEvidenceMatch>()
   const answerParts: string[] = []
+  const telemetry: ChatLatencyTelemetry = {}
+
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     const turnText: string[] = []
     let toolCalls: ChatToolCall[] = []
@@ -322,6 +333,12 @@ export async function runScopedToolChat({
       if (event.text) {
         turnText.push(event.text)
         answerParts.push(event.text)
+        if (round === 0 && telemetry.initialProviderFirstTextAt === undefined) {
+          telemetry.initialProviderFirstTextAt = now()
+        }
+        if (round > 0 && telemetry.finalProviderFirstTextAt === undefined) {
+          telemetry.finalProviderFirstTextAt = now()
+        }
         onEvent('delta', { text: event.text })
       }
       if (event.toolCalls) toolCalls = event.toolCalls
@@ -334,6 +351,7 @@ export async function runScopedToolChat({
         answer,
         citations: [...citationsById.values()],
         evidence: [...evidenceById.values()],
+        telemetry,
       }
     }
     if (round === MAX_TOOL_ROUNDS) throw new Error('Model exceeded the maximum number of tool rounds')
@@ -368,7 +386,13 @@ export async function runScopedToolChat({
               : []
             for (const match of evidence) evidenceById.set(match.id, match)
             for (const citation of result.citations) citationsById.set(citation.source_id, citation)
-            onEvent('tool-complete', { ...activityData(call, result), evidence, citations: result.citations.slice(0, 5) })
+            Object.assign(telemetry, result.telemetry)
+            onEvent('tool-complete', {
+              ...activityData(call, result),
+              evidence,
+              citations: result.citations.slice(0, 5),
+              telemetry: telemetryForActivity(result.telemetry ?? {}),
+            })
           } else {
             onEvent('tool-complete', activityData(call, result))
           }

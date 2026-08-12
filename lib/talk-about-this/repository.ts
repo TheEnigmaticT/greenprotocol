@@ -33,7 +33,21 @@ export interface StoredLiteratureCitation extends Citation {
   >
 }
 
-export type StoredMessageCitation = string | StoredLiteratureCitation
+export type StoredMessageCitation = string | StoredLiteratureCitation | StoredMessageTelemetry
+
+export interface StoredMessageTelemetry {
+  telemetry: {
+    clock: 'performance.now'
+    routeStartedAt: number
+    initialProviderFirstTextAt?: number
+    embeddingStartedAt?: number
+    embeddingFinishedAt?: number
+    rpcStartedAt?: number
+    rpcFinishedAt?: number
+    finalProviderFirstTextAt?: number
+  }
+}
+
 
 export interface TalkMessage {
   id: string
@@ -113,6 +127,7 @@ export function assistantMessageCitations(
   snapshotCitationIds: string[],
   literatureCitations: Citation[],
   literatureEvidence: LiteratureEvidenceMatch[],
+  telemetry?: StoredMessageTelemetry['telemetry'],
 ): StoredMessageCitation[] {
   const evidenceById = new Map(literatureEvidence.map(evidence => [evidence.id, evidence]))
   const citations: StoredMessageCitation[] = [...snapshotCitationIds]
@@ -120,7 +135,9 @@ export function assistantMessageCitations(
   for (const citation of literatureCitations) {
     const evidence = evidenceById.get(citation.source_id)
     if (!evidence || citations.some(item => (
-      typeof item === 'string' ? item === citation.source_id : item.source_id === citation.source_id
+      typeof item === 'string'
+        ? item === citation.source_id
+        : 'source_id' in item && item.source_id === citation.source_id
     ))) continue
 
     citations.push({
@@ -139,7 +156,7 @@ export function assistantMessageCitations(
       },
     })
   }
-
+  if (telemetry) citations.push({ telemetry })
   return citations
 }
 

@@ -1,5 +1,9 @@
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
-import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
+import {
+  citationFromEvidenceMatch,
+  searchLiteratureEvidence,
+  type LiteratureEvidenceTiming,
+} from '@/lib/literature-evidence'
 import type { Citation, EvidenceSignalGroup, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const TOOL_NAMES = [
@@ -75,6 +79,7 @@ export interface ToolResult {
   data: Record<string, unknown>
   citations: Citation[]
   warnings: string[]
+  telemetry?: LiteratureEvidenceTiming
 }
 
 export interface LiteratureEvidenceToolResult extends ToolResult {
@@ -250,10 +255,18 @@ export async function executeScopedTool(context: TalkAboutContext, call: ScopedT
       break
     case 'search_scoped_literature_evidence': {
       if (!queryMatchesScope(context, call.query)) throw new Error('Literature evidence query must mention a scoped chemical or recommendation pair')
-      const evidence = await searchLiteratureEvidence({ query: call.query, limit: 5, threshold: 0.25, signalGroups: call.signalGroups, signal })
+      let telemetry: LiteratureEvidenceTiming = {}
+      const evidence = await searchLiteratureEvidence({
+        query: call.query,
+        limit: 5,
+        threshold: 0.25,
+        signalGroups: call.signalGroups,
+        signal,
+        onTelemetry: timing => { telemetry = timing },
+      })
       return {
         operation: 'literature_evidence', chemical_name: '', status: 'ok', source: 'Literature evidence index',
-        data: { evidence }, citations: evidence.map(citationFromEvidenceMatch), warnings: [],
+        data: { evidence }, citations: evidence.map(citationFromEvidenceMatch), warnings: [], telemetry,
       }
     }
   }

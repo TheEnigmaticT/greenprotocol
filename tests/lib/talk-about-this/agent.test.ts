@@ -93,6 +93,72 @@ describe('runScopedToolChat', () => {
     })
   })
 
+  it('records initial and final provider first text separately and carries retrieval timing in tool activity', async () => {
+    let requests = 0
+    let clock = 100
+    const events: Array<{ event: string; data: Record<string, unknown> }> = []
+    const provider: ChatProvider = {
+      async *stream() {
+        requests += 1
+        if (requests === 1) {
+          yield { text: 'I will check the literature. ' }
+          yield {
+            toolCalls: [{
+              id: 'lit-1',
+              name: 'search_scoped_literature_evidence',
+              arguments: JSON.stringify({ query: 'DMF comparison' }),
+            }],
+          }
+          return
+        }
+        yield { text: 'The evidence is available.' }
+      },
+    }
+
+    const result = await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Compare DMF.' }],
+      executeTool: async () => ({
+        operation: 'literature_evidence',
+        chemical_name: '',
+        status: 'ok',
+        source: 'Literature evidence index',
+        data: { evidence: [] },
+        telemetry: {
+          embeddingStartedAt: 110,
+          embeddingFinishedAt: 120,
+          rpcStartedAt: 130,
+          rpcFinishedAt: 140,
+        },
+        citations: [],
+        warnings: [],
+      }),
+      onEvent: (event, data) => events.push({ event, data }),
+      now: () => clock += 100,
+    })
+
+    expect(result.telemetry).toEqual({
+      initialProviderFirstTextAt: 200,
+      embeddingStartedAt: 110,
+      embeddingFinishedAt: 120,
+      rpcStartedAt: 130,
+      rpcFinishedAt: 140,
+      finalProviderFirstTextAt: 300,
+    })
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'tool-complete',
+      data: expect.objectContaining({
+        telemetry: {
+          embeddingStartedAt: 110,
+          embeddingFinishedAt: 120,
+          rpcStartedAt: 130,
+          rpcFinishedAt: 140,
+        },
+      }),
+    }))
+  })
+
   it('caps each model turn at three tool calls and returns unavailable results for excess calls', async () => {
     let requests = 0
     let executions = 0

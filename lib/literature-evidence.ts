@@ -15,12 +15,20 @@ const SUPPORTED_SIGNAL_GROUPS: Record<EvidenceSignalGroup, true> = {
   hazard: true,
 }
 
+export interface LiteratureEvidenceTiming {
+  embeddingStartedAt?: number
+  embeddingFinishedAt?: number
+  rpcStartedAt?: number
+  rpcFinishedAt?: number
+}
+
 interface SearchLiteratureEvidenceInput {
   query: string
   limit: number
   threshold: number
   signalGroups?: EvidenceSignalGroup[]
   signal?: AbortSignal
+  onTelemetry?: (timing: LiteratureEvidenceTiming) => void
 }
 
 interface EvidenceRpcRow {
@@ -129,6 +137,13 @@ function validateInput(input: SearchLiteratureEvidenceInput): string {
   return query
 }
 
+function reportTiming(
+  input: SearchLiteratureEvidenceInput,
+  timing: LiteratureEvidenceTiming,
+): void {
+  input.onTelemetry?.({ ...timing })
+}
+
 export async function searchLiteratureEvidence(
   input: SearchLiteratureEvidenceInput,
 ): Promise<LiteratureEvidenceMatch[]> {
@@ -136,6 +151,8 @@ export async function searchLiteratureEvidence(
   throwIfAborted(input.signal)
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  const timing: LiteratureEvidenceTiming = { embeddingStartedAt: performance.now() }
+  reportTiming(input, timing)
   const embeddingResponse = await awaitWithAbort(
     openai.embeddings.create(
       { model: 'text-embedding-3-small', input: query },
@@ -143,10 +160,15 @@ export async function searchLiteratureEvidence(
     ),
     input.signal,
   )
+  timing.embeddingFinishedAt = performance.now()
+  reportTiming(input, timing)
   throwIfAborted(input.signal)
 
   const embedding = embeddingResponse.data[0]?.embedding
   if (!embedding) throw new Error('Literature evidence embedding was empty')
+
+  timing.rpcStartedAt = performance.now()
+  reportTiming(input, timing)
 
   const { data, error } = await awaitWithAbort(
     createAdminClient().rpc('match_literature_evidence_units', {
@@ -158,6 +180,8 @@ export async function searchLiteratureEvidence(
     }),
     input.signal,
   )
+  timing.rpcFinishedAt = performance.now()
+  reportTiming(input, timing)
   throwIfAborted(input.signal)
 
   if (error) throw error

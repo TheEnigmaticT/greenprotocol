@@ -1,7 +1,8 @@
 import { runScopedToolChat } from '@/lib/talk-about-this/agent'
+import { firstForwardedDeltaMs } from '@/lib/talk-about-this/latency'
 import { createConfiguredChatProvider, type ChatMessage } from '@/lib/talk-about-this/chat-provider'
 import { executeScopedTool } from '@/lib/talk-about-this/tools'
-import { assistantMessageCitations, createMessage, listConversationMessages, loadOwnedConversation } from '@/lib/talk-about-this/repository'
+import { assistantMessageCitations, createMessage, listConversationMessages, loadOwnedConversation, type StoredMessageTelemetry } from '@/lib/talk-about-this/repository'
 import { approveScopedRecommendation, isExplicitScopedApprovalRequest } from '@/lib/talk-about-this/actions'
 import { createClient } from '@/lib/supabase/server'
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
@@ -154,6 +155,10 @@ export async function POST(
         let ttftMs: number | null = null
         let status: 'complete' | 'failed' | 'cancelled' = 'complete'
         let literatureCitations: Citation[] = []
+        let latencyTelemetry: StoredMessageTelemetry['telemetry'] = {
+          clock: 'performance.now',
+          routeStartedAt: performance.now(),
+        }
         let literatureEvidence: LiteratureEvidenceMatch[] = []
 
         const send = (event: string, data: Record<string, unknown>) => {
@@ -175,12 +180,16 @@ export async function POST(
             signal: abortController.signal,
             executeTool: (call, signal) => executeScopedTool(conversation.context_snapshot, call, signal),
             onEvent: (event, data) => {
-              if (event === 'delta' && ttftMs === null) ttftMs = Date.now() - startedAt
+              ttftMs = firstForwardedDeltaMs(ttftMs, event, startedAt, Date.now())
               send(event, event === 'tool-complete' ? activityPayload(data) : data)
             },
           })
           answer = result.answer
           literatureCitations = result.citations
+          latencyTelemetry = {
+            ...latencyTelemetry,
+            ...result.telemetry,
+          }
           literatureEvidence = result.evidence
         } catch (error) {
           status = abortController.signal.aborted ? 'cancelled' : 'failed'
@@ -200,6 +209,7 @@ export async function POST(
             snapshotCitationIds,
             literatureCitations,
             literatureEvidence,
+            latencyTelemetry,
           )
 
           await createMessage(supabase, user.id, conversationId, {
@@ -209,8 +219,13 @@ export async function POST(
             status,
             ttft_ms: ttftMs,
           })
-
-          send('done', { status, ttftMs, citationIds, evidence: literatureEvidence })
+          send('done', {
+            status,
+            ttftMs,
+            citationIds,
+            evidence: literatureEvidence,
+            telemetry: latencyTelemetry,
+          })
           controller.close()
         }
       })()

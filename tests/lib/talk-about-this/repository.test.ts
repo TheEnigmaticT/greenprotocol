@@ -41,4 +41,28 @@ describe('assistantMessageCitations', () => {
       },
     }])
   })
+
+  it('embeds structured monotonic timing telemetry in citations JSONB', () => {
+    expect(assistantMessageCitations([], [], [], {
+      clock: 'performance.now',
+      routeStartedAt: 10,
+      initialProviderFirstTextAt: 20,
+      embeddingStartedAt: 30,
+      embeddingFinishedAt: 40,
+      rpcStartedAt: 50,
+      rpcFinishedAt: 60,
+      finalProviderFirstTextAt: 70,
+    })).toEqual([{
+      telemetry: {
+        clock: 'performance.now',
+        routeStartedAt: 10,
+        initialProviderFirstTextAt: 20,
+        embeddingStartedAt: 30,
+        embeddingFinishedAt: 40,
+        rpcStartedAt: 50,
+        rpcFinishedAt: 60,
+        finalProviderFirstTextAt: 70,
+      },
+    }])
+  })
 })

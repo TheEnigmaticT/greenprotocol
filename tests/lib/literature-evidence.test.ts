@@ -83,6 +83,29 @@ describe('searchLiteratureEvidence', () => {
     )
   })
 
+  it('reports monotonic embedding and evidence-RPC boundaries without timing synthetic events', async () => {
+    const telemetry: Array<Partial<Record<'embeddingStartedAt' | 'embeddingFinishedAt' | 'rpcStartedAt' | 'rpcFinishedAt', number>>> = []
+    vi.spyOn(performance, 'now')
+      .mockReturnValueOnce(10)
+      .mockReturnValueOnce(20)
+      .mockReturnValueOnce(30)
+      .mockReturnValueOnce(40)
+
+    await searchLiteratureEvidence({
+      query: 'DMF comparison',
+      limit: 5,
+      threshold: 0.25,
+      onTelemetry: timing => telemetry.push(timing),
+    })
+
+    expect(telemetry).toEqual([
+      { embeddingStartedAt: 10 },
+      { embeddingStartedAt: 10, embeddingFinishedAt: 20 },
+      { embeddingStartedAt: 10, embeddingFinishedAt: 20, rpcStartedAt: 30 },
+      { embeddingStartedAt: 10, embeddingFinishedAt: 20, rpcStartedAt: 30, rpcFinishedAt: 40 },
+    ])
+  })
+
   it.each(['', 'x'.repeat(501)])('rejects invalid query %j before embedding', async (query) => {
     await expect(searchLiteratureEvidence({ query, limit: 5, threshold: 0.25 }))
       .rejects.toThrow('query')
