@@ -457,6 +457,32 @@ async function reevaluateRecommendation(
   }
 }
 
+function isCandidateOnlyEvidence(matches: LiteratureEvidenceMatch[]): boolean {
+  return matches.length > 0 && matches.every(
+    match => match.candidateStatus === 'candidate_pending_adjudication'
+  )
+}
+
+function enforceCandidateOnlyReevaluation(
+  reevaluation: ReevaluationResult,
+  matches: LiteratureEvidenceMatch[],
+): ReevaluationResult {
+  if (!isCandidateOnlyEvidence(matches) || reevaluation.action === 'downgrade') {
+    return reevaluation
+  }
+
+  return {
+    ...reevaluation,
+    action: 'downgrade',
+    revisedConfidence: 'low',
+    concerns: [
+      ...reevaluation.concerns,
+      'Candidate-only evidence cannot independently confirm or suppress this intervention.',
+    ],
+    suppressionReason: undefined,
+  }
+}
+
 async function reevaluateAllRecommendations(
   recommendations: Recommendation[],
   onProgress?: (event: ProgressEvent) => void
@@ -490,7 +516,10 @@ async function reevaluateAllRecommendations(
     }
 
     // Re-evaluate with LLM
-    const reevaluation = await reevaluateRecommendation(rec, literatureEvidence)
+    const reevaluationResult = await reevaluateRecommendation(rec, literatureEvidence)
+    const reevaluation = reevaluationResult
+      ? enforceCandidateOnlyReevaluation(reevaluationResult, literatureEvidence)
+      : null
 
     if (!reevaluation) {
       stats.failed++

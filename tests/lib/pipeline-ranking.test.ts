@@ -193,3 +193,65 @@ describe('Phase 2.5 evidence grounding', () => {
     )
   })
 })
+
+describe.each(['confirm', 'suppress'] as const)(
+  'Phase 2.7 candidate-only re-evaluation',
+  action => {
+    it(`does not ${action} a recommendation from candidate-only evidence`, async () => {
+      mocks.evidenceSearch.mockResolvedValue([candidateMatch('doi:p4:u2')])
+      mocks.anthropicCreate
+        .mockResolvedValueOnce(anthropicResponse({
+          protocolTitle: 'Extraction',
+          chemistrySubdomain: 'Organic synthesis',
+          steps: [{
+            stepNumber: 1,
+            description: 'Extract with dichloromethane.',
+            chemicals: [{ name: 'Dichloromethane', role: 'solvent' }],
+            conditions: {},
+          }],
+        }))
+        .mockImplementation(({ system }: { system: string }) => {
+          if (system.includes('protocol writer')) {
+            return Promise.resolve(anthropicResponse({
+              revisedProtocol: 'Revised extraction protocol.',
+              overallAssessment: {
+                greenPrinciplesViolated: [5],
+                mostImpactfulChange: 'Replace dichloromethane.',
+                experimentalValidationNeeded: true,
+                disclaimer: 'Validate experimentally.',
+              },
+            }))
+          }
+          if (system.includes('critical re-evaluation')) {
+            return Promise.resolve(anthropicResponse({
+              action,
+              revisedConfidence: 'high',
+              revisedRationale: 'Candidate-only result.',
+              evidenceAssessment: {
+                supportsOriginalIssue: true,
+                supportsAlternative: true,
+                contextMatch: 'strong',
+                quantitativeData: true,
+              },
+              concerns: [],
+              suppressionReason: 'Candidate-only result.',
+            }))
+          }
+          return Promise.resolve(anthropicResponse({
+            principleNumber: 5,
+            recommendations: system.includes('Principle 5') ? [makeRec({})] : [],
+          }))
+        })
+
+      const result = await analyzeProtocol('Extract with dichloromethane.')
+
+      expect(result.recommendations).toHaveLength(1)
+      expect(result.recommendations[0].confidenceLevel).toBe('low')
+      expect(result.reevaluationStats).toMatchObject({
+        confirmed: 0,
+        suppressed: 0,
+        downgraded: 1,
+      })
+    })
+  },
+)
