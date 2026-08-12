@@ -84,8 +84,8 @@ export interface LiteratureEvidenceToolResult extends ToolResult {
 
 type ToolParameter =
   | { type: 'string'; enum?: readonly string[] }
-  | { type: 'number' }
-  | { type: 'array'; items: { type: 'string'; enum: readonly string[] } }
+  | { type: 'number'; enum?: readonly string[] }
+  | { type: 'array'; enum?: readonly string[]; items: { type: 'string'; enum: readonly string[] } }
 
 interface ToolSchemaVariant {
   properties: Record<string, ToolParameter>

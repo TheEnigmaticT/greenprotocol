@@ -97,7 +97,7 @@ describe('activityData', () => {
             warnings: [candidateWarning],
           }],
         },
-        citations: [{ source: 'PubChem GHS' }],
+        citations: [{ source_id: 'pubchem:ghs', source_name: 'PubChem GHS', citation: 'PubChem GHS' }],
         warnings: [],
       },
     )

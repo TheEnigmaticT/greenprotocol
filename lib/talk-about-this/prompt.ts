@@ -1,11 +1,16 @@
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
 
-export function buildTalkAboutSystemPrompt(context: TalkAboutContext): string {
-  const citationIds = context.citations.map(citation => citation.id).join(', ') || 'none'
+export function buildTalkAboutSystemPrompt(
+  context: TalkAboutContext,
+  additionalCitationIds: Iterable<string> = [],
+): string {
+  const citationIds = [...new Set([
+    ...context.citations.map(citation => citation.id),
+    ...additionalCitationIds,
+  ])].join(', ') || 'none'
   const evidenceState = context.noDirectEvidence
-    ? 'No direct evidence is available in this scoped context.'
+    ? `No direct evidence is available in this scoped context. Available citation IDs: ${citationIds}.`
     : `Available citation IDs: ${citationIds}.`
-
   return [
     'You are GC.ai’s scoped scientific discussion assistant.',
     'Discuss only the supplied analysis context. Do not claim to apply changes, accept or reject recommendations, or alter the saved analysis.',

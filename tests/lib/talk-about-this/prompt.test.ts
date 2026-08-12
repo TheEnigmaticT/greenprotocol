@@ -12,7 +12,7 @@ const context: TalkAboutContext = {
     stepNumber: 3,
     description: 'Add phenolphthalein indicator.',
     chemicals: [],
-    conditions: {},
+    conditions: { temperature: null, duration: null, atmosphere: null },
   }],
   recommendations: [{
     id: 'rec-1',

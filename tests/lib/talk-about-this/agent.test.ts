@@ -21,7 +21,7 @@ const chem21Result: ToolResult = {
   status: 'ok',
   source: 'CHEM21',
   data: { classification: 'hazardous' },
-  citations: [{ citation: 'Prat et al.' }],
+  citations: [{ source_id: 'chem21:prat', source_name: 'CHEM21', citation: 'Prat et al.' }],
   warnings: [],
 }
 
@@ -265,11 +265,11 @@ describe('runScopedToolChat', () => {
 })
 
 describe('literature evidence propagation', () => {
-  it('propagates retrieved evidence citations and streams the first provider delta', async () => {
+  it('keeps visible pre-tool text in the terminal answer and authorizes retrieved evidence citations next round', async () => {
     let requests = 0
     const events: Array<{ event: string; data: Record<string, unknown> }> = []
     const provider: ChatProvider = {
-      async *stream() {
+      async *stream(request) {
         requests += 1
         if (requests === 1) {
           yield { text: 'I will check the literature. ' }
@@ -282,6 +282,7 @@ describe('literature evidence propagation', () => {
           }
           return
         }
+        expect(request.system).toContain('doi:p3:u1')
         yield { text: 'The retrieved evidence is candidate_pending_adjudication.' }
       },
     }
@@ -299,20 +300,24 @@ describe('literature evidence propagation', () => {
           evidence: [{
             id: 'doi:p3:u1',
             sourceDocumentId: 'doi:p3',
+            doi: '10.1000/example',
             title: 'A source',
             pageStart: 3,
             pageEnd: 3,
             quote: 'DMF comparison.',
+            applicability: 'DMF replacement',
+            limitations: 'Candidate evidence only.',
             candidateStatus: 'candidate_pending_adjudication',
             similarity: 0.98,
           }],
         },
-        citations: [{ source_id: 'doi:p3:u1', source_name: 'A source', citation: 'A source. pp. 3–3.' }],
+        citations: [{ source_id: 'doi:p3:u1', source_name: 'A source', citation: 'A source. pp. 3–3.', doi: '10.1000/example' }],
         warnings: [],
       }),
       onEvent: (event, data) => events.push({ event, data }),
     })
 
+    expect(result.answer).toBe('I will check the literature. The retrieved evidence is candidate_pending_adjudication.')
     expect(result.citations).toContainEqual(expect.objectContaining({ source_id: 'doi:p3:u1' }))
     expect(result.evidence).toContainEqual(expect.objectContaining({
       id: 'doi:p3:u1',

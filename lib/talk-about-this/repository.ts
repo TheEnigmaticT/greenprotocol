@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { AnalysisResult } from '@/lib/types'
+import type { AnalysisResult, Citation, LiteratureEvidenceMatch } from '@/lib/types'
 import type { TalkAboutContext, TalkAboutScope } from '@/lib/talk-about-this/context'
 
 export interface StoredAnalysis {
@@ -17,11 +17,28 @@ export interface TalkConversation {
   status: 'active' | 'closed'
 }
 
+export interface StoredLiteratureCitation extends Citation {
+  evidence: Pick<LiteratureEvidenceMatch,
+    | 'id'
+    | 'sourceDocumentId'
+    | 'doi'
+    | 'title'
+    | 'pageStart'
+    | 'pageEnd'
+    | 'quote'
+    | 'applicability'
+    | 'limitations'
+    | 'candidateStatus'
+  >
+}
+
+export type StoredMessageCitation = string | StoredLiteratureCitation
+
 export interface TalkMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
-  citations: string[]
+  citations: StoredMessageCitation[]
   status: 'streaming' | 'complete' | 'failed' | 'cancelled'
   ttft_ms: number | null
   created_at: string
@@ -89,6 +106,40 @@ export async function loadOwnedConversation(
   }
 
   return data as TalkConversation | null
+}
+
+export function assistantMessageCitations(
+  snapshotCitationIds: string[],
+  literatureCitations: Citation[],
+  literatureEvidence: LiteratureEvidenceMatch[],
+): StoredMessageCitation[] {
+  const evidenceById = new Map(literatureEvidence.map(evidence => [evidence.id, evidence]))
+  const citations: StoredMessageCitation[] = [...snapshotCitationIds]
+
+  for (const citation of literatureCitations) {
+    const evidence = evidenceById.get(citation.source_id)
+    if (!evidence || citations.some(item => (
+      typeof item === 'string' ? item === citation.source_id : item.source_id === citation.source_id
+    ))) continue
+
+    citations.push({
+      ...citation,
+      evidence: {
+        id: evidence.id,
+        sourceDocumentId: evidence.sourceDocumentId,
+        doi: evidence.doi,
+        title: evidence.title,
+        pageStart: evidence.pageStart,
+        pageEnd: evidence.pageEnd,
+        quote: evidence.quote,
+        applicability: evidence.applicability,
+        limitations: evidence.limitations,
+        candidateStatus: evidence.candidateStatus,
+      },
+    })
+  }
+
+  return citations
 }
 
 export async function createMessage(

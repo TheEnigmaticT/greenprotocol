@@ -8,7 +8,12 @@ const context = {
   scope: { kind: 'recommendation', recommendationId: 'rec-1' },
   protocolTitle: 'Suzuki coupling',
   protocolText: 'Use DMF with phenylboronic acid.',
-  steps: [{ stepNumber: 1, description: 'Use DMF.', chemicals: [{ name: 'DMF', role: 'solvent' }], conditions: {} }],
+  steps: [{
+    stepNumber: 1,
+    description: 'Use DMF.',
+    chemicals: [{ name: 'DMF', role: 'solvent', quantity: '', quantityMl: null, quantityKg: null }],
+    conditions: { temperature: null, duration: null, atmosphere: null },
+  }],
   recommendations: [{
     id: 'rec-1', stepNumber: 1, principleNumbers: [5], principleNames: ['Safer Solvents'], severity: 'high',
     original: { chemical: 'DMF', issue: 'Hazardous solvent' },

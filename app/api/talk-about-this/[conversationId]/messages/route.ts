@@ -1,7 +1,7 @@
 import { runScopedToolChat } from '@/lib/talk-about-this/agent'
 import { createConfiguredChatProvider, type ChatMessage } from '@/lib/talk-about-this/chat-provider'
 import { executeScopedTool } from '@/lib/talk-about-this/tools'
-import { createMessage, listConversationMessages, loadOwnedConversation } from '@/lib/talk-about-this/repository'
+import { assistantMessageCitations, createMessage, listConversationMessages, loadOwnedConversation } from '@/lib/talk-about-this/repository'
 import { createClient } from '@/lib/supabase/server'
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
@@ -136,11 +136,16 @@ export async function POST(
             ...snapshotCitationIds,
             ...literatureCitations.map(citation => citation.source_id),
           ])]
+          const citations = assistantMessageCitations(
+            snapshotCitationIds,
+            literatureCitations,
+            literatureEvidence,
+          )
 
           await createMessage(supabase, user.id, conversationId, {
             role: 'assistant',
             content: answer || (status === 'cancelled' ? 'Response cancelled.' : 'Unable to generate a response.'),
-            citations: citationIds,
+            citations,
             status,
             ttft_ms: ttftMs,
           })

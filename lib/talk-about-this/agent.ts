@@ -240,10 +240,11 @@ function objectRecords(value: unknown): Record<string, unknown>[] {
     : []
 }
 
-function sourceValues(record: Record<string, unknown>): string[] {
-  return ['source', 'source_id', 'source_name', 'source_url'].flatMap(field => (
-    typeof record[field] === 'string' ? [record[field]] : []
-  ))
+function sourceValues(record: Record<string, unknown> | Citation): string[] {
+  return ['source', 'source_id', 'source_name', 'source_url'].flatMap(field => {
+    const value = record[field as keyof typeof record]
+    return typeof value === 'string' ? [value] : []
+  })
 }
 
 function datasetForMeasurement(measurement: Record<string, unknown>): string | null {
@@ -306,26 +307,28 @@ export async function runScopedToolChat({
 
   const citationsById = new Map<string, Citation>()
   const evidenceById = new Map<string, LiteratureEvidenceMatch>()
+  const answerParts: string[] = []
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     const turnText: string[] = []
     let toolCalls: ChatToolCall[] = []
     onEvent('activity', { state: 'thinking', round })
 
     for await (const event of provider.stream({
-      system: buildTalkAboutSystemPrompt(context),
+      system: buildTalkAboutSystemPrompt(context, citationsById.keys()),
       messages: conversation,
       signal,
       tools: buildChatTools(context),
     })) {
       if (event.text) {
         turnText.push(event.text)
+        answerParts.push(event.text)
         onEvent('delta', { text: event.text })
       }
       if (event.toolCalls) toolCalls = event.toolCalls
     }
 
     if (!toolCalls.length) {
-      const answer = turnText.join('')
+      const answer = answerParts.join('')
       if (!answer) throw new Error('Model returned neither text nor a tool request')
       return {
         answer,
