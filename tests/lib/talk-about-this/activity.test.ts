@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
-import { activityForEvent } from '@/components/TalkAboutThis'
+import { activityForEvent, approvalFromEvent, evidenceFromEvent, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
 import { activityData } from '@/lib/talk-about-this/agent'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
 import { buildTalkAboutSystemPrompt } from '@/lib/talk-about-this/prompt'
@@ -81,6 +80,41 @@ describe('activityForEvent', () => {
   })
 })
 
+describe('structured literature evidence activity', () => {
+  const evidence = {
+    id: 'evidence-1',
+    sourceDocumentId: 'doi:10.1000/example',
+    title: 'Solvent substitution study',
+    pageStart: 12,
+    pageEnd: 13,
+    quote: 'Ethyl acetate provided a practical alternative under these conditions.',
+    candidateStatus: 'candidate',
+    similarity: 0.86,
+    applicability: 'Room-temperature substitution',
+    limitations: 'Confirm substrate compatibility before adoption.',
+  }
+
+  it('labels literature lookups and exposes only valid structured candidate evidence', () => {
+    expect(activityForEvent('tool-complete', {
+      callId: 'lit-1',
+      tool: 'search_scoped_literature_evidence',
+      status: 'ok',
+      source: 'GC.ai literature evidence units',
+    })).toMatchObject({
+      label: 'Received scoped literature evidence',
+      state: 'complete',
+    })
+
+    expect(evidenceFromEvent('tool-complete', { evidence: [evidence] })).toEqual([evidence])
+  })
+
+  it('ignores malformed evidence records', () => {
+    expect(evidenceFromEvent('tool-complete', {
+      evidence: [{ ...evidence, pageStart: '12' }],
+    })).toEqual([])
+  })
+})
+
 describe('activityData', () => {
   it('flattens screening candidate measurements, citations, and warnings into activity metadata', () => {
     const candidateWarning = 'Laboratory validation required: confirm catalyst effects before any solvent change.'
@@ -158,5 +192,28 @@ describe('parseRecommendationApprovedEvent', () => {
     { recommendationId: 'rec-1', label: 'Replace dichloromethane with ethyl acetate', alreadyAccepted: false, actionId: 'action-1', revisionNumber: 4.5 },
   ])('ignores malformed approval receipts', data => {
     expect(parseRecommendationApprovedEvent(scope, data)).toBeNull()
+  })
+})
+
+describe('approvalFromEvent', () => {
+  const scope: TalkAboutScope = { kind: 'recommendation', recommendationId: 'rec-1' }
+
+  it('extracts a matching stable-scope approval identity', () => {
+    expect(approvalFromEvent({
+      recommendationId: 'rec-1',
+      label: 'Step 1: DMF → EtOAc',
+      revisionNumber: 3,
+    }, scope)).toEqual({
+      recommendationId: 'rec-1',
+      label: 'Step 1: DMF → EtOAc',
+      revisionNumber: 3,
+    })
+  })
+
+  it('ignores a mismatched stable-scope approval identity', () => {
+    expect(approvalFromEvent({
+      recommendationId: 'rec-2',
+      revisionNumber: 3,
+    }, scope)).toBeNull()
   })
 })

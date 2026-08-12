@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
+import type { LiteratureEvidenceMatch } from '@/lib/types'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -18,6 +19,11 @@ interface ChatActivity {
   detail?: string
 }
 
+
+interface EvidenceReceipt {
+  evidence: LiteratureEvidenceMatch
+  receivedAt: string
+}
 type TerminalStatus = 'complete' | 'failed' | 'cancelled'
 
 export interface RecommendationApprovalReceipt {
@@ -28,30 +34,72 @@ export interface RecommendationApprovalReceipt {
   revisionNumber: number
 }
 
-export function parseRecommendationApprovedEvent(
-  scope: TalkAboutScope,
+export function approvalFromEvent(
   data: Record<string, unknown>,
-): RecommendationApprovalReceipt | null {
+  scope: TalkAboutScope,
+): { recommendationId: string; label: string; revisionNumber: number } | null {
   if (scope.kind !== 'recommendation' || !('recommendationId' in scope)) return null
 
   const recommendationId = data.recommendationId
   const label = data.label
-  const alreadyAccepted = data.alreadyAccepted
-  const actionId = data.actionId
   const revisionNumber = data.revisionNumber
   if (
     recommendationId !== scope.recommendationId
     || typeof label !== 'string'
     || !label.trim()
-    || typeof alreadyAccepted !== 'boolean'
-    || typeof actionId !== 'string'
-    || !actionId.trim()
     || typeof revisionNumber !== 'number'
     || !Number.isSafeInteger(revisionNumber)
     || revisionNumber < 0
   ) return null
 
-  return { recommendationId, label, alreadyAccepted, actionId, revisionNumber }
+  return { recommendationId, label, revisionNumber }
+}
+
+export function parseRecommendationApprovedEvent(
+  scope: TalkAboutScope,
+  data: Record<string, unknown>,
+): RecommendationApprovalReceipt | null {
+  const approval = approvalFromEvent(data, scope)
+  const alreadyAccepted = data.alreadyAccepted
+  const actionId = data.actionId
+  if (
+    !approval
+    || typeof alreadyAccepted !== 'boolean'
+    || typeof actionId !== 'string'
+    || !actionId.trim()
+  ) return null
+
+  return { ...approval, alreadyAccepted, actionId }
+}
+
+function isLiteratureEvidence(value: unknown): value is LiteratureEvidenceMatch {
+  if (!value || typeof value !== 'object') return false
+  const evidence = value as Record<string, unknown>
+  return typeof evidence.id === 'string'
+    && Boolean(evidence.id.trim())
+    && typeof evidence.sourceDocumentId === 'string'
+    && Boolean(evidence.sourceDocumentId.trim())
+    && typeof evidence.title === 'string'
+    && Boolean(evidence.title.trim())
+    && typeof evidence.pageStart === 'number'
+    && Number.isSafeInteger(evidence.pageStart)
+    && evidence.pageStart > 0
+    && typeof evidence.pageEnd === 'number'
+    && Number.isSafeInteger(evidence.pageEnd)
+    && evidence.pageEnd >= evidence.pageStart
+    && typeof evidence.quote === 'string'
+    && Boolean(evidence.quote.trim())
+    && typeof evidence.candidateStatus === 'string'
+    && Boolean(evidence.candidateStatus.trim())
+    && typeof evidence.similarity === 'number'
+    && Number.isFinite(evidence.similarity)
+}
+
+export function evidenceFromEvent(event: string, data: Record<string, unknown>): LiteratureEvidenceMatch[] {
+  if (event !== 'tool-complete' && event !== 'done') return []
+  return Array.isArray(data.evidence)
+    ? data.evidence.filter(isLiteratureEvidence)
+    : []
 }
 
 function showReadyNotification(title: string, status: TerminalStatus) {
@@ -86,6 +134,7 @@ function sourceLabels(tool: string, data: Record<string, unknown>): string {
 }
 
 function labelForTool(tool: string, source: string, status: string): string {
+  if (tool === 'search_scoped_literature_evidence') return 'Received scoped literature evidence'
   if (tool === 'screen_solvent_candidates') return 'Received local solvent screening evidence'
   if (tool === 'lookup_chem21_solvent') return 'Received CHEM21 solvent evidence'
   if (tool === 'lookup_experimental_solvent_evidence') return 'Received local solvent measurement evidence'
@@ -176,7 +225,6 @@ function parseSseEvent(block: string): { event: string; data: Record<string, unk
     return null
   }
 }
-
 export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecommendationApproved }: TalkAboutThisProps) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -187,10 +235,29 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
   const [draft, setDraft] = useState('')
   const [activities, setActivities] = useState<ChatActivity[]>([])
   const [notifyOnReady, setNotifyOnReady] = useState(false)
-  const abortRef = useRef<AbortController | null>(null)
-
   const [approvalReceipt, setApprovalReceipt] = useState<RecommendationApprovalReceipt | null>(null)
+  const [evidenceReceipts, setEvidenceReceipts] = useState<EvidenceReceipt[]>([])
+  const [approvalReceivedAt, setApprovalReceivedAt] = useState<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const messageInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const sendLockedRef = useRef(false)
+  const approvedActionIdsRef = useRef(new Set<string>())
+
+  const close = () => {
+    abortRef.current?.abort()
+    setIsOpen(false)
+  }
+
   useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(() => {
+    if (!isOpen) return
+    messageInputRef.current?.focus()
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [isOpen])
 
   const openConversation = async () => {
     if (!analysisId) return
@@ -208,6 +275,10 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
       }
       setConversationId(body.conversationId)
       setMessages([])
+      setEvidenceReceipts([])
+      setApprovalReceipt(null)
+      setApprovalReceivedAt(null)
+      approvedActionIdsRef.current.clear()
       setIsOpen(true)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to open chat')
@@ -219,8 +290,9 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
   const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const content = draft.trim()
+    if (!conversationId || !content || isSending || sendLockedRef.current) return
+    sendLockedRef.current = true
     setApprovalReceipt(null)
-    if (!conversationId || !content || isSending) return
 
     setDraft('')
     setActivities([])
@@ -241,7 +313,6 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
         const body = await response.json().catch(() => ({ error: 'Unable to start chat' })) as { error?: string }
         throw new Error(body.error || 'Unable to start chat')
       }
-
       let terminalStatus: TerminalStatus | null = null
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
@@ -259,6 +330,17 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
             setMessages(current => current.map((message, index) =>
               index === current.length - 1 ? { ...message, content: message.content + parsed.data.text } : message,
             ))
+          }
+          const incomingEvidence = evidenceFromEvent(parsed.event, parsed.data)
+          if (incomingEvidence.length > 0) {
+            const receivedAt = new Date().toISOString()
+            setEvidenceReceipts(current => {
+              const knownIds = new Set(current.map(receipt => receipt.evidence.id))
+              const additions = incomingEvidence
+                .filter(evidence => !knownIds.has(evidence.id))
+                .map(evidence => ({ evidence, receivedAt }))
+              return additions.length > 0 ? [...current, ...additions] : current
+            })
           }
           const activity = activityForEvent(parsed.event, parsed.data)
           if (activity) {
@@ -282,8 +364,10 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
           }
           if (parsed.event === 'recommendation-approved') {
             const receipt = parseRecommendationApprovedEvent(scope, parsed.data)
-            if (receipt) {
+            if (receipt && !approvedActionIdsRef.current.has(receipt.actionId)) {
+              approvedActionIdsRef.current.add(receipt.actionId)
               setApprovalReceipt(receipt)
+              setApprovalReceivedAt(new Date().toISOString())
               onRecommendationApproved?.(receipt)
             }
           }
@@ -313,14 +397,11 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
       }
     } finally {
       abortRef.current = null
+      sendLockedRef.current = false
       setIsSending(false)
     }
   }
 
-  const close = () => {
-    abortRef.current?.abort()
-    setIsOpen(false)
-  }
 
   return (
     <>
@@ -349,15 +430,30 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
                 </div>
                 <button type="button" onClick={close} className="text-sm font-bold" style={{ color: '#57534E' }}>Close</button>
               </div>
-              <p className="mt-3 text-xs" style={{ color: '#78716C' }}>This discussion does not change the analysis or its acceptance state.</p>
+              <p className="mt-3 text-xs" style={{ color: '#78716C' }}>
+                {scope.kind === 'recommendation' && 'recommendationId' in scope
+                  ? 'You may explicitly approve this scoped recommendation by sending ‘approve this’; other analysis changes are unavailable.'
+                  : 'This discussion does not change the analysis or its acceptance state.'}
+              </p>
             </header>
             <div className="flex-1 space-y-4 overflow-y-auto p-5" aria-live="polite">
-              {messages.length === 0 && <p className="text-sm" style={{ color: '#57534E' }}>Ask why this was recommended, challenge an assumption, or describe a laboratory constraint.</p>}
               {approvalReceipt && (
                 <p className="rounded border p-3 text-xs" style={{ borderColor: '#BBF7D0', background: '#F0FDF4', color: '#166534' }}>
                   {approvalReceipt.label} {approvalReceipt.alreadyAccepted ? 'was already approved.' : 'has been approved.'}
+                  {' '}Receipt {approvalReceipt.actionId} · revision {approvalReceipt.revisionNumber}
+                  {approvalReceivedAt && ` · ${new Date(approvalReceivedAt).toLocaleString()}`}
                 </p>
               )}
+              {evidenceReceipts.map(({ evidence, receivedAt }) => (
+                <article key={evidence.id} className="rounded-lg border p-3 text-xs space-y-1" style={{ borderColor: '#D6D0C4', background: '#F6F3EB', color: '#1C1917' }}>
+                  <p className="font-bold" style={{ color: '#1C3822' }}>{evidence.candidateStatus === 'candidate' ? 'Candidate evidence' : 'Adjudicated evidence'}</p>
+                  <p><strong>{evidence.sourceDocumentId}</strong> · {evidence.title} · pp. {evidence.pageStart}{evidence.pageEnd === evidence.pageStart ? '' : `–${evidence.pageEnd}`}</p>
+                  <blockquote className="border-l-2 pl-2" style={{ borderColor: '#A8C5A2', color: '#57534E' }}>{evidence.quote}</blockquote>
+                  <p>Status: {evidence.candidateStatus}. Retrieved {new Date(receivedAt).toLocaleString()}.</p>
+                  {evidence.applicability && <p>Applicability: {evidence.applicability}</p>}
+                  {evidence.limitations && <p>Limitations: {evidence.limitations}</p>}
+                </article>
+              ))}
               {messages.map((message, index) => (
                 <article key={`${message.role}-${index}`} className="rounded-lg p-3 text-sm" style={{ background: message.role === 'user' ? '#1C3822' : '#FFFFFF', color: message.role === 'user' ? '#F6F3EB' : '#1C1917', border: message.role === 'assistant' ? '1px solid #E7E5E4' : undefined }}>
                   {message.role === 'assistant'
@@ -417,7 +513,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
                   Notify me when a background response is ready
                 </label>
               )}
-              <textarea id="talk-about-this-message" value={draft} onChange={event => setDraft(event.target.value)} maxLength={4000} rows={3} placeholder="Ask about this recommendation…" className="w-full rounded border p-3 text-sm" style={{ borderColor: '#D6D0C4', color: '#1C1917' }} disabled={isSending} />
+              <textarea ref={messageInputRef} id="talk-about-this-message" value={draft} onChange={event => setDraft(event.target.value)} maxLength={4000} rows={3} placeholder="Ask about this recommendation…" className="w-full rounded border p-3 text-sm" style={{ borderColor: '#D6D0C4', color: '#1C1917' }} disabled={isSending} />
               <div className="mt-2 flex items-center justify-between gap-3">
                 <button type="button" onClick={() => abortRef.current?.abort()} disabled={!isSending} className="text-xs font-bold uppercase tracking-wider disabled:opacity-50" style={{ color: '#78716C' }}>Stop</button>
                 <button type="submit" disabled={!draft.trim() || isSending} className="rounded px-4 py-2 text-xs font-bold uppercase tracking-wider disabled:opacity-50" style={{ background: '#1C3822', color: '#F6F3EB' }}>{isSending ? 'Responding…' : 'Send'}</button>

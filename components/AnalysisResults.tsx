@@ -498,6 +498,12 @@ export default function AnalysisResults({
                   Full citations, calculation trails, and confidence tiers for every recommendation.
                 </p>
               </div>
+              <TalkAboutThis
+                analysisId={analysisId}
+                scope={{ kind: 'principle', principleNumber: 1 }}
+                title="Evidence Atlas"
+                evidenceState="sourced"
+              />
               <a
                 href={`/analyze/${analysisId}/evidence`}
                 aria-label="View Evidence Atlas for this analysis"
