@@ -143,6 +143,8 @@ def build_import_batches(
         if embedding is None:
             raise ValueError(f"missing embedding for evidence unit {unit_id}")
         embedding_model = _required_text(embedding.get("embedding_model"), "embedding model")
+        if embedding_model != "text-embedding-3-small":
+            raise ValueError(f"embedding model must be text-embedding-3-small for evidence unit {unit_id}")
         vector = embedding.get("embedding")
         if not isinstance(vector, list) or len(vector) != VECTOR_DIMENSIONS or any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) for value in vector):
             raise ValueError(f"embedding must contain exactly {VECTOR_DIMENSIONS} finite values for evidence unit {unit_id}")
@@ -242,7 +244,7 @@ def import_evidence(
             raise ValueError("manifest completed unit count is inconsistent with completed unit ID")
     elif completed_unit_count != 0:
         raise ValueError("manifest completed unit count requires a completed unit ID")
-    if completed_source_count > len(documents) or completed_batch_count > math.ceil(len(units) / batch_size):
+    if completed_source_count > len(documents) or completed_unit_count > len(units):
         raise ValueError("manifest completion counts exceed validated input")
     manifest.update({
         "checksums": checksums,

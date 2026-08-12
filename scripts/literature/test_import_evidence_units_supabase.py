@@ -81,6 +81,13 @@ def test_batch_preserves_candidate_status_pages_and_embedding_model():
     assert (units[0]["page_start"], units[0]["page_end"], units[0]["embedding_model"]) == (2, 2, "text-embedding-3-small")
 
 
+def test_build_import_batches_rejects_non_retrieval_embedding_model():
+    sources, units, embeddings = fixture_records()
+    embeddings[units[0]["evidence_unit_id"]]["embedding_model"] = "other-1536-model"
+    with pytest.raises(ValueError, match="text-embedding-3-small"):
+        build_import_batches(sources, units, embeddings)
+
+
 @pytest.mark.parametrize(
     ("mutate", "message"),
     [
@@ -138,3 +145,18 @@ def test_checksum_mismatch_rejects_before_network_io(tmp_path):
     with pytest.raises(ValueError, match="checksum"):
         import_evidence(*paths, manifest, "https://example.test", "secret", session=session)
     assert session.requests == []
+
+
+def test_resume_accepts_a_different_invocation_batch_size(tmp_path):
+    sources, units, embeddings = fixture_records()
+    second = dict(units[0], evidence_unit_id="doc-1:p3:u0", page_start=3, page_end=3)
+    units.append(second)
+    embeddings[second["evidence_unit_id"]] = dict(embeddings["doc-1:p2:u0"], evidence_unit_id=second["evidence_unit_id"])
+    paths = write_inputs(tmp_path, sources, units, embeddings)
+    manifest = tmp_path / "manifest.json"
+    with pytest.raises(RuntimeError):
+        import_evidence(*paths, manifest, "https://example.test", "secret", session=FakeSession([201, 201, 500]), batch_size=1)
+    resumed = FakeSession()
+    import_evidence(*paths, manifest, "https://example.test", "secret", session=resumed, batch_size=2)
+    evidence_requests = [request for request in resumed.requests if "literature_evidence_units" in request["url"]]
+    assert [row["id"] for row in evidence_requests[0]["json"]] == ["doc-1:p3:u0"]
