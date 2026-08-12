@@ -48,3 +48,42 @@ exit 0
 - `components/AnalysisResults.tsx` labels the Atlas chat entry as P1, makes its content scope explicit, and derives its evidence state solely from citations attached to P1-scoped recommendations.
 - `tests/lib/talk-about-this/activity.test.ts` adds server-rendered component assertions for candidate status, optional payload guards, stable vs. non-stable scope instructions, and P1 Atlas scope/evidence state. React DOM is already installed; jsdom/testing-library are not, so server rendering is the least-indirect available component harness.
 - **Concern:** Browser interaction tests for focus/Escape and duplicate receipt delivery remain infeasible with the installed Node-only Vitest environment. Existing focused behavior tests cover receipt validation/rejection; production code retains focus-on-open, Escape-to-close, and action-ID deduplication.
+
+## Closed-dialog conversation-open error repair (2026-08-12)
+
+- **Root cause:** The failed conversation-open request sets `error` without opening the dialog, but the error was only rendered inside the `isOpen` dialog branch.
+- **RED exact output:**
+
+```text
+❯ tests/lib/talk-about-this/activity.test.ts (26 tests | 1 failed) 22ms
+     × renders a failed conversation-open request as an accessible alert while the dialog is closed 3ms
+
+FAIL  tests/lib/talk-about-this/activity.test.ts > closed conversation-open errors > renders a failed conversation-open request as an accessible alert while the dialog is closed
+AssertionError: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+Test Files  1 failed (1)
+     Tests  1 failed | 25 passed (26)
+```
+
+- **GREEN exact output:**
+
+```text
+> greenchemistry-ai@0.6.0 test
+> vitest run tests/lib/talk-about-this/activity.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai/.worktrees/evidence-backed-chat
+
+
+ Test Files  1 passed (1)
+      Tests  26 passed (26)
+   Start at  16:46:53
+   Duration  260ms (transform 74ms, setup 0ms, import 176ms, tests 19ms, environment 0ms)
+```
+
+- `npx tsc --noEmit` completed successfully with no output (exit 0).
+- `components/TalkAboutThis.tsx` renders the existing failure message as `role="alert"` immediately after the launcher only while the dialog is closed; the open dialog retains its current error rendering.
+- `tests/lib/talk-about-this/activity.test.ts` server-renders that closed state and verifies both alert semantics and message visibility.

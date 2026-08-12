@@ -233,6 +233,12 @@ export function EvidenceReceiptCard({ evidence, receivedAt }: EvidenceReceipt) {
   )
 }
 
+export function ClosedConversationError({ error, isOpen }: { error: string | null; isOpen: boolean }) {
+  if (isOpen || !error) return null
+
+  return <p role="alert" className="mt-2 text-xs" style={{ color: '#B45309' }}>{error}</p>
+}
+
 interface TalkAboutThisProps {
   analysisId?: string
   scope: TalkAboutScope
@@ -446,6 +452,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
       >
         {isStarting ? 'Opening…' : buttonLabel}
       </button>
+      <ClosedConversationError error={error} isOpen={isOpen} />
       {isOpen && (
         <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={`Chat about ${title}`}>
           <button type="button" className="absolute inset-0 bg-black/30" onClick={close} aria-label="Close chat" />

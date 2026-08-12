@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
+import { ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
 import { EvidenceAtlasTalkControl } from '@/components/AnalysisResults'
 import { activityData } from '@/lib/talk-about-this/agent'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
@@ -133,6 +133,24 @@ describe('structured literature evidence activity', () => {
     expect(markup).toContain('Candidate evidence')
     expect(markup).toContain('Status: candidate_pending_adjudication.')
     expect(markup).not.toContain('Adjudicated evidence')
+  })
+})
+
+describe('closed conversation-open errors', () => {
+  it('renders a failed conversation-open request as an accessible alert while the dialog is closed', () => {
+    const closedMarkup = renderToStaticMarkup(createElement(ClosedConversationError, {
+      error: 'Chat service is unavailable.',
+      isOpen: false,
+    }))
+
+    const openMarkup = renderToStaticMarkup(createElement(ClosedConversationError, {
+      error: 'Chat service is unavailable.',
+      isOpen: true,
+    }))
+
+    expect(closedMarkup).toContain('role="alert"')
+    expect(closedMarkup).toContain('Chat service is unavailable.')
+    expect(openMarkup).toBe('')
   })
 })
 
