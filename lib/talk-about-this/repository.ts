@@ -35,16 +35,22 @@ export interface StoredLiteratureCitation extends Citation {
 
 export type StoredMessageCitation = string | StoredLiteratureCitation | StoredMessageTelemetry
 
+export interface RetrievalAttemptTelemetry {
+  callId: string
+  status: 'complete' | 'failed' | 'aborted'
+  embeddingStartedAt?: number
+  embeddingFinishedAt?: number
+  rpcStartedAt?: number
+  rpcFinishedAt?: number
+}
+
 export interface StoredMessageTelemetry {
   telemetry: {
     clock: 'performance.now'
     routeStartedAt: number
     initialProviderFirstTextAt?: number
-    embeddingStartedAt?: number
-    embeddingFinishedAt?: number
-    rpcStartedAt?: number
-    rpcFinishedAt?: number
     finalProviderFirstTextAt?: number
+    retrievalAttempts?: RetrievalAttemptTelemetry[]
   }
 }
 

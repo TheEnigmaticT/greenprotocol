@@ -2,32 +2,51 @@ import { runScopedToolChat } from '@/lib/talk-about-this/agent'
 import { firstForwardedDeltaMs } from '@/lib/talk-about-this/latency'
 import { createConfiguredChatProvider, type ChatMessage } from '@/lib/talk-about-this/chat-provider'
 import { executeScopedTool } from '@/lib/talk-about-this/tools'
-import { assistantMessageCitations, createMessage, listConversationMessages, loadOwnedConversation, type StoredMessageTelemetry } from '@/lib/talk-about-this/repository'
+import { assistantMessageCitations, createMessage, listConversationMessages, loadOwnedConversation, type RetrievalAttemptTelemetry, type StoredMessageTelemetry } from '@/lib/talk-about-this/repository'
 import { approveScopedRecommendation, isExplicitScopedApprovalRequest } from '@/lib/talk-about-this/actions'
 import { createClient } from '@/lib/supabase/server'
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const runtime = 'nodejs'
 
-const MAX_STAGE_TELEMETRY_MS = 60_000
+const MAX_RETRIEVAL_ATTEMPTS = 5
 
-function stageTelemetry(value: unknown): Record<string, number> | undefined {
+function stageTelemetry(value: unknown): Omit<RetrievalAttemptTelemetry, 'callId' | 'status'> | undefined {
   if (!value || typeof value !== 'object') return undefined
-  const telemetry: Record<string, number> = {}
+  const telemetry: Omit<RetrievalAttemptTelemetry, 'callId' | 'status'> = {}
+  let previousTimestamp: number | undefined
   for (const key of ['embeddingStartedAt', 'embeddingFinishedAt', 'rpcStartedAt', 'rpcFinishedAt'] as const) {
     const timestamp = (value as Record<string, unknown>)[key]
-    if (typeof timestamp === 'number' && Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= MAX_STAGE_TELEMETRY_MS) {
-      telemetry[key] = timestamp
-    }
+    if (timestamp === undefined) continue
+    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp < 0) return undefined
+    if (previousTimestamp !== undefined && timestamp < previousTimestamp) return undefined
+    telemetry[key] = timestamp
+    previousTimestamp = timestamp
   }
   return Object.keys(telemetry).length ? telemetry : undefined
+}
+
+function retrievalAttempt(data: Record<string, unknown>): RetrievalAttemptTelemetry | undefined {
+  if (data.tool !== 'search_scoped_literature_evidence' || typeof data.callId !== 'string') return undefined
+  const timing = stageTelemetry(data.telemetry)
+  if (!timing) return undefined
+  const warnings = Array.isArray(data.warnings) ? data.warnings : []
+  const status = warnings.includes('Literature evidence retrieval aborted')
+    ? 'aborted'
+    : data.status === 'ok' ? 'complete' : 'failed'
+  return { callId: data.callId, status, ...timing }
 }
 
 export function mergeActivityTelemetry(
   current: StoredMessageTelemetry['telemetry'],
   data: Record<string, unknown>,
 ): StoredMessageTelemetry['telemetry'] {
-  return { ...current, ...stageTelemetry(data.telemetry) }
+  const attempt = retrievalAttempt(data)
+  if (!attempt) return current
+  return {
+    ...current,
+    retrievalAttempts: [...(current.retrievalAttempts ?? []), attempt].slice(-MAX_RETRIEVAL_ATTEMPTS),
+  }
 }
 
 export function activityPayload(data: Record<string, unknown>): Record<string, unknown> {

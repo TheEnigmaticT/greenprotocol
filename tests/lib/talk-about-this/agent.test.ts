@@ -140,10 +140,14 @@ describe('runScopedToolChat', () => {
 
     expect(result.telemetry).toEqual({
       initialProviderFirstTextAt: 200,
-      embeddingStartedAt: 110,
-      embeddingFinishedAt: 120,
-      rpcStartedAt: 130,
-      rpcFinishedAt: 140,
+      retrievalAttempts: [{
+        callId: 'lit-1',
+        status: 'complete',
+        embeddingStartedAt: 110,
+        embeddingFinishedAt: 120,
+        rpcStartedAt: 130,
+        rpcFinishedAt: 140,
+      }],
       finalProviderFirstTextAt: 300,
     })
     expect(events).toContainEqual(expect.objectContaining({
@@ -155,6 +159,71 @@ describe('runScopedToolChat', () => {
           rpcStartedAt: 130,
           rpcFinishedAt: 140,
         },
+      }),
+    }))
+  })
+
+  it('keeps each literature retrieval attempt atomic when a later attempt aborts', async () => {
+    let requests = 0
+    const events: Array<{ event: string; data: Record<string, unknown> }> = []
+    const provider: ChatProvider = {
+      async *stream() {
+        requests += 1
+        if (requests <= 2) {
+          yield {
+            toolCalls: [{
+              id: `lit-${requests}`,
+              name: 'search_scoped_literature_evidence',
+              arguments: JSON.stringify({ query: 'DMF comparison' }),
+            }],
+          }
+          return
+        }
+        yield { text: 'Final answer.' }
+      },
+    }
+    let calls = 0
+
+    const result = await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Compare DMF.' }],
+      executeTool: async () => {
+        calls += 1
+        return {
+          operation: 'literature_evidence',
+          chemical_name: '',
+          status: calls === 1 ? 'ok' : 'unavailable',
+          source: 'Literature evidence index',
+          data: { evidence: [] },
+          citations: [],
+          warnings: calls === 1 ? [] : ['Literature evidence retrieval aborted'],
+          telemetry: calls === 1
+            ? { embeddingStartedAt: 10, embeddingFinishedAt: 20, rpcStartedAt: 30, rpcFinishedAt: 40 }
+            : { embeddingStartedAt: 100 },
+        }
+      },
+      onEvent: (event, data) => events.push({ event, data }),
+    })
+
+    expect(result.telemetry.retrievalAttempts).toEqual([
+      {
+        callId: 'lit-1',
+        status: 'complete',
+        embeddingStartedAt: 10,
+        embeddingFinishedAt: 20,
+        rpcStartedAt: 30,
+        rpcFinishedAt: 40,
+      },
+      {
+        callId: 'lit-2',
+        status: 'aborted',
+        embeddingStartedAt: 100,
+      },
+    ])
+    expect(events.filter(({ event }) => event === 'tool-complete').at(-1)).toEqual(expect.objectContaining({
+      data: expect.objectContaining({
+        telemetry: { embeddingStartedAt: 100 },
       }),
     }))
   })

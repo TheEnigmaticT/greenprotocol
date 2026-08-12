@@ -9,7 +9,7 @@ import {
   type ToolName,
   type ToolResult,
 } from '@/lib/talk-about-this/tools'
-import type { LiteratureEvidenceTiming } from '@/lib/literature-evidence'
+import type { RetrievalAttemptTelemetry } from '@/lib/talk-about-this/repository'
 import type { Citation, EvidenceSignalGroup, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const MAX_TOOL_ROUNDS = 4
@@ -35,9 +35,10 @@ export interface ChatRunResult {
   evidence: LiteratureEvidenceMatch[]
 }
 
-export interface ChatLatencyTelemetry extends LiteratureEvidenceTiming {
+export interface ChatLatencyTelemetry {
   initialProviderFirstTextAt?: number
   finalProviderFirstTextAt?: number
+  retrievalAttempts?: RetrievalAttemptTelemetry[]
 }
 
 function isToolName(name: string): name is ToolName {
@@ -301,6 +302,18 @@ export function activityData(call: ChatToolCall, result: ToolResult): Record<str
   }
 }
 
+function retrievalAttemptTelemetry(call: ChatToolCall, result: ToolResult): RetrievalAttemptTelemetry | undefined {
+  if (result.operation !== 'literature_evidence' || !result.telemetry) return undefined
+  const status = result.warnings.includes('Literature evidence retrieval aborted')
+    ? 'aborted'
+    : result.status === 'ok' ? 'complete' : 'failed'
+  return {
+    callId: call.id,
+    status,
+    ...telemetryForActivity(result.telemetry),
+  }
+}
+
 /** Runs a bounded, frozen-context tool loop and never permits arbitrary model-directed I/O. */
 export async function runScopedToolChat({
   provider,
@@ -391,7 +404,10 @@ export async function runScopedToolChat({
               : []
             for (const match of evidence) evidenceById.set(match.id, match)
             for (const citation of result.citations) citationsById.set(citation.source_id, citation)
-            Object.assign(telemetry, result.telemetry)
+            const retrievalAttempt = retrievalAttemptTelemetry(call, result)
+            if (retrievalAttempt) {
+              telemetry.retrievalAttempts = [...(telemetry.retrievalAttempts ?? []), retrievalAttempt].slice(-5)
+            }
             onEvent('tool-complete', {
               ...activityData(call, result),
               evidence,

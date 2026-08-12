@@ -93,3 +93,24 @@ No configured chat provider, embedding key, Supabase environment, authenticated 
 ### Remaining live blockers
 
 The existing configured-provider, embedding, Supabase, authenticated-browser, source-artifact, and warm-retrieval prerequisites remain unavailable. No live timing gate result is claimed.
+
+## Task 7 telemetry follow-up repair
+
+### RED
+
+- `npx vitest run tests/lib/talk-about-this/messages-route.test.ts tests/lib/talk-about-this/agent.test.ts` — 3 regression tests failed as expected: a `60_001` monotonic stage timestamp was dropped, terminal telemetry flattened two attempts into one cross-merged object, and agent telemetry had no atomic attempt list.
+
+### GREEN
+
+- `npx vitest run tests/lib/literature-evidence.test.ts tests/lib/talk-about-this/tools.test.ts tests/lib/talk-about-this/agent.test.ts tests/lib/talk-about-this/messages-route.test.ts tests/lib/talk-about-this/latency.test.ts` — 5 files, 37 tests passed.
+- `npx tsc --noEmit` — exit 0, no output.
+
+### Repair
+
+- Stage timestamps now accept finite nonnegative monotonic `performance.now()` values without an uptime cap; an invalid supplied timestamp or out-of-order stage rejects that attempt snapshot.
+- Each literature retrieval produces an ordered bounded `retrievalAttempts` snapshot with its call ID, terminal state (`complete`, `failed`, or `aborted`), and only that attempt's recorded stages. The same list is carried by tool-complete, persisted citations JSONB, and terminal `done` telemetry.
+- Legacy top-level route/provider timestamps remain available to existing consumers; flattened retrieval stage fields are no longer emitted, preventing a partial second attempt from inheriting the first attempt's end/RPC values.
+
+### Remaining external blocker
+
+The configured-provider, embedding, Supabase, authenticated-browser, source-artifact, and warm-retrieval prerequisites remain unavailable. No live timing gate result is claimed.
