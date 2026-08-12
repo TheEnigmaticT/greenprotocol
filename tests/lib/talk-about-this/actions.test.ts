@@ -5,7 +5,12 @@ import {
 } from '@/lib/talk-about-this/actions'
 
 describe('isExplicitScopedApprovalRequest', () => {
-  it.each(['approve this', 'Accept this recommendation.'])('recognizes direct approval %j', text => {
+  it.each([
+    'approve this',
+    'accept this recommendation',
+    'accept this',
+    'approve this recommendation',
+  ])('recognizes direct approval %j', text => {
     expect(isExplicitScopedApprovalRequest(text)).toBe(true)
   })
 
@@ -14,6 +19,9 @@ describe('isExplicitScopedApprovalRequest', () => {
     'do not approve this',
     'approve this if it is safe',
     'approve this and reject the next',
+    'accept this recommendation?',
+    'do not accept this',
+    'accept this, then change the solvent',
   ])('rejects non-authorizing text %j', text => {
     expect(isExplicitScopedApprovalRequest(text)).toBe(false)
   })

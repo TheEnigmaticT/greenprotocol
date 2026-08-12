@@ -15,13 +15,37 @@ import UserMenu from '@/components/UserMenu'
 import ChemistryDataNotice from '@/components/ChemistryDataNotice'
 import { NEW_ANALYSIS_HREF } from '@/lib/analysis-session'
 
-interface AnalysisData {
+export interface AnalysisData {
   id: string
   protocolText: string
   analysis: AnalysisResult
   impactDelta: ImpactDelta
   equivalencies: Equivalency[]
   revisionNumber: number
+}
+
+export function reconcilePersistedRevision(
+  current: AnalysisData | null,
+  revisionNumber: number,
+): AnalysisData | null {
+  if (!current || revisionNumber < current.revisionNumber) return current
+  return { ...current, revisionNumber }
+}
+
+export function applyRecommendationApproval(
+  current: AnalysisData | null,
+  receipt: RecommendationApprovalReceipt,
+): AnalysisData | null {
+  if (!current) return current
+  const recommendationIndex = current.analysis.recommendations.findIndex(rec => rec.id === receipt.recommendationId)
+  if (recommendationIndex === -1) return current
+  const recommendations = [...current.analysis.recommendations]
+  recommendations[recommendationIndex] = { ...recommendations[recommendationIndex], isAccepted: true }
+  return {
+    ...current,
+    analysis: { ...current.analysis, recommendations },
+    revisionNumber: Math.max(current.revisionNumber, receipt.revisionNumber),
+  }
 }
 
 export default function AnalysisByIdPage() {
@@ -56,8 +80,8 @@ export default function AnalysisByIdPage() {
           throw new Error(`PATCH /api/analyses/${analysisId} returned ${res.status}`)
         }
         const payload = await res.json() as { revisionNumber: number }
-        setData(current => current && current.id === analysisId
-          ? { ...current, revisionNumber: payload.revisionNumber }
+        setData(current => current?.id === analysisId
+          ? reconcilePersistedRevision(current, payload.revisionNumber)
           : current)
         setPersistError(null)
       } catch (err) {
@@ -116,18 +140,7 @@ export default function AnalysisByIdPage() {
   }
 
   const handleRecommendationApproved = (receipt: RecommendationApprovalReceipt) => {
-    setData(current => {
-      if (!current) return current
-      const recommendationIndex = current.analysis.recommendations.findIndex(rec => rec.id === receipt.recommendationId)
-      if (recommendationIndex === -1) return current
-      const recommendations = [...current.analysis.recommendations]
-      recommendations[recommendationIndex] = { ...recommendations[recommendationIndex], isAccepted: true }
-      return {
-        ...current,
-        analysis: { ...current.analysis, recommendations },
-        revisionNumber: receipt.revisionNumber,
-      }
-    })
+    setData(current => applyRecommendationApproval(current, receipt))
   }
 
   const originalTotals = calculateOriginalTotals(data.analysis)

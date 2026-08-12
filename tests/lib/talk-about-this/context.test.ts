@@ -58,6 +58,30 @@ describe('buildTalkAboutContext', () => {
     expect(context.contextHash).toMatch(/^[a-f0-9]{64}$/)
   })
 
+  it('uses the same immutable context identity after the scoped recommendation is accepted', () => {
+    const beforeApproval = buildTalkAboutContext({
+      analysisId: 'analysis-1',
+      protocolText: 'Couple acid and amine in DMF.',
+      analysis,
+      scope: { kind: 'recommendation', recommendationId: 'rec-1' },
+    })
+    const afterApproval = buildTalkAboutContext({
+      analysisId: 'analysis-1',
+      protocolText: 'Couple acid and amine in DMF.',
+      analysis: {
+        ...analysis,
+        recommendations: analysis.recommendations.map(recommendation => ({
+          ...recommendation,
+          isAccepted: true,
+        })),
+      },
+      scope: { kind: 'recommendation', recommendationId: 'rec-1' },
+    })
+
+    expect(afterApproval.contextHash).toBe(beforeApproval.contextHash)
+    expect(afterApproval.recommendations[0]).not.toHaveProperty('isAccepted')
+  })
+
   it('resolves a legacy recommendation without an ID by its frozen index', () => {
     const legacyAnalysis = {
       ...analysis,

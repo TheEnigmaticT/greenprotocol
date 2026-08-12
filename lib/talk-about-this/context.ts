@@ -61,6 +61,11 @@ function truncateProtocol(protocolText: string): string {
     : `${protocolText.slice(0, MAX_PROTOCOL_CHARACTERS)}\n\n[Protocol truncated for chat context]`
 }
 
+function snapshotRecommendation(recommendation: Recommendation): Recommendation {
+  const { isAccepted: _isAccepted, ...snapshot } = recommendation
+  return snapshot
+}
+
 function resolveRecommendations(analysis: AnalysisResult, scope: TalkAboutScope): Recommendation[] {
   if (scope.kind === 'recommendation') {
     const matches = 'recommendationId' in scope
@@ -71,14 +76,16 @@ function resolveRecommendations(analysis: AnalysisResult, scope: TalkAboutScope)
       throw new Error('Recommendation scope does not match exactly one recommendation in this analysis')
     }
 
-    return matches
+    return matches.map(snapshotRecommendation)
   }
 
   if (!Number.isInteger(scope.principleNumber) || scope.principleNumber < 1 || scope.principleNumber > 12) {
     throw new Error('Principle scope must be between 1 and 12')
   }
 
-  return analysis.recommendations.filter(item => item.principleNumbers.includes(scope.principleNumber))
+  return analysis.recommendations
+    .filter(item => item.principleNumbers.includes(scope.principleNumber))
+    .map(snapshotRecommendation)
 }
 
 function relevantSteps(analysis: AnalysisResult, recommendations: Recommendation[]): AnalysisStep[] {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assistantMessageCitations } from '@/lib/talk-about-this/repository'
+import { assistantMessageCitations, receiptFromStoredAction } from '@/lib/talk-about-this/repository'
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 const literatureCitation: Citation = {
@@ -72,5 +72,36 @@ describe('assistantMessageCitations', () => {
         }],
       },
     }])
+  })
+})
+
+describe('receiptFromStoredAction', () => {
+  it('recovers the durable action identity and revision without consulting message text', () => {
+    expect(receiptFromStoredAction({
+      id: 'action-persisted',
+      target_recommendation_id: 'rec-1',
+      label: 'Use ethyl acetate',
+      already_applied: false,
+      revision_number: 9,
+      completed_at: '2026-08-12T00:00:00.000Z',
+    })).toEqual({
+      actionId: 'action-persisted',
+      recommendationId: 'rec-1',
+      label: 'Use ethyl acetate',
+      alreadyAccepted: false,
+      revisionNumber: 9,
+      receivedAt: '2026-08-12T00:00:00.000Z',
+    })
+  })
+
+  it('rejects incomplete persisted actions rather than inferring a receipt from chat content', () => {
+    expect(receiptFromStoredAction({
+      id: 'action-persisted',
+      target_recommendation_id: 'rec-1',
+      label: 'Use ethyl acetate',
+      already_applied: false,
+      revision_number: 9,
+      completed_at: null,
+    })).toBeNull()
   })
 })

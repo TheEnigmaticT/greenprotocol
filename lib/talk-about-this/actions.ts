@@ -19,6 +19,8 @@ interface ApprovalRpcReceipt {
 const APPROVAL_REQUESTS: Record<string, true> = {
   'approve this': true,
   'accept this recommendation': true,
+  'accept this': true,
+  'approve this recommendation': true,
 }
 
 export function isExplicitScopedApprovalRequest(content: string): boolean {

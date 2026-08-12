@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { buildTalkAboutContext, parseTalkAboutScope } from '@/lib/talk-about-this/context'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
-import { createConversation, loadOwnedAnalysis } from '@/lib/talk-about-this/repository'
+import { createConversation, findOwnedConversationByContextHash, loadOwnedAnalysis, loadOwnedRecommendationApprovalReceipt } from '@/lib/talk-about-this/repository'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
@@ -36,14 +36,22 @@ export async function POST(request: Request) {
       analysis: analysis.analysis_result,
       scope,
     })
-    const conversation = await createConversation(supabase, user.id, analysisId, scope, context)
+    const existingConversation = await findOwnedConversationByContextHash(
+      supabase,
+      user.id,
+      analysisId,
+      context.contextHash,
+    )
+    const conversation = existingConversation ?? await createConversation(supabase, user.id, analysisId, scope, context)
+    const approvalReceipt = await loadOwnedRecommendationApprovalReceipt(supabase, user.id, conversation.id)
 
     return NextResponse.json({
       conversationId: conversation.id,
       scope: conversation.scope,
       contextHash: conversation.context_hash,
       noDirectEvidence: context.noDirectEvidence,
-    }, { status: 201 })
+      approvalReceipt,
+    }, { status: existingConversation ? 200 : 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create conversation'
     return NextResponse.json({ error: message }, { status: 400 })

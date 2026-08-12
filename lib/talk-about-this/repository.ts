@@ -18,6 +18,52 @@ export interface TalkConversation {
   status: 'active' | 'closed'
 }
 
+export interface StoredRecommendationApprovalAction {
+  id: string
+  target_recommendation_id: string
+  label: string
+  already_applied: boolean
+  revision_number: number
+  completed_at: string | null
+}
+
+export interface PersistedRecommendationApprovalReceipt {
+  actionId: string
+  recommendationId: string
+  label: string
+  alreadyAccepted: boolean
+  revisionNumber: number
+  receivedAt: string
+}
+
+export function receiptFromStoredAction(
+  action: StoredRecommendationApprovalAction | null,
+): PersistedRecommendationApprovalReceipt | null {
+  if (
+    !action
+    || typeof action.id !== 'string'
+    || !action.id.trim()
+    || typeof action.target_recommendation_id !== 'string'
+    || !action.target_recommendation_id.trim()
+    || typeof action.label !== 'string'
+    || !action.label.trim()
+    || typeof action.already_applied !== 'boolean'
+    || !Number.isSafeInteger(action.revision_number)
+    || action.revision_number < 1
+    || typeof action.completed_at !== 'string'
+    || !action.completed_at.trim()
+  ) return null
+
+  return {
+    actionId: action.id,
+    recommendationId: action.target_recommendation_id,
+    label: action.label,
+    alreadyAccepted: action.already_applied,
+    revisionNumber: action.revision_number,
+    receivedAt: action.completed_at,
+  }
+}
+
 export interface StoredLiteratureCitation extends Citation {
   evidence: Pick<LiteratureEvidenceMatch,
     | 'id'
@@ -127,6 +173,50 @@ export async function loadOwnedConversation(
   }
 
   return data as TalkConversation | null
+}
+
+export async function findOwnedConversationByContextHash(
+  supabase: SupabaseClient,
+  userId: string,
+  analysisId: string,
+  contextHash: string,
+): Promise<TalkConversation | null> {
+  const { data, error } = await supabase
+    .from('gpc_talk_conversations')
+    .select('id, analysis_id, scope, context_snapshot, context_hash, status')
+    .eq('analysis_id', analysisId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .eq('user_id', userId)
+    .eq('context_hash', contextHash)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to find conversation: ${error.message}`)
+  }
+
+  return data as TalkConversation | null
+}
+
+export async function loadOwnedRecommendationApprovalReceipt(
+  supabase: SupabaseClient,
+  userId: string,
+  conversationId: string,
+): Promise<PersistedRecommendationApprovalReceipt | null> {
+  const { data, error } = await supabase
+    .from('gpc_talk_actions')
+    .select('id, target_recommendation_id, label, already_applied, revision_number, completed_at')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId)
+    .eq('action_type', 'approve_recommendation')
+    .eq('status', 'completed')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to load approval receipt: ${error.message}`)
+  }
+
+  return receiptFromStoredAction(data as StoredRecommendationApprovalAction | null)
 }
 
 export function assistantMessageCitations(

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
+import { ApprovalReceiptCard, ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, parsePersistedRecommendationApprovalReceipt, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
 import { EvidenceAtlasTalkControl } from '@/components/AnalysisResults'
 import { activityData } from '@/lib/talk-about-this/agent'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
@@ -287,5 +287,43 @@ describe('approvalFromEvent', () => {
       recommendationId: 'rec-2',
       revisionNumber: 3,
     }, scope)).toBeNull()
+  })
+})
+
+describe('parsePersistedRecommendationApprovalReceipt', () => {
+  it('hydrates a durable matching receipt with its persisted completion time', () => {
+    expect(parsePersistedRecommendationApprovalReceipt({ kind: 'recommendation', recommendationId: 'rec-1' }, {
+      actionId: 'action-persisted',
+      recommendationId: 'rec-1',
+      label: 'Use ethyl acetate',
+      alreadyAccepted: true,
+      revisionNumber: 9,
+      receivedAt: '2026-08-12T00:00:00.000Z',
+    })).toEqual({
+      actionId: 'action-persisted',
+      recommendationId: 'rec-1',
+      label: 'Use ethyl acetate',
+      alreadyAccepted: true,
+      revisionNumber: 9,
+      receivedAt: '2026-08-12T00:00:00.000Z',
+    })
+  })
+})
+
+describe('ApprovalReceiptCard', () => {
+  it('renders a rehydrated receipt identity and revision', () => {
+    const markup = renderToStaticMarkup(createElement(ApprovalReceiptCard, {
+      receipt: {
+        actionId: 'action-persisted',
+        recommendationId: 'rec-1',
+        label: 'Use ethyl acetate',
+        alreadyAccepted: true,
+        revisionNumber: 9,
+      },
+      receivedAt: '2026-08-12T00:00:00.000Z',
+    }))
+
+    expect(markup).toContain('Receipt action-persisted')
+    expect(markup).toContain('revision 9')
   })
 })

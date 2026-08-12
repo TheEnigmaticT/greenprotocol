@@ -34,6 +34,21 @@ export interface RecommendationApprovalReceipt {
   revisionNumber: number
 }
 
+export interface PersistedRecommendationApprovalReceipt extends RecommendationApprovalReceipt {
+  receivedAt: string
+}
+
+export function parsePersistedRecommendationApprovalReceipt(
+  scope: TalkAboutScope,
+  receipt: unknown,
+): PersistedRecommendationApprovalReceipt | null {
+  if (!receipt || typeof receipt !== 'object') return null
+  const { receivedAt, ...event } = receipt as Record<string, unknown>
+  const approval = parseRecommendationApprovedEvent(scope, event)
+  if (!approval || typeof receivedAt !== 'string' || !receivedAt.trim()) return null
+  return { ...approval, receivedAt }
+}
+
 export function approvalFromEvent(
   data: Record<string, unknown>,
   scope: TalkAboutScope,
@@ -239,6 +254,22 @@ export function ClosedConversationError({ error, isOpen }: { error: string | nul
   return <p role="alert" className="mt-2 text-xs" style={{ color: '#B45309' }}>{error}</p>
 }
 
+export function ApprovalReceiptCard({
+  receipt,
+  receivedAt,
+}: {
+  receipt: RecommendationApprovalReceipt
+  receivedAt: string | null
+}) {
+  return (
+    <p className="rounded border p-3 text-xs" style={{ borderColor: '#BBF7D0', background: '#F0FDF4', color: '#166534' }}>
+      {receipt.label} {receipt.alreadyAccepted ? 'was already approved.' : 'has been approved.'}
+      {' '}Receipt {receipt.actionId} · revision {receipt.revisionNumber}
+      {receivedAt && ` · ${new Date(receivedAt).toLocaleString()}`}
+    </p>
+  )
+}
+
 interface TalkAboutThisProps {
   analysisId?: string
   scope: TalkAboutScope
@@ -306,16 +337,21 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ analysisId, scope }),
       })
-      const body = await response.json() as { conversationId?: string; error?: string }
+      const body = await response.json() as {
+        conversationId?: string
+        approvalReceipt?: unknown
+        error?: string
+      }
       if (!response.ok || !body.conversationId) {
         throw new Error(body.error || 'Unable to open chat')
       }
       setConversationId(body.conversationId)
       setMessages([])
       setEvidenceReceipts([])
-      setApprovalReceipt(null)
-      setApprovalReceivedAt(null)
-      approvedActionIdsRef.current.clear()
+      const persistedReceipt = parsePersistedRecommendationApprovalReceipt(scope, body.approvalReceipt)
+      setApprovalReceipt(persistedReceipt)
+      setApprovalReceivedAt(persistedReceipt?.receivedAt ?? null)
+      approvedActionIdsRef.current = new Set(persistedReceipt ? [persistedReceipt.actionId] : [])
       setIsOpen(true)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to open chat')
@@ -471,13 +507,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
               <DiscussionScopeInstruction scope={scope} />
             </header>
             <div className="flex-1 space-y-4 overflow-y-auto p-5" aria-live="polite">
-              {approvalReceipt && (
-                <p className="rounded border p-3 text-xs" style={{ borderColor: '#BBF7D0', background: '#F0FDF4', color: '#166534' }}>
-                  {approvalReceipt.label} {approvalReceipt.alreadyAccepted ? 'was already approved.' : 'has been approved.'}
-                  {' '}Receipt {approvalReceipt.actionId} · revision {approvalReceipt.revisionNumber}
-                  {approvalReceivedAt && ` · ${new Date(approvalReceivedAt).toLocaleString()}`}
-                </p>
-              )}
+              {approvalReceipt && <ApprovalReceiptCard receipt={approvalReceipt} receivedAt={approvalReceivedAt} />}
               {evidenceReceipts.map(receipt => (
                 <EvidenceReceiptCard key={receipt.evidence.id} {...receipt} />
               ))}

@@ -114,3 +114,28 @@ The existing configured-provider, embedding, Supabase, authenticated-browser, so
 ### Remaining external blocker
 
 The configured-provider, embedding, Supabase, authenticated-browser, source-artifact, and warm-retrieval prerequisites remain unavailable. No live timing gate result is claimed.
+
+## Final approval repair
+
+### RED
+
+- `npx vitest run tests/lib/talk-about-this/actions.test.ts` — 2 expected failures: `accept this` and `approve this recommendation` were not direct approval commands.
+- `npx vitest run tests/lib/talk-about-this/repository.test.ts` — 2 expected failures because persisted action receipts had no hydration adapter.
+- `npx vitest run tests/lib/talk-about-this/context.test.ts` — 1 expected failure because accepted state changed the context hash instead of reusing the immutable conversation.
+- `npx vitest run tests/lib/talk-about-this/activity.test.ts` — expected failures for absent persisted receipt hydration and receipt presentation.
+- `npx vitest run tests/lib/talk-about-this/page-state.test.ts` — 1 expected failure because normal PATCH reconciliation lacked a monotonic state boundary.
+
+### GREEN
+
+- `npx vitest run tests/lib/talk-about-this/actions.test.ts tests/lib/talk-about-this/context.test.ts tests/lib/talk-about-this/repository.test.ts tests/lib/talk-about-this/activity.test.ts tests/lib/talk-about-this/page-state.test.ts` — 5 files, 51 tests passed.
+- `npx tsc --noEmit` — exit 0, no output.
+
+### Repair
+
+- The direct-command allowlist now includes exactly `approve this`, `accept this recommendation`, `accept this`, and `approve this recommendation`; question, negated, conditional, and compound forms remain rejected.
+- Immutable context snapshots exclude the mutable acceptance flag. Opening the same scope now finds its existing context-hash conversation, loads the completed server action receipt, returns it, and TalkAboutThis validates, hydrates, and renders the stored action ID/revision/completion time. Receipt data is never derived from user message text.
+- A normal delayed PATCH result only advances a matching page state revision. Approval reconciliation keeps the larger revision and sets only the receipt-targeted recommendation accepted, so stale save completion cannot undo a newer approval.
+
+### Remaining external blocker
+
+Remote Supabase migration/RPC and authenticated browser flows remain unavailable in this worktree; focused repository/component/state contracts cover durable receipt hydration and stale local reconciliation without claiming a live database verification.
