@@ -215,6 +215,18 @@ export default function FinalizedProtocol({
                         {rec.alternative.chemical}
                       </span>
                     </div>
+                    {rec.id && (
+                      <div className="shrink-0" onClick={event => event.stopPropagation()}>
+                        <TalkAboutThis
+                          analysisId={analysisId}
+                          scope={{ kind: 'recommendation', recommendationId: rec.id }}
+                          title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
+                          evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
+                          onRecommendationApproved={onRecommendationApproved}
+                          buttonLabel="Talk about this"
+                        />
+                      </div>
+                    )}
                     <span className="text-xs shrink-0" style={{ color: '#16a34a' }}>✓</span>
                   </div>
                 )

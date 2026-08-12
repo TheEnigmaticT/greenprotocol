@@ -159,3 +159,24 @@ Remote Supabase migration/RPC and authenticated browser flows remain unavailable
 ### Concern
 
 Remote Supabase/RPC and authenticated-browser flows remain unavailable in this worktree; this repair is covered by the focused component/activity regression and static TypeScript compilation, not a live approval stream.
+
+## Accepted recommendation receipt-access repair
+
+### RED
+
+`npx vitest run tests/lib/talk-about-this/activity.test.ts` — 1 of 31 tests failed as expected. The accepted recommendation rendered under `Accepted Changes (1)`, but its SSR markup had no `aria-label="Talk about this. Direct evidence is included in this discussion."` control.
+
+### GREEN
+
+- `npx vitest run tests/lib/talk-about-this/activity.test.ts` — 1 file, 31 tests passed (exit 0; duration 269 ms).
+- `npx tsc --noEmit` — exit 0; no output.
+
+### Repair
+
+- Accepted recommendation rows now render `TalkAboutThis` only when `rec.id` is present, using `{ kind: 'recommendation', recommendationId: rec.id }`, the same title, evidence-state derivation, analysis ID, and approval callback as pending cards.
+- The control is visible in the accepted row rather than behind its existing row toggle. Its wrapper stops click propagation so opening the receipt/chat cannot trigger the accepted-card toggle or any approval mutation.
+- The focused SSR regression renders an accepted stable recommendation with the accessible control and confirms that an ID-less accepted recommendation does not render a fallback-scoped control.
+
+### Remaining external blocker
+
+No configured chat provider, Supabase environment, or authenticated browser session is available in this worktree. The focused SSR/UI contract and static TypeScript compilation are verified; live persisted-receipt hydration after a remote reload remains unavailable for browser verification.

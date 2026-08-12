@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { applyRecommendationApprovedEvent, ApprovalReceiptCard, ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, parsePersistedRecommendationApprovalReceipt, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
+import FinalizedProtocol from '@/components/FinalizedProtocol'
 import { EvidenceAtlasTalkControl } from '@/components/AnalysisResults'
 import { activityData } from '@/lib/talk-about-this/agent'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
@@ -184,6 +185,59 @@ describe('scope instructions and Evidence Atlas controls', () => {
     } as AnalysisResult
     const markup = renderToStaticMarkup(createElement(EvidenceAtlasTalkControl, { analysisId: 'analysis-1', analysis }))
     expect(markup).toContain('Model-inferred — no direct evidence located.')
+  })
+})
+
+describe('accepted recommendation receipt access', () => {
+  it('renders an accessible scoped Talk About This control for an accepted stable recommendation', () => {
+    const analysis = {
+      protocolTitle: 'Solvent comparison',
+      chemistrySubdomain: 'Synthetic chemistry',
+      steps: [],
+      revisedProtocol: 'Use ethyl acetate.',
+      overallAssessment: {
+        greenPrinciplesViolated: [5],
+        mostImpactfulChange: 'Replace DMF.',
+        experimentalValidationNeeded: true,
+        disclaimer: 'Validate experimentally.',
+      },
+      recommendations: [{
+        id: 'rec-accepted-stable',
+        stepNumber: 1,
+        principleNumbers: [5],
+        principleNames: ['Safer solvents and auxiliaries'],
+        severity: 'high',
+        original: { chemical: 'DMF', issue: 'Reproductive toxicity concern.' },
+        alternative: {
+          chemical: 'Ethyl acetate',
+          rationale: 'Lower-hazard solvent alternative.',
+          yieldImpact: 'Validate experimentally.',
+          caveats: 'Confirm solubility.',
+          evidenceBasis: 'Literature evidence.',
+        },
+        evidence: {
+          why_flagged: [],
+          why_replacement: [],
+          citations: [{ source_id: 'evidence-1', source_name: 'Source', citation: 'Citation' }],
+        },
+        confidenceLevel: 'high',
+        evidenceTier: 'sourced',
+        isAccepted: true,
+      }],
+    } as AnalysisResult
+
+    const markup = renderToStaticMarkup(createElement(FinalizedProtocol, { analysis, analysisId: 'analysis-1' }))
+    const missingIdMarkup = renderToStaticMarkup(createElement(FinalizedProtocol, {
+      analysis: {
+        ...analysis,
+        recommendations: [{ ...analysis.recommendations[0], id: undefined }],
+      },
+      analysisId: 'analysis-1',
+    }))
+
+    expect(markup).toContain('Accepted Changes (1)')
+    expect(markup).toContain('aria-label="Talk about this. Direct evidence is included in this discussion."')
+    expect(missingIdMarkup).not.toContain('aria-label="Talk about this.')
   })
 })
 
