@@ -1,9 +1,13 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { activityForEvent, approvalFromEvent, evidenceFromEvent, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
+import { DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
+import { EvidenceAtlasTalkControl } from '@/components/AnalysisResults'
 import { activityData } from '@/lib/talk-about-this/agent'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
 import { buildTalkAboutSystemPrompt } from '@/lib/talk-about-this/prompt'
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
+import type { AnalysisResult } from '@/lib/types'
 
 const context: TalkAboutContext = {
   schemaVersion: 1,
@@ -108,10 +112,60 @@ describe('structured literature evidence activity', () => {
     expect(evidenceFromEvent('tool-complete', { evidence: [evidence] })).toEqual([evidence])
   })
 
-  it('ignores malformed evidence records', () => {
-    expect(evidenceFromEvent('tool-complete', {
-      evidence: [{ ...evidence, pageStart: '12' }],
+  it('rejects optional fields with invalid types before they can reach React rendering', () => {
+    expect(evidenceFromEvent('done', {
+      evidence: [
+        { ...evidence, applicability: { unsafe: true } },
+        { ...evidence, limitations: ['unsafe'] },
+      ],
     })).toEqual([])
+  })
+
+  it('renders literal candidate-pending-adjudication status as Candidate evidence', () => {
+    const candidate = {
+      ...evidence,
+      candidateStatus: 'candidate_pending_adjudication',
+      applicability: undefined,
+      limitations: undefined,
+    }
+    const markup = renderToStaticMarkup(createElement(EvidenceReceiptCard, { evidence: candidate, receivedAt: '2026-08-12T00:00:00.000Z' }))
+
+    expect(markup).toContain('Candidate evidence')
+    expect(markup).toContain('Status: candidate_pending_adjudication.')
+    expect(markup).not.toContain('Adjudicated evidence')
+  })
+})
+
+describe('scope instructions and Evidence Atlas controls', () => {
+  it('shows explicit approval guidance only for a stable recommendation scope', () => {
+    expect(renderToStaticMarkup(createElement(DiscussionScopeInstruction, { scope: { kind: 'recommendation', recommendationId: 'rec-1' } })))
+      .toContain('approve this')
+    expect(renderToStaticMarkup(createElement(DiscussionScopeInstruction, { scope: { kind: 'principle', principleNumber: 1 } })))
+      .toContain('does not change the analysis')
+  })
+
+  it('labels the Atlas control as P1 and derives sourced state from P1 recommendation citations', () => {
+    const analysis = {
+      recommendations: [
+        { principleNumbers: [1], evidence: { citations: [{ source_id: 'atlas-p1', source_name: 'Atlas', citation: 'P1 citation' }] } },
+        { principleNumbers: [2], evidence: { citations: [{ source_id: 'atlas-p2', source_name: 'Atlas', citation: 'P2 citation' }] } },
+      ],
+    } as AnalysisResult
+    const markup = renderToStaticMarkup(createElement(EvidenceAtlasTalkControl, { analysisId: 'analysis-1', analysis }))
+
+    expect(markup).toContain('P1 Evidence Atlas')
+    expect(markup).toContain('Direct evidence is included')
+  })
+
+  it('does not claim sourced evidence for P1 when only another principle has citations', () => {
+    const analysis = {
+      recommendations: [
+        { principleNumbers: [1], evidence: { citations: [] } },
+        { principleNumbers: [2], evidence: { citations: [{ source_id: 'atlas-p2', source_name: 'Atlas', citation: 'P2 citation' }] } },
+      ],
+    } as AnalysisResult
+    const markup = renderToStaticMarkup(createElement(EvidenceAtlasTalkControl, { analysisId: 'analysis-1', analysis }))
+    expect(markup).toContain('Model-inferred — no direct evidence located.')
   })
 })
 

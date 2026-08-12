@@ -110,6 +110,24 @@ function EvidenceView({ evidence, principleNumbers, analysisId }: {
   )
 }
 
+
+export function EvidenceAtlasTalkControl({ analysisId, analysis }: { analysisId: string; analysis: AnalysisResult }) {
+  const principleNumber = 1
+  const hasScopedCitations = analysis.recommendations.some(recommendation =>
+    recommendation.principleNumbers.includes(principleNumber)
+    && (recommendation.evidence?.citations.length ?? 0) > 0,
+  )
+
+  return (
+    <TalkAboutThis
+      analysisId={analysisId}
+      scope={{ kind: 'principle', principleNumber }}
+      title="P1 Evidence Atlas"
+      evidenceState={hasScopedCitations ? 'sourced' : 'inferred'}
+      buttonLabel="Chat about P1 Evidence Atlas"
+    />
+  )
+}
 function RecommendationCard({ 
   rec, 
   onToggleAccept,
@@ -495,15 +513,10 @@ export default function AnalysisResults({
               <div>
                 <p className="text-sm font-semibold" style={{ color: '#1C3822', fontFamily: 'var(--font-mono)' }}>Evidence Atlas</p>
                 <p className="text-xs mt-0.5" style={{ color: '#78716C' }}>
-                  Full citations, calculation trails, and confidence tiers for every recommendation.
+                  Full citations and calculation trails. Chat is scoped to Principle 1 only.
                 </p>
               </div>
-              <TalkAboutThis
-                analysisId={analysisId}
-                scope={{ kind: 'principle', principleNumber: 1 }}
-                title="Evidence Atlas"
-                evidenceState="sourced"
-              />
+              <EvidenceAtlasTalkControl analysisId={analysisId} analysis={analysis} />
               <a
                 href={`/analyze/${analysisId}/evidence`}
                 aria-label="View Evidence Atlas for this analysis"

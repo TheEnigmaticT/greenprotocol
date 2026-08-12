@@ -75,6 +75,7 @@ export function parseRecommendationApprovedEvent(
 function isLiteratureEvidence(value: unknown): value is LiteratureEvidenceMatch {
   if (!value || typeof value !== 'object') return false
   const evidence = value as Record<string, unknown>
+
   return typeof evidence.id === 'string'
     && Boolean(evidence.id.trim())
     && typeof evidence.sourceDocumentId === 'string'
@@ -93,6 +94,8 @@ function isLiteratureEvidence(value: unknown): value is LiteratureEvidenceMatch 
     && Boolean(evidence.candidateStatus.trim())
     && typeof evidence.similarity === 'number'
     && Number.isFinite(evidence.similarity)
+    && (!('applicability' in evidence) || evidence.applicability === undefined || typeof evidence.applicability === 'string')
+    && (!('limitations' in evidence) || evidence.limitations === undefined || typeof evidence.limitations === 'string')
 }
 
 export function evidenceFromEvent(event: string, data: Record<string, unknown>): LiteratureEvidenceMatch[] {
@@ -203,11 +206,39 @@ export function activityForEvent(event: string, data: Record<string, unknown>): 
   return null
 }
 
+export function DiscussionScopeInstruction({ scope }: { scope: TalkAboutScope }) {
+  const canApprove = scope.kind === 'recommendation' && 'recommendationId' in scope
+  return (
+    <p className="mt-3 text-xs" style={{ color: '#78716C' }}>
+      {canApprove
+        ? 'You may explicitly approve this scoped recommendation by sending ‘approve this’; other analysis changes are unavailable.'
+        : 'This discussion does not change the analysis or its acceptance state.'}
+    </p>
+  )
+}
+
+export function EvidenceReceiptCard({ evidence, receivedAt }: EvidenceReceipt) {
+  const isCandidate = evidence.candidateStatus === 'candidate_pending_adjudication'
+    || evidence.candidateStatus === 'candidate'
+
+  return (
+    <article className="rounded-lg border p-3 text-xs space-y-1" style={{ borderColor: '#D6D0C4', background: '#F6F3EB', color: '#1C1917' }}>
+      <p className="font-bold" style={{ color: '#1C3822' }}>{isCandidate ? 'Candidate evidence' : 'Adjudicated evidence'}</p>
+      <p><strong>{evidence.sourceDocumentId}</strong> · {evidence.title} · pp. {evidence.pageStart}{evidence.pageEnd === evidence.pageStart ? '' : `–${evidence.pageEnd}`}</p>
+      <blockquote className="border-l-2 pl-2" style={{ borderColor: '#A8C5A2', color: '#57534E' }}>{evidence.quote}</blockquote>
+      <p>Status: {evidence.candidateStatus}. Retrieved {new Date(receivedAt).toLocaleString()}.</p>
+      {evidence.applicability && <p>Applicability: {evidence.applicability}</p>}
+      {evidence.limitations && <p>Limitations: {evidence.limitations}</p>}
+    </article>
+  )
+}
+
 interface TalkAboutThisProps {
   analysisId?: string
   scope: TalkAboutScope
   title: string
   evidenceState: 'sourced' | 'inferred'
+  buttonLabel?: string
   onRecommendationApproved?: (receipt: RecommendationApprovalReceipt) => void
 }
 
@@ -225,7 +256,7 @@ function parseSseEvent(block: string): { event: string; data: Record<string, unk
     return null
   }
 }
-export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecommendationApproved }: TalkAboutThisProps) {
+export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecommendationApproved, buttonLabel = 'Chat about this' }: TalkAboutThisProps) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
@@ -411,10 +442,10 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
         disabled={!analysisId || isStarting}
         className="text-xs px-3 py-1.5 rounded border font-bold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         style={{ color: '#1C3822', borderColor: '#2D4A3A', background: '#F6F3EB' }}
+        aria-label={`${buttonLabel}. ${evidenceState === 'sourced' ? 'Direct evidence is included in this discussion.' : 'Model-inferred — no direct evidence located.'}`}
       >
-        {isStarting ? 'Opening…' : 'Chat about this'}
+        {isStarting ? 'Opening…' : buttonLabel}
       </button>
-      {error && !isOpen && <p className="mt-2 text-xs" style={{ color: '#B45309' }}>{error}</p>}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={`Chat about ${title}`}>
           <button type="button" className="absolute inset-0 bg-black/30" onClick={close} aria-label="Close chat" />
@@ -430,11 +461,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
                 </div>
                 <button type="button" onClick={close} className="text-sm font-bold" style={{ color: '#57534E' }}>Close</button>
               </div>
-              <p className="mt-3 text-xs" style={{ color: '#78716C' }}>
-                {scope.kind === 'recommendation' && 'recommendationId' in scope
-                  ? 'You may explicitly approve this scoped recommendation by sending ‘approve this’; other analysis changes are unavailable.'
-                  : 'This discussion does not change the analysis or its acceptance state.'}
-              </p>
+              <DiscussionScopeInstruction scope={scope} />
             </header>
             <div className="flex-1 space-y-4 overflow-y-auto p-5" aria-live="polite">
               {approvalReceipt && (
@@ -444,15 +471,8 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
                   {approvalReceivedAt && ` · ${new Date(approvalReceivedAt).toLocaleString()}`}
                 </p>
               )}
-              {evidenceReceipts.map(({ evidence, receivedAt }) => (
-                <article key={evidence.id} className="rounded-lg border p-3 text-xs space-y-1" style={{ borderColor: '#D6D0C4', background: '#F6F3EB', color: '#1C1917' }}>
-                  <p className="font-bold" style={{ color: '#1C3822' }}>{evidence.candidateStatus === 'candidate' ? 'Candidate evidence' : 'Adjudicated evidence'}</p>
-                  <p><strong>{evidence.sourceDocumentId}</strong> · {evidence.title} · pp. {evidence.pageStart}{evidence.pageEnd === evidence.pageStart ? '' : `–${evidence.pageEnd}`}</p>
-                  <blockquote className="border-l-2 pl-2" style={{ borderColor: '#A8C5A2', color: '#57534E' }}>{evidence.quote}</blockquote>
-                  <p>Status: {evidence.candidateStatus}. Retrieved {new Date(receivedAt).toLocaleString()}.</p>
-                  {evidence.applicability && <p>Applicability: {evidence.applicability}</p>}
-                  {evidence.limitations && <p>Limitations: {evidence.limitations}</p>}
-                </article>
+              {evidenceReceipts.map(receipt => (
+                <EvidenceReceiptCard key={receipt.evidence.id} {...receipt} />
               ))}
               {messages.map((message, index) => (
                 <article key={`${message.role}-${index}`} className="rounded-lg p-3 text-sm" style={{ background: message.role === 'user' ? '#1C3822' : '#FFFFFF', color: message.role === 'user' ? '#F6F3EB' : '#1C1917', border: message.role === 'assistant' ? '1px solid #E7E5E4' : undefined }}>
