@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
-import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis } from '@/lib/types'
+import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type LiteratureEvidenceMatch } from '@/lib/types'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
 import { getAnalysisMetadata } from '@/lib/version'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
-import { searchLiterature, SearchResult } from '@/lib/vector-search'
+import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
 import { buildSdsReferences } from '@/lib/sds'
 import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
 import { logLLMTrace, logDedupTrace } from '@/lib/trace'
@@ -440,7 +440,7 @@ interface ReevaluationResult {
 
 async function reevaluateRecommendation(
   recommendation: Recommendation,
-  literatureEvidence: SearchResult[]
+  literatureEvidence: LiteratureEvidenceMatch[]
 ): Promise<ReevaluationResult | null> {
   try {
     const systemPrompt = buildReevaluatePrompt(recommendation, literatureEvidence)
@@ -476,15 +476,13 @@ async function reevaluateAllRecommendations(
 
     // Retrieve literature for this specific recommendation
     const query = `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
-    let literatureEvidence: SearchResult[] = []
+    let literatureEvidence: LiteratureEvidenceMatch[] = []
     
     try {
-      literatureEvidence = await searchLiterature({
+      literatureEvidence = await searchLiteratureEvidence({
         query,
         limit: 5,
-        threshold: 0.3,
-        principles: rec.principleNumbers,
-        chemicals: [rec.original.chemical.toLowerCase(), rec.alternative.chemical.toLowerCase()],
+        threshold: 0.25,
       })
       console.log(`Phase 2.7: Found ${literatureEvidence.length} literature matches for ${chemName}`)
     } catch (err) {
@@ -821,12 +819,10 @@ export async function analyzeProtocol(
 
     const results = await Promise.allSettled(
       rawRecommendations.map((rec, i) =>
-        searchLiterature({
+        searchLiteratureEvidence({
           query: queries[i],
           limit: 3,
-          threshold: 0.35,
-          principles: rec.principleNumbers,
-          chemicals: [rec.original.chemical.toLowerCase(), rec.alternative.chemical.toLowerCase()],
+          threshold: 0.25,
         })
       )
     )
@@ -844,24 +840,17 @@ export async function analyzeProtocol(
       if (!rec.evidence) {
         rec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
       }
+      const seenEvidenceIds = new Set(rec.evidence.citations.map(citation => citation.source_id))
       for (const match of matches) {
-        const alreadyExists = rec.evidence.citations.some(c => c.doi && match.doi && c.doi === match.doi)
-        if (!alreadyExists) {
-          rec.evidence.citations.push({
-            source_id: match.id,
-            source_name: match.journal || match.title,
-            citation: `${match.authors || 'Unknown'} (${match.year || 'n.d.'}). ${match.title}.`,
-            url: match.url ?? undefined,
-            doi: match.doi ?? undefined,
-          })
-          if (match.content_snippet) {
-            rec.evidence.why_replacement.push({
-              chemical: rec.alternative.chemical,
-              source: match.journal || 'Literature',
-              content: match.content_snippet,
-            })
-          }
-        }
+        if (seenEvidenceIds.has(match.id)) continue
+
+        seenEvidenceIds.add(match.id)
+        rec.evidence.citations.push(citationFromEvidenceMatch(match))
+        rec.evidence.why_replacement.push({
+          chemical: rec.alternative.chemical,
+          source: match.title,
+          content: `${match.candidateStatus === 'candidate_pending_adjudication' ? 'Candidate evidence — ' : ''}${match.quote}`,
+        })
       }
     }
   } catch (err) {

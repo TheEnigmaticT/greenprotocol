@@ -1,7 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
-import { Recommendation } from '@/lib/types'
-import { SearchResult } from '@/lib/vector-search'
+import type { Recommendation, LiteratureEvidenceMatch } from '@/lib/types'
 
 describe('Phase 2.7: Re-evaluation Pipeline', () => {
   const mockRecommendation: Recommendation = {
@@ -23,25 +22,20 @@ describe('Phase 2.7: Re-evaluation Pipeline', () => {
     confidenceLevel: 'high',
   }
 
-  const mockLiteratureEvidence: SearchResult[] = [
+  const mockLiteratureEvidence: LiteratureEvidenceMatch[] = [
     {
-      id: 'pub1',
-      title: 'Green Alternatives to Dichloromethane in Organic Chemistry',
-      authors: 'Smith et al.',
-      journal: 'Green Chemistry',
-      year: 2020,
+      id: 'doi:p7:u1',
+      sourceDocumentId: 'doi:10.1039/sample',
       doi: '10.1039/sample',
-      url: 'https://example.com/paper1',
-      content_snippet: 'Ethyl acetate has been successfully used as a replacement for DCM in extraction protocols with comparable yields...',
+      title: 'Green Alternatives to Dichloromethane in Organic Chemistry',
+      pageStart: 7,
+      pageEnd: 7,
+      quote: 'Ethyl acetate has been successfully used as a replacement for DCM in extraction protocols with comparable yields.',
+      evidenceType: 'comparison',
+      applicability: 'Extraction protocols using dichloromethane.',
+      limitations: 'May require optimization of extraction time.',
+      candidateStatus: 'candidate_pending_adjudication',
       similarity: 0.85,
-    },
-    {
-      id: 'pub2',
-      title: 'Solvent Selection for Sustainable Chemistry',
-      authors: 'Jones & Brown',
-      journal: 'ACS Sustainable Chemistry',
-      year: 2021,
-      similarity: 0.72,
     },
   ]
 
@@ -55,20 +49,23 @@ describe('Phase 2.7: Re-evaluation Pipeline', () => {
       expect(prompt).toContain('high')
     })
 
-    it('should include literature evidence when available', () => {
+    it('passes status-labelled page evidence—not article snippets—to Phase 2.7 re-evaluation', () => {
       const prompt = buildReevaluatePrompt(mockRecommendation, mockLiteratureEvidence)
-      
-      expect(prompt).toContain('Green Alternatives to Dichloromethane')
-      expect(prompt).toContain('Smith et al.')
-      expect(prompt).toContain('85.0%')
+
+      expect(prompt).toContain('candidate_pending_adjudication')
+      expect(prompt).toContain('Pages: 7–7')
       expect(prompt).toContain('Ethyl acetate has been successfully used')
+      expect(prompt).toContain('candidate evidence is preliminary')
+      expect(prompt).not.toContain('Smith et al.')
+      expect(prompt).not.toContain('Journal:')
+      expect(prompt).not.toContain('Similarity:')
     })
 
     it('should handle no literature evidence', () => {
       const prompt = buildReevaluatePrompt(mockRecommendation, [])
       
       expect(prompt).toContain('No relevant literature evidence was found')
-      expect(prompt).not.toContain('Smith et al.')
+      expect(prompt).not.toContain('Green Alternatives to Dichloromethane')
     })
 
     it('should include re-evaluation rules', () => {

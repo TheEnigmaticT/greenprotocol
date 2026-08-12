@@ -1,6 +1,35 @@
-import { describe, it, expect } from 'vitest'
-import { deriveEvidenceTier, rankRecommendations } from '@/lib/pipeline'
-import type { Recommendation } from '@/lib/types'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LiteratureEvidenceMatch, Recommendation } from '@/lib/types'
+
+const mocks = vi.hoisted(() => ({
+  anthropicCreate: vi.fn(),
+  evidenceSearch: vi.fn(),
+}))
+
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class MockAnthropic {
+    messages = { create: mocks.anthropicCreate }
+  },
+}))
+
+vi.mock('@/lib/chemistry-service', () => ({
+  batchConvert: vi.fn(),
+  scoreProtocol: vi.fn(),
+  isServiceAvailable: vi.fn().mockResolvedValue(false),
+}))
+
+vi.mock('@/lib/literature-evidence', () => ({
+  searchLiteratureEvidence: mocks.evidenceSearch,
+  citationFromEvidenceMatch: (match: LiteratureEvidenceMatch) => ({
+    source_id: match.id,
+    source_name: match.title,
+    citation: `${match.title}. pp. ${match.pageStart}–${match.pageEnd}.`,
+    doi: match.doi,
+  }),
+}))
+
+
+import { analyzeProtocol, deriveEvidenceTier, rankRecommendations } from '@/lib/pipeline'
 
 function makeRec(overrides: Partial<Recommendation>): Recommendation {
   return {
@@ -14,6 +43,45 @@ function makeRec(overrides: Partial<Recommendation>): Recommendation {
     ...overrides,
   }
 }
+
+function candidateMatch(id: string): LiteratureEvidenceMatch {
+  return {
+    id,
+    sourceDocumentId: 'doi:10.1039/example',
+    doi: '10.1039/example',
+    title: 'Page-Bounded Green Solvent Study',
+    pageStart: 4,
+    pageEnd: 4,
+    quote: 'Ethyl acetate replaced dichloromethane with comparable extraction yields.',
+    evidenceType: 'comparison',
+    applicability: 'Liquid-liquid extraction',
+    limitations: 'Requires solvent-volume optimization.',
+    candidateStatus: 'candidate_pending_adjudication',
+    similarity: 0.91,
+  }
+}
+
+function toolResult(input: Record<string, unknown>) {
+  return {
+    id: 'tool',
+    type: 'tool_use',
+    name: 'return_result',
+    input,
+  }
+}
+
+function anthropicResponse(input: Record<string, unknown>) {
+  return {
+    content: [toolResult(input)],
+    usage: { input_tokens: 1, output_tokens: 1 },
+    stop_reason: 'tool_use',
+  }
+}
+
+beforeEach(() => {
+  mocks.anthropicCreate.mockReset()
+  mocks.evidenceSearch.mockReset().mockResolvedValue([])
+})
 
 describe('deriveEvidenceTier', () => {
   it('returns sourced when citations present', () => {
@@ -59,5 +127,69 @@ describe('rankRecommendations', () => {
     const srcMed = makeRec({ severity: 'medium', evidenceTier: 'sourced' })  // 2 × 1.5 = 3.0
     const [first] = rankRecommendations([infHigh, srcMed])
     expect(first).toBe(srcMed)
+  })
+})
+
+describe('Phase 2.5 evidence grounding', () => {
+  it('attaches a page-bounded candidate citation in Phase 2.5', async () => {
+    mocks.evidenceSearch.mockResolvedValue([candidateMatch('doi:p4:u2')])
+    mocks.anthropicCreate
+      .mockResolvedValueOnce(anthropicResponse({
+        protocolTitle: 'Extraction',
+        chemistrySubdomain: 'Organic synthesis',
+        steps: [{
+          stepNumber: 1,
+          description: 'Extract with dichloromethane.',
+          chemicals: [{ name: 'Dichloromethane', role: 'solvent' }],
+          conditions: {},
+        }],
+      }))
+      .mockImplementation(({ system }: { system: string }) => {
+        if (system.includes('protocol writer')) {
+          return Promise.resolve(anthropicResponse({
+            revisedProtocol: 'Revised extraction protocol.',
+            overallAssessment: {
+              greenPrinciplesViolated: [5],
+              mostImpactfulChange: 'Replace dichloromethane.',
+              experimentalValidationNeeded: true,
+              disclaimer: 'Validate experimentally.',
+            },
+          }))
+        }
+        if (system.includes('critical re-evaluation')) {
+          return Promise.resolve(anthropicResponse({
+            action: 'confirm',
+            revisedConfidence: 'medium',
+            revisedRationale: 'Evidence supports further validation.',
+            evidenceAssessment: {
+              supportsOriginalIssue: true,
+              supportsAlternative: false,
+              contextMatch: 'partial',
+              quantitativeData: true,
+            },
+            concerns: ['Candidate evidence requires adjudication.'],
+          }))
+        }
+        return Promise.resolve(anthropicResponse({
+          principleNumber: 5,
+          recommendations: system.includes('Principle 5')
+            ? [makeRec({})]
+            : [],
+        }))
+      })
+
+    const result = await analyzeProtocol('Extract with dichloromethane.')
+
+    expect(result.recommendations[0].evidence?.citations).toContainEqual(
+      expect.objectContaining({
+        source_id: 'doi:p4:u2',
+        citation: expect.stringContaining('p. 4'),
+      }),
+    )
+    expect(result.recommendations[0].evidence?.why_replacement).toContainEqual(
+      expect.objectContaining({
+        content: expect.stringContaining('Candidate evidence'),
+      }),
+    )
   })
 })

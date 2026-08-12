@@ -1,27 +1,32 @@
-import { Recommendation } from '@/lib/types'
-import { SearchResult } from '@/lib/vector-search'
+import type { LiteratureEvidenceMatch, Recommendation } from '@/lib/types'
 
 /**
  * Phase 2.7: Re-evaluation System Prompt
- * 
- * After generating recommendations and retrieving literature evidence,
- * re-evaluate each recommendation based on the actual evidence found.
- * The LLM can confirm, downgrade confidence, adjust rationale, or suppress
- * a recommendation if the evidence contradicts the original suggestion.
+ *
+ * After generating recommendations and retrieving page-bounded literature
+ * evidence, re-evaluate each recommendation based on the evidence found.
  */
-
 export function buildReevaluatePrompt(
   recommendation: Recommendation,
-  literatureEvidence: SearchResult[]
+  literatureEvidence: LiteratureEvidenceMatch[]
 ): string {
   const hasEvidence = literatureEvidence.length > 0
   const citationContext = hasEvidence
-    ? literatureEvidence.map((lit, idx) => 
-        `[${idx + 1}] ${lit.title} (${lit.authors || 'Unknown'}, ${lit.year || 'n.d.'})\n` +
-        `   Journal: ${lit.journal || 'N/A'}\n` +
-        `   Snippet: ${lit.content_snippet || 'No content available'}\n` +
-        `   Similarity: ${(lit.similarity * 100).toFixed(1)}%`
-      ).join('\n\n')
+    ? literatureEvidence.map((evidence, idx) => {
+        const doi = evidence.doi ? `DOI: ${evidence.doi}` : `Title: ${evidence.title}`
+        const applicability = evidence.applicability ?? 'Not stated'
+        const limitations = evidence.limitations ?? 'Not stated'
+        const candidateNote = evidence.candidateStatus === 'candidate_pending_adjudication'
+          ? '\n   Candidate evidence is preliminary and cannot alone confirm or suppress an intervention.'
+          : ''
+
+        return `[${idx + 1}] ${doi}\n` +
+          `   Pages: ${evidence.pageStart}–${evidence.pageEnd}\n` +
+          `   Status: ${evidence.candidateStatus}\n` +
+          `   Quote: ${evidence.quote}\n` +
+          `   Applicability: ${applicability}\n` +
+          `   Limitations: ${limitations}${candidateNote}`
+      }).join('\n\n')
     : 'No relevant literature evidence was found in the vector database.'
 
   return `You are a green chemistry expert conducting a critical re-evaluation of a recommendation.
@@ -67,6 +72,7 @@ Re-evaluate this recommendation based on the retrieved literature evidence. You 
 - Don't fabricate support: if the literature doesn't mention the alternative, say so
 - Context matters: a valid substitution in one chemistry domain may not apply to another
 - Quantitative evidence (yields, selectivity, scale) beats qualitative claims
+- candidate evidence is preliminary. Never use a candidate alone to confirm or suppress an intervention; downgrade or retain uncertainty until experimentally validated evidence supports the decision.
 - If no literature was found, **downgrade confidence** and flag as "needs experimental validation"
 
 Return your re-evaluation as structured JSON.`
