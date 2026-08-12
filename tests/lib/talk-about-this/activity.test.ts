@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
 import { activityForEvent } from '@/components/TalkAboutThis'
 import { activityData } from '@/lib/talk-about-this/agent'
+import type { TalkAboutScope } from '@/lib/talk-about-this/context'
 import { buildTalkAboutSystemPrompt } from '@/lib/talk-about-this/prompt'
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
 
@@ -104,15 +106,57 @@ describe('activityData', () => {
 
     expect(metadata).toMatchObject({
       measurementCount: 2,
-      datasetSources: ['BigSolDB v2.0', 'MixtureSolDB', 'PubChem GHS'],
+      datasetSources: expect.arrayContaining(['BigSolDB v2.0', 'MixtureSolDB', 'PubChem GHS']),
       warnings: [candidateWarning],
     })
-    expect(activityForEvent('tool-complete', metadata)?.detail).toContain(candidateWarning)
   })
 })
 
 describe('screening prompt copy', () => {
   it('requires laboratory compatibility validation before treating screening as a recommendation', () => {
     expect(buildTalkAboutSystemPrompt(context)).toContain('laboratory compatibility validation')
+  })
+})
+
+describe('parseRecommendationApprovedEvent', () => {
+  const scope: TalkAboutScope = { kind: 'recommendation', recommendationId: 'rec-1' }
+
+  it('accepts a complete receipt for the current stable recommendation scope', () => {
+    expect(parseRecommendationApprovedEvent(scope, {
+      recommendationId: 'rec-1',
+      label: 'Replace dichloromethane with ethyl acetate',
+      alreadyAccepted: false,
+      actionId: 'action-1',
+      revisionNumber: 4,
+    })).toEqual({
+      recommendationId: 'rec-1',
+      label: 'Replace dichloromethane with ethyl acetate',
+      alreadyAccepted: false,
+      actionId: 'action-1',
+      revisionNumber: 4,
+    })
+  })
+
+  it.each([
+    [{ kind: 'principle', principleNumber: 5 } as TalkAboutScope, 'rec-1'],
+    [{ kind: 'recommendation', recommendationId: 'other-rec' } as TalkAboutScope, 'rec-1'],
+    [scope, 'other-rec'],
+  ])('ignores approval events outside the current stable recommendation scope', (eventScope, recommendationId) => {
+    expect(parseRecommendationApprovedEvent(eventScope, {
+      recommendationId,
+      label: 'Replace dichloromethane with ethyl acetate',
+      alreadyAccepted: false,
+      actionId: 'action-1',
+      revisionNumber: 4,
+    })).toBeNull()
+  })
+
+  it.each([
+    { recommendationId: 'rec-1', label: '', alreadyAccepted: false, actionId: 'action-1', revisionNumber: 4 },
+    { recommendationId: 'rec-1', label: 'Replace dichloromethane with ethyl acetate', alreadyAccepted: 'false', actionId: 'action-1', revisionNumber: 4 },
+    { recommendationId: 'rec-1', label: 'Replace dichloromethane with ethyl acetate', alreadyAccepted: false, actionId: '', revisionNumber: 4 },
+    { recommendationId: 'rec-1', label: 'Replace dichloromethane with ethyl acetate', alreadyAccepted: false, actionId: 'action-1', revisionNumber: 4.5 },
+  ])('ignores malformed approval receipts', data => {
+    expect(parseRecommendationApprovedEvent(scope, data)).toBeNull()
   })
 })

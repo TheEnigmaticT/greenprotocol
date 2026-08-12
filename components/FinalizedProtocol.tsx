@@ -1,7 +1,7 @@
 'use client'
 
 import { AnalysisResult, Recommendation } from '@/lib/types'
-import { TalkAboutThis } from './TalkAboutThis'
+import { RecommendationApprovalReceipt, TalkAboutThis } from './TalkAboutThis'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -21,10 +21,11 @@ function SeverityBadge({ severity }: { severity: string }) {
   )
 }
 
-function PendingCard({ rec, onAccept, onDecline, analysisId, recommendationIndex }: {
+function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analysisId, recommendationIndex }: {
   rec: Recommendation
   onAccept: () => void
   onDecline: () => void
+  onRecommendationApproved?: (receipt: RecommendationApprovalReceipt) => void
   analysisId?: string
   recommendationIndex: number
 }) {
@@ -43,6 +44,7 @@ function PendingCard({ rec, onAccept, onDecline, analysisId, recommendationIndex
               : { kind: 'recommendation', recommendationIndex }}
             title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
             evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
+            onRecommendationApproved={onRecommendationApproved}
           />
           <button
             onClick={onAccept}
@@ -85,11 +87,13 @@ export default function FinalizedProtocol({
   analysis,
   originalProtocol,
   onUpdateAnalysis,
+  onRecommendationApproved,
   analysisId,
 }: {
   analysis: AnalysisResult
   originalProtocol?: string
   onUpdateAnalysis?: (updated: AnalysisResult) => void
+  onRecommendationApproved?: (receipt: RecommendationApprovalReceipt) => void
   analysisId?: string
 }) {
   const total = analysis.recommendations.length
@@ -173,6 +177,7 @@ export default function FinalizedProtocol({
                     rec={rec}
                     onAccept={() => setRecAccepted(globalIndex, true)}
                     onDecline={() => setRecAccepted(globalIndex, false)}
+                    onRecommendationApproved={onRecommendationApproved}
                     analysisId={analysisId}
                     recommendationIndex={globalIndex}
                   />

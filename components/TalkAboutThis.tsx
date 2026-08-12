@@ -20,6 +20,40 @@ interface ChatActivity {
 
 type TerminalStatus = 'complete' | 'failed' | 'cancelled'
 
+export interface RecommendationApprovalReceipt {
+  recommendationId: string
+  label: string
+  alreadyAccepted: boolean
+  actionId: string
+  revisionNumber: number
+}
+
+export function parseRecommendationApprovedEvent(
+  scope: TalkAboutScope,
+  data: Record<string, unknown>,
+): RecommendationApprovalReceipt | null {
+  if (scope.kind !== 'recommendation' || !('recommendationId' in scope)) return null
+
+  const recommendationId = data.recommendationId
+  const label = data.label
+  const alreadyAccepted = data.alreadyAccepted
+  const actionId = data.actionId
+  const revisionNumber = data.revisionNumber
+  if (
+    recommendationId !== scope.recommendationId
+    || typeof label !== 'string'
+    || !label.trim()
+    || typeof alreadyAccepted !== 'boolean'
+    || typeof actionId !== 'string'
+    || !actionId.trim()
+    || typeof revisionNumber !== 'number'
+    || !Number.isSafeInteger(revisionNumber)
+    || revisionNumber < 0
+  ) return null
+
+  return { recommendationId, label, alreadyAccepted, actionId, revisionNumber }
+}
+
 function showReadyNotification(title: string, status: TerminalStatus) {
   if (
     document.visibilityState !== 'hidden'
@@ -125,6 +159,7 @@ interface TalkAboutThisProps {
   scope: TalkAboutScope
   title: string
   evidenceState: 'sourced' | 'inferred'
+  onRecommendationApproved?: (receipt: RecommendationApprovalReceipt) => void
 }
 
 function parseSseEvent(block: string): { event: string; data: Record<string, unknown> } | null {
@@ -142,7 +177,7 @@ function parseSseEvent(block: string): { event: string; data: Record<string, unk
   }
 }
 
-export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkAboutThisProps) {
+export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecommendationApproved }: TalkAboutThisProps) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
@@ -154,6 +189,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
   const [notifyOnReady, setNotifyOnReady] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
+  const [approvalReceipt, setApprovalReceipt] = useState<RecommendationApprovalReceipt | null>(null)
   useEffect(() => () => abortRef.current?.abort(), [])
 
   const openConversation = async () => {
@@ -183,6 +219,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
   const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const content = draft.trim()
+    setApprovalReceipt(null)
     if (!conversationId || !content || isSending) return
 
     setDraft('')
@@ -242,6 +279,13 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
                 ? { ...message, citations: validatedCitationIds }
                 : message,
             ))
+          }
+          if (parsed.event === 'recommendation-approved') {
+            const receipt = parseRecommendationApprovedEvent(scope, parsed.data)
+            if (receipt) {
+              setApprovalReceipt(receipt)
+              onRecommendationApproved?.(receipt)
+            }
           }
           if (parsed.event === 'error' && typeof parsed.data.error === 'string') {
             const errorMessage = parsed.data.error
@@ -309,6 +353,11 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState }: TalkA
             </header>
             <div className="flex-1 space-y-4 overflow-y-auto p-5" aria-live="polite">
               {messages.length === 0 && <p className="text-sm" style={{ color: '#57534E' }}>Ask why this was recommended, challenge an assumption, or describe a laboratory constraint.</p>}
+              {approvalReceipt && (
+                <p className="rounded border p-3 text-xs" style={{ borderColor: '#BBF7D0', background: '#F0FDF4', color: '#166534' }}>
+                  {approvalReceipt.label} {approvalReceipt.alreadyAccepted ? 'was already approved.' : 'has been approved.'}
+                </p>
+              )}
               {messages.map((message, index) => (
                 <article key={`${message.role}-${index}`} className="rounded-lg p-3 text-sm" style={{ background: message.role === 'user' ? '#1C3822' : '#FFFFFF', color: message.role === 'user' ? '#F6F3EB' : '#1C1917', border: message.role === 'assistant' ? '1px solid #E7E5E4' : undefined }}>
                   {message.role === 'assistant'

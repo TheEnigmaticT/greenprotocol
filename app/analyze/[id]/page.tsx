@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
+import type { RecommendationApprovalReceipt } from '@/components/TalkAboutThis'
 import { calculateOriginalTotals } from '@/lib/calculations'
 import { projectScores } from '@/lib/projected-scores'
 import ImpactScoreboard from '@/components/ImpactScoreboard'
@@ -114,6 +115,21 @@ export default function AnalysisByIdPage() {
     persistToApi(id, updatedAnalysis, expectedRevisionNumber)
   }
 
+  const handleRecommendationApproved = (receipt: RecommendationApprovalReceipt) => {
+    setData(current => {
+      if (!current) return current
+      const recommendationIndex = current.analysis.recommendations.findIndex(rec => rec.id === receipt.recommendationId)
+      if (recommendationIndex === -1) return current
+      const recommendations = [...current.analysis.recommendations]
+      recommendations[recommendationIndex] = { ...recommendations[recommendationIndex], isAccepted: true }
+      return {
+        ...current,
+        analysis: { ...current.analysis, recommendations },
+        revisionNumber: receipt.revisionNumber,
+      }
+    })
+  }
+
   const originalTotals = calculateOriginalTotals(data.analysis)
   const projectedScores = projectScores(data.analysis)
 
@@ -209,6 +225,7 @@ export default function AnalysisByIdPage() {
             originalProtocol={data.protocolText}
             onUpdateAnalysis={handleUpdateAnalysis}
             analysisId={id}
+            onRecommendationApproved={handleRecommendationApproved}
           />
         </section>
 
