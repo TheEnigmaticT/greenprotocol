@@ -1,4 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  searchLiteratureEvidence: vi.fn(),
+  citationFromEvidenceMatch: vi.fn(),
+}))
+
+vi.mock('@/lib/literature-evidence', () => ({
+  searchLiteratureEvidence: mocks.searchLiteratureEvidence,
+  citationFromEvidenceMatch: mocks.citationFromEvidenceMatch,
+}))
 import { buildChatTools, executeScopedTool } from '@/lib/talk-about-this/tools'
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
 
@@ -174,4 +184,42 @@ it('permits a locally indexed density solvent but rejects it for scoped solubili
       canonicalSoluteSmiles: 'CN(C)C=O',
     },
   )).rejects.toThrow('outside this scoped discussion')
+})
+
+it('returns partial retrieval timing in a controlled unavailable result when evidence RPC fails', async () => {
+  mocks.searchLiteratureEvidence.mockImplementationOnce(async ({ onTelemetry }: { onTelemetry?: (timing: object) => void }) => {
+    onTelemetry?.({ embeddingStartedAt: 10, embeddingFinishedAt: 20, rpcStartedAt: 30 })
+    throw new Error('RPC endpoint token=secret')
+  })
+
+  await expect(executeScopedTool(
+    context,
+    { id: 'literature-1', name: 'search_scoped_literature_evidence', query: 'DMF comparison' },
+  )).resolves.toEqual(expect.objectContaining({
+    operation: 'literature_evidence',
+    status: 'unavailable',
+    data: { evidence: [] },
+    telemetry: { embeddingStartedAt: 10, embeddingFinishedAt: 20, rpcStartedAt: 30 },
+    warnings: ['Literature evidence retrieval failed'],
+  }))
+})
+
+it('returns partial retrieval timing with the abort reason when retrieval aborts', async () => {
+  mocks.searchLiteratureEvidence.mockImplementationOnce(async ({ onTelemetry }: { onTelemetry?: (timing: object) => void }) => {
+    onTelemetry?.({ embeddingStartedAt: 10 })
+    const error = new Error('Literature evidence retrieval aborted')
+    error.name = 'AbortError'
+    throw error
+  })
+
+  await expect(executeScopedTool(
+    context,
+    { id: 'literature-2', name: 'search_scoped_literature_evidence', query: 'DMF comparison' },
+  )).resolves.toEqual(expect.objectContaining({
+    operation: 'literature_evidence',
+    status: 'unavailable',
+    data: { evidence: [] },
+    telemetry: { embeddingStartedAt: 10 },
+    warnings: ['Literature evidence retrieval aborted'],
+  }))
 })

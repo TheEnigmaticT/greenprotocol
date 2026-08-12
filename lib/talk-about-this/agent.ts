@@ -321,6 +321,7 @@ export async function runScopedToolChat({
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     const turnText: string[] = []
+    let roundFirstTextAt: number | undefined
     let toolCalls: ChatToolCall[] = []
     onEvent('activity', { state: 'thinking', round })
 
@@ -333,11 +334,12 @@ export async function runScopedToolChat({
       if (event.text) {
         turnText.push(event.text)
         answerParts.push(event.text)
-        if (round === 0 && telemetry.initialProviderFirstTextAt === undefined) {
-          telemetry.initialProviderFirstTextAt = now()
-        }
-        if (round > 0 && telemetry.finalProviderFirstTextAt === undefined) {
-          telemetry.finalProviderFirstTextAt = now()
+        if (roundFirstTextAt === undefined) {
+          const firstTextAt = now()
+          roundFirstTextAt = firstTextAt
+          if (round === 0 && telemetry.initialProviderFirstTextAt === undefined) {
+            telemetry.initialProviderFirstTextAt = firstTextAt
+          }
         }
         onEvent('delta', { text: event.text })
       }
@@ -345,6 +347,9 @@ export async function runScopedToolChat({
     }
 
     if (!toolCalls.length) {
+      if (roundFirstTextAt !== undefined && telemetry.finalProviderFirstTextAt === undefined) {
+        telemetry.finalProviderFirstTextAt = roundFirstTextAt
+      }
       const answer = answerParts.join('')
       if (!answer) throw new Error('Model returned neither text nor a tool request')
       return {

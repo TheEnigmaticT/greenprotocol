@@ -256,17 +256,31 @@ export async function executeScopedTool(context: TalkAboutContext, call: ScopedT
     case 'search_scoped_literature_evidence': {
       if (!queryMatchesScope(context, call.query)) throw new Error('Literature evidence query must mention a scoped chemical or recommendation pair')
       let telemetry: LiteratureEvidenceTiming = {}
-      const evidence = await searchLiteratureEvidence({
-        query: call.query,
-        limit: 5,
-        threshold: 0.25,
-        signalGroups: call.signalGroups,
-        signal,
-        onTelemetry: timing => { telemetry = timing },
-      })
-      return {
-        operation: 'literature_evidence', chemical_name: '', status: 'ok', source: 'Literature evidence index',
-        data: { evidence }, citations: evidence.map(citationFromEvidenceMatch), warnings: [], telemetry,
+      try {
+        const evidence = await searchLiteratureEvidence({
+          query: call.query,
+          limit: 5,
+          threshold: 0.25,
+          signalGroups: call.signalGroups,
+          signal,
+          onTelemetry: timing => { telemetry = timing },
+        })
+        return {
+          operation: 'literature_evidence', chemical_name: '', status: 'ok', source: 'Literature evidence index',
+          data: { evidence }, citations: evidence.map(citationFromEvidenceMatch), warnings: [], telemetry,
+        }
+      } catch (error) {
+        const aborted = error instanceof Error && error.name === 'AbortError'
+        return {
+          operation: 'literature_evidence',
+          chemical_name: '',
+          status: 'unavailable',
+          source: 'Literature evidence index',
+          data: { evidence: [] },
+          citations: [],
+          warnings: [aborted ? 'Literature evidence retrieval aborted' : 'Literature evidence retrieval failed'],
+          telemetry,
+        }
       }
     }
   }

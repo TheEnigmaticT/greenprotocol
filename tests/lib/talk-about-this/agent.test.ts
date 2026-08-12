@@ -158,6 +158,41 @@ describe('runScopedToolChat', () => {
       }),
     }))
   })
+  it('promotes first text only from the final provider pass after multiple tool rounds', async () => {
+    let requests = 0
+    let clock = 100
+    const provider: ChatProvider = {
+      async *stream() {
+        requests += 1
+        if (requests < 3) {
+          yield { text: `Working round ${requests}. ` }
+          yield {
+            toolCalls: [{
+              id: `tool-${requests}`,
+              name: 'lookup_chem21_solvent',
+              arguments: JSON.stringify({ chemical: 'DMF' }),
+            }],
+          }
+          return
+        }
+        yield { text: 'Final answer.' }
+      },
+    }
+
+    const result = await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => chem21Result,
+      onEvent: () => undefined,
+      now: () => clock += 100,
+    })
+
+    expect(result.telemetry).toEqual({
+      initialProviderFirstTextAt: 200,
+      finalProviderFirstTextAt: 400,
+    })
+  })
 
   it('caps each model turn at three tool calls and returns unavailable results for excess calls', async () => {
     let requests = 0

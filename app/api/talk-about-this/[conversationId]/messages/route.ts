@@ -9,7 +9,28 @@ import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const runtime = 'nodejs'
 
-function activityPayload(data: Record<string, unknown>): Record<string, unknown> {
+const MAX_STAGE_TELEMETRY_MS = 60_000
+
+function stageTelemetry(value: unknown): Record<string, number> | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const telemetry: Record<string, number> = {}
+  for (const key of ['embeddingStartedAt', 'embeddingFinishedAt', 'rpcStartedAt', 'rpcFinishedAt'] as const) {
+    const timestamp = (value as Record<string, unknown>)[key]
+    if (typeof timestamp === 'number' && Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= MAX_STAGE_TELEMETRY_MS) {
+      telemetry[key] = timestamp
+    }
+  }
+  return Object.keys(telemetry).length ? telemetry : undefined
+}
+
+export function mergeActivityTelemetry(
+  current: StoredMessageTelemetry['telemetry'],
+  data: Record<string, unknown>,
+): StoredMessageTelemetry['telemetry'] {
+  return { ...current, ...stageTelemetry(data.telemetry) }
+}
+
+export function activityPayload(data: Record<string, unknown>): Record<string, unknown> {
   return {
     callId: typeof data.callId === 'string' ? data.callId : undefined,
     tool: typeof data.tool === 'string' ? data.tool : undefined,
@@ -31,6 +52,7 @@ function activityPayload(data: Record<string, unknown>): Record<string, unknown>
       ? data.evidence.filter((evidence): evidence is LiteratureEvidenceMatch => evidence !== null && typeof evidence === 'object'
         && typeof (evidence as LiteratureEvidenceMatch).id === 'string').slice(0, 5)
       : undefined,
+    telemetry: stageTelemetry(data.telemetry),
   }
 }
 
@@ -181,7 +203,9 @@ export async function POST(
             executeTool: (call, signal) => executeScopedTool(conversation.context_snapshot, call, signal),
             onEvent: (event, data) => {
               ttftMs = firstForwardedDeltaMs(ttftMs, event, startedAt, Date.now())
-              send(event, event === 'tool-complete' ? activityPayload(data) : data)
+              const activity = event === 'tool-complete' ? activityPayload(data) : data
+              if (event === 'tool-complete') latencyTelemetry = mergeActivityTelemetry(latencyTelemetry, activity)
+              send(event, activity)
             },
           })
           answer = result.answer

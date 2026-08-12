@@ -69,3 +69,27 @@ Local runtime configuration was inspected without exposing values. No `.env.loca
 ### Remaining live-gate blocker
 
 No configured chat provider, embedding key, Supabase environment, authenticated browser session, or retrievable warm evidence data is available in this worktree. Therefore three representative warm retrieval measurements and the ≤3,000 ms release criterion remain unobserved and blocked; this addendum does not claim the release gate passes.
+
+## Task 7 telemetry repair addendum
+
+### RED
+
+- `npx vitest run tests/lib/talk-about-this/agent.test.ts` — the multi-tool-round test failed as expected: `finalProviderFirstTextAt` was `300` from an intermediate tool turn, rather than `400` from the final no-tool pass.
+- `npx vitest run tests/lib/talk-about-this/tools.test.ts` — embedding/RPC failure and abort cases failed as expected because retrieval exceptions escaped and discarded captured stage telemetry.
+- `npx vitest run tests/lib/talk-about-this/messages-route.test.ts` — terminal-persistence case failed as expected because no telemetry merge helper existed.
+
+### GREEN
+
+- `npx vitest run tests/lib/talk-about-this/messages-route.test.ts tests/lib/talk-about-this/agent.test.ts tests/lib/talk-about-this/tools.test.ts tests/lib/literature-evidence.test.ts tests/lib/talk-about-this/latency.test.ts` — 5 files, 36 tests passed.
+- `npx tsc --noEmit` — exit 0, no output.
+
+### Repair
+
+- Per-turn text timestamps are held locally and promoted to `finalProviderFirstTextAt` only after that completed provider turn has no tool calls.
+- Literature retrieval converts failures and aborts into controlled unavailable results with the latest finite stage timing. Abort receives its specific retrieval-aborted warning; other error details are not forwarded.
+- Tool-complete SSE validation allows only finite, nonnegative stage timestamps no greater than 60,000 ms. The route merges that already-sanitized telemetry before terminal persistence and `done`.
+- TTFT remains assigned exclusively by the first forwarded `delta`; activity and tool events cannot synthesize it.
+
+### Remaining live blockers
+
+The existing configured-provider, embedding, Supabase, authenticated-browser, source-artifact, and warm-retrieval prerequisites remain unavailable. No live timing gate result is claimed.
