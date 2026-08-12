@@ -8,6 +8,7 @@ import {
   type ToolName,
   type ToolResult,
 } from '@/lib/talk-about-this/tools'
+import type { Citation, EvidenceSignalGroup, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const MAX_TOOL_ROUNDS = 4
 export const MAX_TOOL_CALLS_PER_TURN = 3
@@ -24,6 +25,12 @@ export interface ScopedToolChatRequest {
   onEvent: (event: ChatLifecycleEvent, data: Record<string, unknown>) => void
 }
 
+export interface ChatRunResult {
+  answer: string
+  citations: Citation[]
+  evidence: LiteratureEvidenceMatch[]
+}
+
 function isToolName(name: string): name is ToolName {
   return name === 'lookup_chem21_solvent'
     || name === 'lookup_pubchem_profile'
@@ -31,6 +38,7 @@ function isToolName(name: string): name is ToolName {
     || name === 'lookup_experimental_solvent_evidence'
     || name === 'lookup_solvent_hazard_profile'
     || name === 'screen_solvent_candidates'
+    || name === 'search_scoped_literature_evidence'
 }
 
 function operationFor(name: string): ToolResult['operation'] {
@@ -41,6 +49,7 @@ function operationFor(name: string): ToolResult['operation'] {
     case 'lookup_experimental_solvent_evidence': return 'solvent_evidence'
     case 'lookup_solvent_hazard_profile': return 'solvent_hazard'
     case 'screen_solvent_candidates': return 'solvent_screening'
+    case 'search_scoped_literature_evidence': return 'literature_evidence'
     default: return 'rdkit'
   }
 }
@@ -125,6 +134,33 @@ export function parseScopedToolCall(
   if (!isToolName(call.name)) throw new Error(`Unsupported tool requested: ${call.name}`)
   const value = parseArguments(call)
 
+
+  if (call.name === 'search_scoped_literature_evidence') {
+    requireOnlyArguments(value, ['query', 'signalGroups'])
+    const query = requireString(value, 'query')
+    if (query.length > 500) throw new Error('Literature evidence query must contain 1–500 characters')
+    const signalGroups = value.signalGroups
+    if (signalGroups !== undefined && (!Array.isArray(signalGroups)
+      || signalGroups.some(group => group !== 'comparison' && group !== 'process' && group !== 'outcome' && group !== 'hazard'))) {
+      throw new Error('Tool request has an unsupported literature evidence signal group')
+    }
+    const scopeTerms = [
+      ...scopedChemicals(context),
+      ...context.recommendations.flatMap(recommendation => [
+        `${recommendation.original.chemical} ${recommendation.alternative.chemical}`,
+        `${recommendation.alternative.chemical} ${recommendation.original.chemical}`,
+      ]),
+    ]
+    if (!scopeTerms.some(term => query.toLocaleLowerCase().includes(term.toLocaleLowerCase()))) {
+      throw new Error('Literature evidence query must mention a scoped chemical or recommendation pair')
+    }
+    return {
+      id: call.id,
+      name: call.name,
+      query,
+      ...(signalGroups ? { signalGroups: signalGroups as EvidenceSignalGroup[] } : {}),
+    }
+  }
   switch (call.name) {
     case 'lookup_chem21_solvent':
     case 'lookup_pubchem_profile':
@@ -263,11 +299,13 @@ export async function runScopedToolChat({
   signal,
   executeTool,
   onEvent,
-}: ScopedToolChatRequest): Promise<string> {
+}: ScopedToolChatRequest): Promise<ChatRunResult> {
   const conversation = [...messages]
   const canonicalSmilesByChemical = new Map<string, string>()
   const toolLoopDeadline = Date.now() + TOOL_LOOP_TIMEOUT_MS
 
+  const citationsById = new Map<string, Citation>()
+  const evidenceById = new Map<string, LiteratureEvidenceMatch>()
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     const turnText: string[] = []
     let toolCalls: ChatToolCall[] = []
@@ -279,15 +317,21 @@ export async function runScopedToolChat({
       signal,
       tools: buildChatTools(context),
     })) {
-      if (event.text) turnText.push(event.text)
+      if (event.text) {
+        turnText.push(event.text)
+        onEvent('delta', { text: event.text })
+      }
       if (event.toolCalls) toolCalls = event.toolCalls
     }
 
     if (!toolCalls.length) {
       const answer = turnText.join('')
       if (!answer) throw new Error('Model returned neither text nor a tool request')
-      onEvent('delta', { text: answer })
-      return answer
+      return {
+        answer,
+        citations: [...citationsById.values()],
+        evidence: [...evidenceById.values()],
+      }
     }
     if (round === MAX_TOOL_ROUNDS) throw new Error('Model exceeded the maximum number of tool rounds')
 
@@ -314,7 +358,17 @@ export async function runScopedToolChat({
               canonicalSmilesByChemical.set(scopedCall.chemical.toLowerCase(), canonicalSmiles)
             }
           }
-          onEvent('tool-complete', activityData(call, result))
+          if (result.operation === 'literature_evidence') {
+            const evidence = Array.isArray(result.data.evidence)
+              ? result.data.evidence.filter((item): item is LiteratureEvidenceMatch => item !== null && typeof item === 'object'
+                && typeof (item as LiteratureEvidenceMatch).id === 'string').slice(0, 5)
+              : []
+            for (const match of evidence) evidenceById.set(match.id, match)
+            for (const citation of result.citations) citationsById.set(citation.source_id, citation)
+            onEvent('tool-complete', { ...activityData(call, result), evidence, citations: result.citations.slice(0, 5) })
+          } else {
+            onEvent('tool-complete', activityData(call, result))
+          }
         } catch (error) {
           const reason = error instanceof Error ? error.message : 'Tool request failed'
           result = failureResult(call, reason)

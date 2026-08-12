@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { runScopedToolChat } from '@/lib/talk-about-this/agent'
+import { parseScopedToolCall, runScopedToolChat } from '@/lib/talk-about-this/agent'
 import type { ChatProvider } from '@/lib/talk-about-this/chat-provider'
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
 import type { ToolResult } from '@/lib/talk-about-this/tools'
@@ -24,6 +24,27 @@ const chem21Result: ToolResult = {
   citations: [{ citation: 'Prat et al.' }],
   warnings: [],
 }
+
+describe('parseScopedToolCall literature boundary', () => {
+  it('accepts a scoped bounded query and rejects an oversized query', () => {
+    expect(parseScopedToolCall(context, {
+      id: 'lit-1',
+      name: 'search_scoped_literature_evidence',
+      arguments: JSON.stringify({ query: 'DMF replacement comparison', signalGroups: ['comparison'] }),
+    }, new Map())).toEqual({
+      id: 'lit-1',
+      name: 'search_scoped_literature_evidence',
+      query: 'DMF replacement comparison',
+      signalGroups: ['comparison'],
+    })
+
+    expect(() => parseScopedToolCall(context, {
+      id: 'lit-2',
+      name: 'search_scoped_literature_evidence',
+      arguments: JSON.stringify({ query: 'x'.repeat(501) }),
+    }, new Map())).toThrow('500')
+  })
+})
 
 describe('runScopedToolChat', () => {
   it('executes only validated scoped calls, returns the result to Qwen, and emits lifecycle events', async () => {
@@ -55,7 +76,7 @@ describe('runScopedToolChat', () => {
       onEvent: (event, data) => events.push({ event, data }),
     })
 
-    expect(answer).toBe('CHEM21 classifies DMF as hazardous.')
+    expect(answer.answer).toBe('CHEM21 classifies DMF as hazardous.')
     expect(events.map(event => event.event)).toEqual([
       'activity',
       'tool-start',
@@ -102,7 +123,7 @@ describe('runScopedToolChat', () => {
         return chem21Result
       },
       onEvent: (event, data) => events.push({ event, data }),
-    })).resolves.toBe('The scoped result is available.')
+    })).resolves.toMatchObject({ answer: 'The scoped result is available.' })
 
     expect(executions).toBe(3)
     expect(events).toContainEqual(expect.objectContaining({
@@ -134,7 +155,7 @@ describe('runScopedToolChat', () => {
       messages: [{ role: 'user', content: 'What about benzene?' }],
       executeTool,
       onEvent: (event, data) => events.push({ event, data }),
-    })).resolves.toContain('outside the scoped discussion')
+    })).resolves.toMatchObject({ answer: expect.stringContaining('outside the scoped discussion') })
 
     expect(events).toContainEqual(expect.objectContaining({ event: 'tool-failed' }))
   })
@@ -169,7 +190,7 @@ describe('runScopedToolChat', () => {
         return chem21Result
       },
       onEvent: (event, data) => events.push({ event, data }),
-    })).resolves.toBe('Resolve DMF with PubChem first.')
+    })).resolves.toMatchObject({ answer: 'Resolve DMF with PubChem first.' })
 
     expect(executions).toBe(0)
     expect(events).toContainEqual(expect.objectContaining({
@@ -229,7 +250,7 @@ describe('runScopedToolChat', () => {
         return call.name === 'lookup_pubchem_profile' ? pubchemResult : chem21Result
       },
       onEvent: () => {},
-    })).resolves.toBe('The screening result is available.')
+    })).resolves.toMatchObject({ answer: 'The screening result is available.' })
 
     expect(executed).toHaveLength(2)
     expect(executed[1]).toMatchObject({
@@ -240,5 +261,105 @@ describe('runScopedToolChat', () => {
       canonicalSoluteSmiles: 'CN(C)C=O',
     })
     expect(executed[1]).not.toHaveProperty('soluteSmiles')
+  })
+})
+
+describe('literature evidence propagation', () => {
+  it('propagates retrieved evidence citations and streams the first provider delta', async () => {
+    let requests = 0
+    const events: Array<{ event: string; data: Record<string, unknown> }> = []
+    const provider: ChatProvider = {
+      async *stream() {
+        requests += 1
+        if (requests === 1) {
+          yield { text: 'I will check the literature. ' }
+          yield {
+            toolCalls: [{
+              id: 'lit-1',
+              name: 'search_scoped_literature_evidence',
+              arguments: JSON.stringify({ query: 'DMF replacement comparison', signalGroups: ['comparison'] }),
+            }],
+          }
+          return
+        }
+        yield { text: 'The retrieved evidence is candidate_pending_adjudication.' }
+      },
+    }
+
+    const result = await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Compare DMF replacements.' }],
+      executeTool: async () => ({
+        operation: 'literature_evidence',
+        chemical_name: '',
+        status: 'ok',
+        source: 'Literature evidence index',
+        data: {
+          evidence: [{
+            id: 'doi:p3:u1',
+            sourceDocumentId: 'doi:p3',
+            title: 'A source',
+            pageStart: 3,
+            pageEnd: 3,
+            quote: 'DMF comparison.',
+            candidateStatus: 'candidate_pending_adjudication',
+            similarity: 0.98,
+          }],
+        },
+        citations: [{ source_id: 'doi:p3:u1', source_name: 'A source', citation: 'A source. pp. 3–3.' }],
+        warnings: [],
+      }),
+      onEvent: (event, data) => events.push({ event, data }),
+    })
+
+    expect(result.citations).toContainEqual(expect.objectContaining({ source_id: 'doi:p3:u1' }))
+    expect(result.evidence).toContainEqual(expect.objectContaining({
+      id: 'doi:p3:u1',
+      candidateStatus: 'candidate_pending_adjudication',
+      pageStart: 3,
+    }))
+    expect(events.find(event => event.event === 'delta')).toMatchObject({
+      data: { text: 'I will check the literature. ' },
+    })
+    expect(events.find(event => event.event === 'tool-complete')).toMatchObject({
+      data: { evidence: [expect.objectContaining({ id: 'doi:p3:u1', pageStart: 3 })] },
+    })
+  })
+  it('reports an aborted literature lookup as tool-failed', async () => {
+    let requests = 0
+    const events: Array<{ event: string; data: Record<string, unknown> }> = []
+    const provider: ChatProvider = {
+      async *stream() {
+        requests += 1
+        if (requests === 1) {
+          yield {
+            toolCalls: [{
+              id: 'lit-abort',
+              name: 'search_scoped_literature_evidence',
+              arguments: JSON.stringify({ query: 'DMF comparison' }),
+            }],
+          }
+          return
+        }
+        yield { text: 'Literature evidence was unavailable.' }
+      },
+    }
+
+    const result = await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Compare DMF.' }],
+      executeTool: async () => {
+        throw new Error('literature request aborted')
+      },
+      onEvent: (event, data) => events.push({ event, data }),
+    })
+
+    expect(result.answer).toBe('Literature evidence was unavailable.')
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'tool-failed',
+      data: expect.objectContaining({ callId: 'lit-abort', reason: 'literature request aborted' }),
+    }))
   })
 })

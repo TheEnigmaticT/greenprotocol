@@ -3,6 +3,7 @@ import { createConfiguredChatProvider, type ChatMessage } from '@/lib/talk-about
 import { executeScopedTool } from '@/lib/talk-about-this/tools'
 import { createMessage, listConversationMessages, loadOwnedConversation } from '@/lib/talk-about-this/repository'
 import { createClient } from '@/lib/supabase/server'
+import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const runtime = 'nodejs'
 
@@ -19,6 +20,14 @@ function activityPayload(data: Record<string, unknown>): Record<string, unknown>
       : undefined,
     warnings: Array.isArray(data.warnings)
       ? data.warnings.filter((warning): warning is string => typeof warning === 'string')
+      : undefined,
+    citations: Array.isArray(data.citations)
+      ? data.citations.filter((citation): citation is Citation => citation !== null && typeof citation === 'object'
+        && typeof (citation as Citation).source_id === 'string').slice(0, 5)
+      : undefined,
+    evidence: Array.isArray(data.evidence)
+      ? data.evidence.filter((evidence): evidence is LiteratureEvidenceMatch => evidence !== null && typeof evidence === 'object'
+        && typeof (evidence as LiteratureEvidenceMatch).id === 'string').slice(0, 5)
       : undefined,
   }
 }
@@ -84,6 +93,8 @@ export async function POST(
         let answer = ''
         let ttftMs: number | null = null
         let status: 'complete' | 'failed' | 'cancelled' = 'complete'
+        let literatureCitations: Citation[] = []
+        let literatureEvidence: LiteratureEvidenceMatch[] = []
 
         const send = (event: string, data: Record<string, unknown>) => {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
@@ -97,7 +108,7 @@ export async function POST(
               .map(message => ({ role: message.role, content: message.content }) as ChatMessage),
             { role: 'user', content },
           ]
-          answer = await runScopedToolChat({
+          const result = await runScopedToolChat({
             provider,
             context: conversation.context_snapshot,
             messages,
@@ -108,6 +119,9 @@ export async function POST(
               send(event, event === 'tool-complete' ? activityPayload(data) : data)
             },
           })
+          answer = result.answer
+          literatureCitations = result.citations
+          literatureEvidence = result.evidence
         } catch (error) {
           status = abortController.signal.aborted ? 'cancelled' : 'failed'
           console.error('Chat response failed', error)
@@ -115,9 +129,13 @@ export async function POST(
             error: status === 'cancelled' ? 'Response cancelled' : 'Chat response failed',
           })
         } finally {
-          const citationIds = conversation.context_snapshot.citations
+          const snapshotCitationIds = conversation.context_snapshot.citations
             .filter(citation => answer.includes(`[${citation.id}]`))
             .map(citation => citation.id)
+          const citationIds = [...new Set([
+            ...snapshotCitationIds,
+            ...literatureCitations.map(citation => citation.source_id),
+          ])]
 
           await createMessage(supabase, user.id, conversationId, {
             role: 'assistant',
@@ -127,7 +145,7 @@ export async function POST(
             ttft_ms: ttftMs,
           })
 
-          send('done', { status, ttftMs, citationIds })
+          send('done', { status, ttftMs, citationIds, evidence: literatureEvidence })
           controller.close()
         }
       })()

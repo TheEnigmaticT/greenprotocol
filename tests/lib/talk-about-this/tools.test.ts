@@ -84,6 +84,21 @@ describe('buildChatTools', () => {
       },
     })
   })
+
+  it('exposes a closed, bounded literature evidence tool', () => {
+    const tools = buildChatTools(context)
+    const literature = tools.find(tool => tool.function.name === 'search_scoped_literature_evidence')
+
+    expect(literature?.function.parameters).toEqual({
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        query: { type: 'string' },
+        signalGroups: { type: 'array', items: { type: 'string', enum: ['comparison', 'process', 'outcome', 'hazard'] } },
+      },
+      required: ['query'],
+    })
+  })
 })
 
 
