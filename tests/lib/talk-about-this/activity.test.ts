@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { ApprovalReceiptCard, ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, parsePersistedRecommendationApprovalReceipt, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
+import { applyRecommendationApprovedEvent, ApprovalReceiptCard, ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, parsePersistedRecommendationApprovalReceipt, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
 import { EvidenceAtlasTalkControl } from '@/components/AnalysisResults'
 import { activityData } from '@/lib/talk-about-this/agent'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
@@ -307,6 +307,38 @@ describe('parsePersistedRecommendationApprovalReceipt', () => {
       revisionNumber: 9,
       receivedAt: '2026-08-12T00:00:00.000Z',
     })
+  })
+})
+
+describe('applyRecommendationApprovedEvent', () => {
+  const scope: TalkAboutScope = { kind: 'recommendation', recommendationId: 'rec-1' }
+  const receipt = {
+    actionId: 'action-persisted',
+    recommendationId: 'rec-1',
+    label: 'Use ethyl acetate',
+    alreadyAccepted: true,
+    revisionNumber: 9,
+  }
+
+  it('restores a hydrated receipt when a repeat approved phrase returns the same action ID without notifying the parent again', () => {
+    const result = applyRecommendationApprovedEvent(
+      scope,
+      receipt,
+      new Set([receipt.actionId]),
+    )
+
+    expect(result.receipt).toEqual(receipt)
+    expect(result.shouldNotifyParent).toBe(false)
+  })
+
+  it('keeps the display receipt absent and rejects a mismatched event', () => {
+    const result = applyRecommendationApprovedEvent(scope, {
+      ...receipt,
+      recommendationId: 'other-rec',
+    }, new Set([receipt.actionId]))
+
+    expect(result.receipt).toBeNull()
+    expect(result.shouldNotifyParent).toBe(false)
   })
 })
 

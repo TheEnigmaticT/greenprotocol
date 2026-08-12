@@ -139,3 +139,23 @@ The configured-provider, embedding, Supabase, authenticated-browser, source-arti
 ### Remaining external blocker
 
 Remote Supabase migration/RPC and authenticated browser flows remain unavailable in this worktree; focused repository/component/state contracts cover durable receipt hydration and stale local reconciliation without claiming a live database verification.
+
+## Idempotent approval receipt repair
+
+### RED
+
+- `npx vitest run tests/lib/talk-about-this/activity.test.ts` — 2 expected failures: the receipt-event reducer did not exist, so a hydrated action ID could not distinguish callback deduplication from receipt presentation.
+
+### GREEN
+
+- `npx vitest run tests/lib/talk-about-this/activity.test.ts` — 1 file, 30 tests passed.
+- `npx tsc --noEmit` — exit 0, no output.
+
+### Repair
+
+- Sending another message no longer clears a durable approval receipt before the reply arrives.
+- A matching repeat `recommendation-approved` event restores the display receipt even when its hydrated action ID has already deduplicated the parent approval callback. Mismatched receipts remain rejected before either display or callback handling.
+
+### Concern
+
+Remote Supabase/RPC and authenticated-browser flows remain unavailable in this worktree; this repair is covered by the focused component/activity regression and static TypeScript compilation, not a live approval stream.

@@ -87,6 +87,18 @@ export function parseRecommendationApprovedEvent(
   return { ...approval, alreadyAccepted, actionId }
 }
 
+export function applyRecommendationApprovedEvent(
+  scope: TalkAboutScope,
+  data: Record<string, unknown>,
+  notifiedActionIds: ReadonlySet<string>,
+): { receipt: RecommendationApprovalReceipt | null; shouldNotifyParent: boolean } {
+  const receipt = parseRecommendationApprovedEvent(scope, data)
+  return {
+    receipt,
+    shouldNotifyParent: Boolean(receipt && !notifiedActionIds.has(receipt.actionId)),
+  }
+}
+
 function isLiteratureEvidence(value: unknown): value is LiteratureEvidenceMatch {
   if (!value || typeof value !== 'object') return false
   const evidence = value as Record<string, unknown>
@@ -365,7 +377,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
     const content = draft.trim()
     if (!conversationId || !content || isSending || sendLockedRef.current) return
     sendLockedRef.current = true
-    setApprovalReceipt(null)
+    // Keep a durable approval receipt visible while the follow-up response streams.
 
     setDraft('')
     setActivities([])
@@ -436,12 +448,14 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
             ))
           }
           if (parsed.event === 'recommendation-approved') {
-            const receipt = parseRecommendationApprovedEvent(scope, parsed.data)
-            if (receipt && !approvedActionIdsRef.current.has(receipt.actionId)) {
-              approvedActionIdsRef.current.add(receipt.actionId)
-              setApprovalReceipt(receipt)
-              setApprovalReceivedAt(new Date().toISOString())
-              onRecommendationApproved?.(receipt)
+            const approval = applyRecommendationApprovedEvent(scope, parsed.data, approvedActionIdsRef.current)
+            if (approval.receipt) {
+              setApprovalReceipt(approval.receipt)
+              if (approval.shouldNotifyParent) {
+                approvedActionIdsRef.current.add(approval.receipt.actionId)
+                setApprovalReceivedAt(new Date().toISOString())
+                onRecommendationApproved?.(approval.receipt)
+              }
             }
           }
           if (parsed.event === 'error' && typeof parsed.data.error === 'string') {
