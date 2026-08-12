@@ -6,6 +6,7 @@ export interface StoredAnalysis {
   id: string
   protocol_text: string
   analysis_result: AnalysisResult
+  revision_number: number
 }
 
 export interface TalkConversation {
@@ -51,7 +52,7 @@ export async function loadOwnedAnalysis(
 ): Promise<StoredAnalysis | null> {
   const { data, error } = await supabase
     .from('gpc_analyses')
-    .select('id, protocol_text, analysis_result')
+    .select('id, protocol_text, analysis_result, revision_number')
     .eq('id', analysisId)
     .eq('user_id', userId)
     .maybeSingle()

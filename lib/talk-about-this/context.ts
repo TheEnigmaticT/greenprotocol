@@ -6,7 +6,7 @@ const MAX_PROTOCOL_CHARACTERS = 12_000
 
 export type TalkAboutScope =
   | { kind: 'recommendation'; recommendationId: string }
-  | { kind: 'recommendation'; recommendationIndex: number }
+  | { kind: 'recommendation'; recommendationIndex: number; readOnly?: true }
   | { kind: 'principle'; principleNumber: number }
 
 export function parseTalkAboutScope(value: unknown): TalkAboutScope {
@@ -20,7 +20,7 @@ export function parseTalkAboutScope(value: unknown): TalkAboutScope {
   }
 
   if (scope.kind === 'recommendation' && Number.isInteger(scope.recommendationIndex) && (scope.recommendationIndex as number) >= 0) {
-    return { kind: 'recommendation', recommendationIndex: scope.recommendationIndex as number }
+    return { kind: 'recommendation', recommendationIndex: scope.recommendationIndex as number, readOnly: true }
   }
 
   if (scope.kind === 'principle' && typeof scope.principleNumber === 'number') {
@@ -63,15 +63,15 @@ function truncateProtocol(protocolText: string): string {
 
 function resolveRecommendations(analysis: AnalysisResult, scope: TalkAboutScope): Recommendation[] {
   if (scope.kind === 'recommendation') {
-    const recommendation = 'recommendationId' in scope
-      ? analysis.recommendations.find(item => item.id === scope.recommendationId)
-      : analysis.recommendations[scope.recommendationIndex]
+    const matches = 'recommendationId' in scope
+      ? analysis.recommendations.filter(item => item.id === scope.recommendationId)
+      : [analysis.recommendations[scope.recommendationIndex]].filter((item): item is Recommendation => Boolean(item))
 
-    if (!recommendation) {
-      throw new Error('Recommendation scope does not match this analysis')
+    if (matches.length !== 1) {
+      throw new Error('Recommendation scope does not match exactly one recommendation in this analysis')
     }
 
-    return [recommendation]
+    return matches
   }
 
   if (!Number.isInteger(scope.principleNumber) || scope.principleNumber < 1 || scope.principleNumber > 12) {

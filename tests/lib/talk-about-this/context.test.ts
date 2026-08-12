@@ -65,7 +65,7 @@ describe('buildTalkAboutContext', () => {
     }
 
     expect(parseTalkAboutScope({ kind: 'recommendation', recommendationIndex: 0 }))
-      .toEqual({ kind: 'recommendation', recommendationIndex: 0 })
+      .toEqual({ kind: 'recommendation', recommendationIndex: 0, readOnly: true })
 
     const context = buildTalkAboutContext({
       analysisId: 'analysis-legacy',
@@ -84,6 +84,6 @@ describe('buildTalkAboutContext', () => {
       protocolText: 'Couple acid and amine in DMF.',
       analysis,
       scope: { kind: 'recommendation', recommendationId: 'rec-missing' },
-    })).toThrow('Recommendation scope does not match this analysis')
+    })).toThrow('Recommendation scope does not match exactly one recommendation in this analysis')
   })
 })

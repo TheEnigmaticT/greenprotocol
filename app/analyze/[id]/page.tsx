@@ -20,6 +20,7 @@ interface AnalysisData {
   analysis: AnalysisResult
   impactDelta: ImpactDelta
   equivalencies: Equivalency[]
+  revisionNumber: number
 }
 
 export default function AnalysisByIdPage() {
@@ -34,18 +35,29 @@ export default function AnalysisByIdPage() {
   // Debounced persist to Supabase when recommendations are accepted/rejected
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const persistToApi = useCallback((analysisId: string, analysisResult: AnalysisResult) => {
+  const persistToApi = useCallback((analysisId: string, analysisResult: AnalysisResult, expectedRevisionNumber: number) => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/analyses/${analysisId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ analysis_result: analysisResult }),
+          body: JSON.stringify({
+            analysis_result: analysisResult,
+            expected_revision_number: expectedRevisionNumber,
+          }),
         })
+        if (res.status === 409) {
+          setPersistError('This analysis changed elsewhere. Reload before making further changes.')
+          return
+        }
         if (!res.ok) {
           throw new Error(`PATCH /api/analyses/${analysisId} returned ${res.status}`)
         }
+        const payload = await res.json() as { revisionNumber: number }
+        setData(current => current && current.id === analysisId
+          ? { ...current, revisionNumber: payload.revisionNumber }
+          : current)
         setPersistError(null)
       } catch (err) {
         console.error('Failed to persist accepted recommendations:', err)
@@ -97,8 +109,9 @@ export default function AnalysisByIdPage() {
 
   const handleUpdateAnalysis = (updatedAnalysis: AnalysisResult) => {
     if (!data) return
+    const expectedRevisionNumber = data.revisionNumber
     setData({ ...data, analysis: updatedAnalysis })
-    persistToApi(id, updatedAnalysis)
+    persistToApi(id, updatedAnalysis, expectedRevisionNumber)
   }
 
   const originalTotals = calculateOriginalTotals(data.analysis)

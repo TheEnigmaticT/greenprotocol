@@ -2,6 +2,7 @@ import { runScopedToolChat } from '@/lib/talk-about-this/agent'
 import { createConfiguredChatProvider, type ChatMessage } from '@/lib/talk-about-this/chat-provider'
 import { executeScopedTool } from '@/lib/talk-about-this/tools'
 import { assistantMessageCitations, createMessage, listConversationMessages, loadOwnedConversation } from '@/lib/talk-about-this/repository'
+import { approveScopedRecommendation, isExplicitScopedApprovalRequest } from '@/lib/talk-about-this/actions'
 import { createClient } from '@/lib/supabase/server'
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
@@ -66,6 +67,65 @@ export async function POST(
     return Response.json({ error: 'Conversation is closed' }, { status: 409 })
   }
 
+
+  if (isExplicitScopedApprovalRequest(content)) {
+    try {
+      const receipt = await approveScopedRecommendation({ supabase, conversationId })
+      await createMessage(supabase, user.id, conversationId, {
+        role: 'user',
+        content,
+        citations: [],
+        status: 'complete',
+        ttft_ms: null,
+      })
+      await createMessage(supabase, user.id, conversationId, {
+        role: 'assistant',
+        content: receipt.alreadyAccepted
+          ? `${receipt.label} was already approved from this scoped conversation.`
+          : `${receipt.label} has been approved from this scoped conversation.`,
+        citations: [],
+        status: 'complete',
+        ttft_ms: null,
+      })
+
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          const send = (event: string, data: Record<string, unknown>) => {
+            controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+          }
+          send('conversation', { conversationId })
+          send('recommendation-approved', {
+            recommendationId: receipt.recommendationId,
+            label: receipt.label,
+            alreadyAccepted: receipt.alreadyAccepted,
+            actionId: receipt.actionId,
+            revisionNumber: receipt.revisionNumber,
+          })
+          send('done', {
+            status: 'complete',
+            ttftMs: null,
+            citationIds: [],
+            action: 'approve_recommendation',
+          })
+          controller.close()
+        },
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no',
+        },
+      })
+    } catch (error) {
+      return Response.json({
+        error: error instanceof Error ? error.message : 'Unable to approve this recommendation',
+      }, { status: 409 })
+    }
+  }
   let provider
   try {
     provider = createConfiguredChatProvider()
