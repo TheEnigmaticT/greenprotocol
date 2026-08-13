@@ -181,6 +181,31 @@ describe('tool-run diagnostics', () => {
     }))
   })
 
+  it('omits free-form query and telemetry strings even under allowed keys', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ id: 'run-1', status: 'timed_out', reason_code: 'deadline_exceeded' }],
+      error: null,
+    })
+
+    await createToolRun({ rpc } as never, 'user-1', {
+      ...toolRunInput,
+      validatedArguments: {
+        chemical: 'dichloromethane',
+        query: 'Bearer query-secret caused provider error',
+      },
+      telemetry: {
+        elapsedMs: 5000,
+        startedAt: 'token telemetry-secret',
+        completedAt: 'raw error with password',
+      },
+    })
+
+    expect(rpc).toHaveBeenCalledWith('record_scoped_tool_run', expect.objectContaining({
+      p_validated_arguments: { chemical: 'dichloromethane' },
+      p_telemetry: { elapsedMs: 5000 },
+    }))
+  })
+
   it('declares authenticated browser roles unable to execute diagnostic RPCs', () => {
     const migration = readFileSync(resolve(
       process.cwd(),

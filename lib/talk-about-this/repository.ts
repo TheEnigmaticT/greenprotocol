@@ -407,48 +407,78 @@ const safeReasonDetails: Record<Exclude<ToolRunReasonCode, 'none'>, string> = {
   diagnostic_write_failed: 'Tool diagnostic persistence failed.',
 }
 
-const validatedArgumentKeys: Record<string, true> = {
-  chemical: true,
-  mode: true,
-  solvent: true,
-  solute: true,
-  coSolvent: true,
-  fractionSolvent: true,
-  fractionType: true,
-  temperatureK: true,
-  currentSolvent: true,
-  query: true,
-  signalGroups: true,
+const validatedArgumentKeys: Record<string, 'string' | 'number' | 'string_array'> = {
+  chemical: 'string',
+  mode: 'string',
+  solvent: 'string',
+  solute: 'string',
+  coSolvent: 'string',
+  fractionSolvent: 'number',
+  fractionType: 'string',
+  temperatureK: 'number',
+  currentSolvent: 'string',
+  signalGroups: 'string_array',
 }
 
-const telemetryKeys: Record<string, true> = {
-  elapsedMs: true,
-  queueMs: true,
-  executionMs: true,
-  startedAt: true,
-  completedAt: true,
-  attempt: true,
-  providerRound: true,
+const telemetryKeys: Record<string, 'number'> = {
+  elapsedMs: 'number',
+  queueMs: 'number',
+  executionMs: 'number',
+  attempt: 'number',
+  providerRound: 'number',
 }
+
+const toolRunArgumentSchemas: Record<string, Record<string, 'string' | 'number' | 'string_array'>> = {
+  lookup_chem21_solvent: { chemical: 'string' },
+  lookup_pubchem_profile: { chemical: 'string' },
+  calculate_rdkit_properties: { chemical: 'string' },
+  lookup_experimental_solvent_evidence: {
+    mode: 'string',
+    solvent: 'string',
+    solute: 'string',
+    coSolvent: 'string',
+    fractionSolvent: 'number',
+    fractionType: 'string',
+    temperatureK: 'number',
+  },
+  lookup_solvent_hazard_profile: { solvent: 'string' },
+  screen_solvent_candidates: {
+    solute: 'string',
+    currentSolvent: 'string',
+    temperatureK: 'number',
+  },
+  search_scoped_literature_evidence: { signalGroups: 'string_array' },
+}
+
+const sensitiveDiagnosticValue = /(?:\b(?:api[_ -]?key|authorization|bearer|token|secret|password|credential|error|exception)\b|(?:sk|pk)_[A-Za-z0-9_-]{8,})/i
 
 function redactDiagnosticRecord(
   value: Record<string, unknown>,
-  allowedKeys: Record<string, true>,
-): Record<string, string | number | boolean | string[]> {
-  const redacted: Record<string, string | number | boolean | string[]> = {}
+  allowedKeys: Record<string, 'string' | 'number' | 'string_array'>,
+): Record<string, string | number | string[]> {
+  const redacted: Record<string, string | number | string[]> = {}
 
   for (const [key, candidate] of Object.entries(value)) {
-    if (!allowedKeys[key]) continue
-    if (typeof candidate === 'string' && candidate.length <= 500) {
+    const expectedType = allowedKeys[key]
+    if (
+      expectedType === 'string'
+      && typeof candidate === 'string'
+      && candidate.length > 0
+      && candidate.length <= 100
+      && !sensitiveDiagnosticValue.test(candidate)
+    ) {
       redacted[key] = candidate
-    } else if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-      redacted[key] = candidate
-    } else if (typeof candidate === 'boolean') {
+    } else if (expectedType === 'number' && typeof candidate === 'number' && Number.isFinite(candidate)) {
       redacted[key] = candidate
     } else if (
-      Array.isArray(candidate)
+      expectedType === 'string_array'
+      && Array.isArray(candidate)
       && candidate.length <= 20
-      && candidate.every(item => typeof item === 'string' && item.length <= 100)
+      && candidate.every(item => (
+        typeof item === 'string'
+        && item.length <= 100
+        && !sensitiveDiagnosticValue.test(item)
+      ))
     ) {
       redacted[key] = candidate
     }
@@ -544,7 +574,10 @@ export async function createToolRun(
     p_provider_round: input.providerRound,
     p_call_id: input.callId,
     p_tool_name: input.toolName,
-    p_validated_arguments: redactDiagnosticRecord(input.validatedArguments, validatedArgumentKeys),
+    p_validated_arguments: redactDiagnosticRecord(
+      input.validatedArguments,
+      toolRunArgumentSchemas[input.toolName] ?? {},
+    ),
     p_status: input.status,
     p_reason_code: input.reasonCode,
     p_reason_detail: input.reasonDetail === undefined || input.reasonCode === 'none'
