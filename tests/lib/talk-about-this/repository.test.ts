@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   assistantMessageCitations,
@@ -151,6 +153,52 @@ describe('tool-run diagnostics', () => {
       p_reason_code: 'deadline_exceeded',
       p_reason_detail: 'The tool did not finish before its dispatch deadline.',
     }))
+  })
+
+  it('redacts token-bearing values from diagnostic JSON RPC payloads', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ id: 'run-1', status: 'timed_out', reason_code: 'deadline_exceeded' }],
+      error: null,
+    })
+
+    await createToolRun({ rpc } as never, 'user-1', {
+      ...toolRunInput,
+      validatedArguments: {
+        chemical: 'dichloromethane',
+        apiKey: 'sk-validated-arguments-secret',
+        nestedError: { message: 'database password: secret' },
+      },
+      telemetry: {
+        elapsedMs: 5000,
+        providerError: 'Bearer telemetry-secret',
+        request: { authorization: 'token secret' },
+      },
+    })
+
+    expect(rpc).toHaveBeenCalledWith('record_scoped_tool_run', expect.objectContaining({
+      p_validated_arguments: { chemical: 'dichloromethane' },
+      p_telemetry: { elapsedMs: 5000 },
+    }))
+  })
+
+  it('declares authenticated browser roles unable to execute diagnostic RPCs', () => {
+    const migration = readFileSync(resolve(
+      process.cwd(),
+      'supabase/migrations/20260812000001_create_talk_tool_runs.sql',
+    ), 'utf8')
+
+    expect(migration).toContain(
+      'REVOKE ALL ON FUNCTION public.record_scoped_tool_run(UUID, UUID, UUID, UUID, INTEGER, TEXT, TEXT, JSONB, TEXT, TEXT, TEXT, INTEGER, TIMESTAMPTZ, TIMESTAMPTZ, INTEGER, JSONB) FROM PUBLIC, anon, authenticated;',
+    )
+    expect(migration).toContain(
+      'REVOKE ALL ON FUNCTION public.link_scoped_tool_runs_to_assistant_message(UUID, UUID, UUID, UUID) FROM PUBLIC, anon, authenticated;',
+    )
+    expect(migration).toContain(
+      'GRANT EXECUTE ON FUNCTION public.record_scoped_tool_run(UUID, UUID, UUID, UUID, INTEGER, TEXT, TEXT, JSONB, TEXT, TEXT, TEXT, INTEGER, TIMESTAMPTZ, TIMESTAMPTZ, INTEGER, JSONB) TO service_role;',
+    )
+    expect(migration).toContain(
+      'GRANT EXECUTE ON FUNCTION public.link_scoped_tool_runs_to_assistant_message(UUID, UUID, UUID, UUID) TO service_role;',
+    )
   })
 
   it('rejects invalid local diagnostic values before calling the RPC', async () => {

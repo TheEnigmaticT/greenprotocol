@@ -407,6 +407,56 @@ const safeReasonDetails: Record<Exclude<ToolRunReasonCode, 'none'>, string> = {
   diagnostic_write_failed: 'Tool diagnostic persistence failed.',
 }
 
+const validatedArgumentKeys: Record<string, true> = {
+  chemical: true,
+  mode: true,
+  solvent: true,
+  solute: true,
+  coSolvent: true,
+  fractionSolvent: true,
+  fractionType: true,
+  temperatureK: true,
+  currentSolvent: true,
+  query: true,
+  signalGroups: true,
+}
+
+const telemetryKeys: Record<string, true> = {
+  elapsedMs: true,
+  queueMs: true,
+  executionMs: true,
+  startedAt: true,
+  completedAt: true,
+  attempt: true,
+  providerRound: true,
+}
+
+function redactDiagnosticRecord(
+  value: Record<string, unknown>,
+  allowedKeys: Record<string, true>,
+): Record<string, string | number | boolean | string[]> {
+  const redacted: Record<string, string | number | boolean | string[]> = {}
+
+  for (const [key, candidate] of Object.entries(value)) {
+    if (!allowedKeys[key]) continue
+    if (typeof candidate === 'string' && candidate.length <= 500) {
+      redacted[key] = candidate
+    } else if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      redacted[key] = candidate
+    } else if (typeof candidate === 'boolean') {
+      redacted[key] = candidate
+    } else if (
+      Array.isArray(candidate)
+      && candidate.length <= 20
+      && candidate.every(item => typeof item === 'string' && item.length <= 100)
+    ) {
+      redacted[key] = candidate
+    }
+  }
+
+  return redacted
+}
+
 function isBoundedNonEmptyString(value: unknown, maximumLength: number): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= maximumLength
 }
@@ -494,7 +544,7 @@ export async function createToolRun(
     p_provider_round: input.providerRound,
     p_call_id: input.callId,
     p_tool_name: input.toolName,
-    p_validated_arguments: input.validatedArguments,
+    p_validated_arguments: redactDiagnosticRecord(input.validatedArguments, validatedArgumentKeys),
     p_status: input.status,
     p_reason_code: input.reasonCode,
     p_reason_detail: input.reasonDetail === undefined || input.reasonCode === 'none'
@@ -504,7 +554,7 @@ export async function createToolRun(
     p_started_at: input.startedAt ?? null,
     p_completed_at: input.completedAt ?? null,
     p_elapsed_ms: input.elapsedMs ?? null,
-    p_telemetry: input.telemetry,
+    p_telemetry: redactDiagnosticRecord(input.telemetry, telemetryKeys),
   } as never)
 
   if (error || !Array.isArray(data) || data.length !== 1) {
