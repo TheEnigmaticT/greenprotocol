@@ -39,7 +39,7 @@ Overall code quality: **C+ — "a prototype that grew a real product inside it."
 - `app/api/analyze/route.ts:236` — `calculateImpactDelta` iterates **all** recommendations, not accepted ones; `impact_delta` assumes 100% adoption and is summed into public "CO2e saved" totals on `/u/[username]`.
 - `route.ts:269` / `components/ImpactScoreboard.tsx:95` — alternatives not in the 50-chemical hardcoded `lib/chemicals.ts` get footprint **zero**, so "savings" equal the original's entire footprint. Most LLM-suggested alternatives (Cyrene, CPME, DES…) aren't in that table.
 - Invented fallback masses (0.5 kg solvent / 0.1 kg other on TS side; 100 g / 10 g on Python side) silently dominate mass-weighted results while confidence stays "calculated."
-- `lib/equivalencies.ts:8` — tree-seedling equivalency overstated ~2.8× vs EPA figure.
+- `lib/equivalencies.ts:8` — tree-seedling equivalency (45.5/tonne) overstated ~2.7× vs EPA's ~16.7 seedlings grown 10 years per tonne CO2e ([EPA equivalencies calc](https://www.epa.gov/energy/greenhouse-gas-equivalencies-calculator)).
 - Hazardous-waste "eliminated" (`route.ts:280`) counts the original's full mass without checking whether the alternative is also hazardous.
 
 ---
@@ -114,8 +114,8 @@ Overall code quality: **C+ — "a prototype that grew a real product inside it."
 
 ## What's genuinely solid — don't touch
 
-- **Per-route authn/authz** is consistent and correct everywhere except the DOZN route: `auth.getUser()` + `.eq('user_id', user.id)` on every query; no IDOR found. Optimistic concurrency (revision + DB trigger backstop) is the right instinct — it just needs one writer protocol.
-- **RLS on all `gpc_` tables** present and owner-scoped; `gpc_talk_actions`/`gpc_talk_tool_runs` go further (client writes revoked; SECURITY DEFINER RPCs with ownership re-verification, row locks, scope-hash checks, idempotency, pinned `search_path`).
+- **Per-route authn/authz** is consistent (`auth.getUser()` on every route except DOZN) and no cross-user IDOR was found. *Correction from second audit (see Reconciliation): `rescore` authenticates but re-scores caller-supplied `analysis` JSON rather than loading the owned row — a compute-abuse/provenance gap, not IDOR.* Optimistic concurrency (revision + DB trigger backstop) is the right instinct — it just needs one writer protocol.
+- **RLS is present on all `gpc_` tables and owner-scoped for the sensitive ones**; `gpc_talk_actions`/`gpc_talk_tool_runs` go further (client writes revoked; SECURITY DEFINER RPCs with ownership re-verification, row locks, scope-hash checks, idempotency, pinned `search_path`). *Correction from second audit: `gpc_analysis_traces` and `gpc_dedup_log` grant client `INSERT`/`UPDATE` (self-scoped) — the audit/cost ledger is user-fabricable; not a cross-user leak but it undercuts trace trustworthiness.*
 - **The talk-about-this agent loop is a model of bounded tool design:** frozen hashed context snapshot, enum-constrained schemas, server-side re-validation of every argument against the scoped chemical list, bounded rounds/calls/deadlines, no LLM write tools (approval is an exact-phrase, server-side action), sha256-digested diagnostics. Prompt-injected literature cannot cause writes. The "filter unsafe persisted chat evidence" fix is complete for its purpose.
 - **XSS/exfil-safe LLM rendering:** ReactMarkdown with `skipHtml`, links inert, images stripped; no `dangerouslySetInnerHTML` anywhere. No open redirect in auth callback.
 - **Python service shape:** clean per-principle modules with uniform `PrincipleScore`, `secrets.compare_digest` token check, no eval/exec/subprocess/pickle, fixed-host PubChem/PubMed clients (no SSRF), pydantic bounded fields. The solvent-evidence subsystem (frozen dataclasses, thread-safety tests) is the best code in the repo.
@@ -124,6 +124,24 @@ Overall code quality: **C+ — "a prototype that grew a real product inside it."
 - **ScoreCard's provenance legend** (`*`/`~`/`≈`) is an honest UI pattern — it just isn't fed honest inputs everywhere yet.
 
 ---
+
+## Reconciliation — second adversarial audit (2026-08-13, Opus 4.8)
+
+An independent adversarial audit reviewed both the codebase and this report. **The central diagnosis was confirmed** — it independently *reproduced* the converter `NameError` (`converter.convert('DMF','1 mL')` → `NameError: name 'resolve_synonym' is not defined`), confirmed the configured chemistry service was unreachable, and confirmed the dishonest "all reference data was available" status path (`pipeline.ts:761` classifies only `not_found`, never `"error"`, as unresolved → `:1025-1030` reports success). All Critical/High correctness findings above (7/12 principles, P2 unavailable, P1 `round(None)` crash, impact overstatement, projected-vs-server formula divergence, regrade-destroys-baseline, no retry, timeout risk, JSONB system-of-record, profile `user_id` leak, dead provenance validator, chat raw errors, 250 ms diagnostic race) were independently confirmed.
+
+**Corrections it made to this report (verified in source, folded in above):**
+1. **`rescore` authorization was overstated.** It authenticates but re-scores a caller-supplied `AnalysisResult` (`app/api/rescore/route.ts:19-28`) instead of loading the owned `gpc_analyses` row. Not IDOR, but it permits unbounded client-chosen scoring compute and makes "regraded" provenance unreliable. **New P1 item.**
+2. **"RLS on all gpc_ tables correct" was overstated.** `gpc_analysis_traces` and `gpc_dedup_log` grant client `INSERT`/`UPDATE` (self-scoped, `20260801000000_...:45-61`) — a user can fabricate their own trace/cost rows. Undercuts audit-ledger trust; low severity (no cross-user exposure). **New Low item.**
+3. Seedling factor corrected to ~2.7× vs EPA ~16.7 (was ~2.8×/16.5).
+
+**Claims it (correctly) downgraded from asserted-fact to needs-live-verification** — the repo evidence is strong but these can't be proven from source alone; treat as external verification items, not settled facts:
+- Literature-table **"public write access"** — migrations prove RLS is *absent*; live role grants / any manual remediation must be checked in the Supabase dashboard before assuming exploitable.
+- **`exec_sql` as live RCE** — `apply_migration.js` proves the call site and anon-key fallback exist; whether the function exists and is anon-executable in the live project is unverified.
+- **July decommission / "no real traffic" / keys never rotated** — depend on deployment + secret-manager evidence, not repo state. (Second audit did independently confirm the configured endpoint is currently unreachable.)
+- **"~90% of LLM spend untraced"** — mechanism confirmed (`context` not forwarded at `pipeline.ts:258-268,441-452`); the exact magnitude is plausible but not quantified.
+- Lint counts, the "26 commits on Aug 12," and vitest results were not independently re-run.
+
+**Net:** two reviews, one conclusion — the scoped-chat work is materially stronger than the scoring/impact core, and the immediate problem is not the chat feature but that the core numerical claims are currently *neither available nor honestly represented*. No finding from either audit was refuted by the other.
 
 ## Prioritized fix list
 
@@ -140,6 +158,12 @@ Overall code quality: **C+ — "a prototype that grew a real product inside it."
 8. Wire p4/p7/p9/p10 + p8 + reaction SMILES → real 12-principle scoring.
 9. Kill formula duplication: projected scores call `/score` in projection mode; single source for GHS/CHEM21 tables.
 10. Retry/backoff in `callClaude`; forward `context` in `evaluatePrinciple`/`reevaluateRecommendation` (two-line fix); batch re-evaluation (grouped calls) to fit the 300s ceiling.
+10b. **`rescore` should load the owned `gpc_analyses` row by id** (auth + `.eq('user_id', user.id)`) and re-score *that*, not trust a client-supplied `AnalysisResult` — restores provenance and closes the compute-abuse gap.
+
+**P0.5 — live verification (do before trusting the P0 severities; dashboard/CLI, not repo)**
+- Inspect live Supabase role grants on the three literature tables + confirm whether `public.exec_sql(text)` exists and is anon/authenticated-executable; check literature tables for already-injected rows.
+- Confirm the current `CHEMISTRY_SERVICE_URL` target and whether it's reachable/authenticated; confirm the July Anthropic key + `CHEMISTRY_SERVICE_TOKEN` were rotated.
+- Confirm which Supabase project is production (`jjxvlofcnyiqrtvwccsq` per `apply_migration.js` vs `xwcviwzwedljuuyfduso` per CLAUDE.md).
 
 **P2 — structure for 0.8**
 11. `gpc_recommendation_decisions` table; blob becomes immutable; retire whole-blob PATCH + array-index jsonb_set.
