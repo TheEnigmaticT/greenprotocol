@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AnalysisResult, Citation, LiteratureEvidenceMatch } from '@/lib/types'
 import type { TalkAboutContext, TalkAboutScope } from '@/lib/talk-about-this/context'
+import type { AdminSupabaseClient } from '@/lib/supabase/admin'
 
 export interface StoredAnalysis {
   id: string
@@ -296,4 +297,247 @@ export async function listConversationMessages(
   }
 
   return (data ?? []) as TalkMessage[]
+}
+
+export type ToolRunStatus = 'completed' | 'failed' | 'timed_out' | 'cancelled' | 'skipped_limit'
+
+export type ToolRunReasonCode =
+  | 'none'
+  | 'deadline_exceeded'
+  | 'client_cancelled'
+  | 'call_limit_exceeded'
+  | 'invalid_request'
+  | 'tool_error'
+  | 'diagnostic_write_failed'
+
+export interface CreateToolRunInput {
+  conversationId: string
+  userMessageId: string
+  turnId: string
+  providerRound: number
+  callId: string
+  toolName: string
+  validatedArguments: Record<string, unknown>
+  status: ToolRunStatus
+  reasonCode: ToolRunReasonCode
+  reasonDetail?: string
+  dispatchBudgetMs?: number
+  startedAt?: string
+  completedAt?: string
+  elapsedMs?: number
+  telemetry: Record<string, unknown>
+}
+
+export interface LinkToolRunsToAssistantMessageInput {
+  conversationId: string
+  turnId: string
+  assistantMessageId: string
+}
+
+interface StoredToolRun {
+  id: string
+  conversation_id: string
+  analysis_id: string
+  user_id: string
+  user_message_id: string | null
+  assistant_message_id: string | null
+  turn_id: string
+  provider_round: number
+  call_id: string
+  tool_name: string
+  validated_arguments: Record<string, unknown>
+  status: ToolRunStatus
+  reason_code: ToolRunReasonCode
+  reason_detail: string | null
+  dispatch_budget_ms: number | null
+  started_at: string | null
+  completed_at: string | null
+  elapsed_ms: number | null
+  telemetry: Record<string, unknown>
+  created_at: string
+}
+
+export interface PersistedToolRun {
+  id: string
+  conversationId: string
+  analysisId: string
+  userId: string
+  userMessageId: string | null
+  assistantMessageId: string | null
+  turnId: string
+  providerRound: number
+  callId: string
+  toolName: string
+  validatedArguments: Record<string, unknown>
+  status: ToolRunStatus
+  reasonCode: ToolRunReasonCode
+  reasonDetail: string | null
+  dispatchBudgetMs: number | null
+  startedAt: string | null
+  completedAt: string | null
+  elapsedMs: number | null
+  telemetry: Record<string, unknown>
+  createdAt: string
+}
+
+const toolRunStatuses: Record<ToolRunStatus, true> = {
+  completed: true,
+  failed: true,
+  timed_out: true,
+  cancelled: true,
+  skipped_limit: true,
+}
+
+const toolRunReasonCodes: Record<ToolRunReasonCode, true> = {
+  none: true,
+  deadline_exceeded: true,
+  client_cancelled: true,
+  call_limit_exceeded: true,
+  invalid_request: true,
+  tool_error: true,
+  diagnostic_write_failed: true,
+}
+
+const safeReasonDetails: Record<Exclude<ToolRunReasonCode, 'none'>, string> = {
+  deadline_exceeded: 'The tool did not finish before its dispatch deadline.',
+  client_cancelled: 'The client cancelled the tool request.',
+  call_limit_exceeded: 'The tool call limit was reached.',
+  invalid_request: 'The tool request was invalid.',
+  tool_error: 'The tool could not complete the request.',
+  diagnostic_write_failed: 'Tool diagnostic persistence failed.',
+}
+
+function isBoundedNonEmptyString(value: unknown, maximumLength: number): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= maximumLength
+}
+
+function isFiniteNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function isBoundedRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || Array.isArray(value) || typeof value !== 'object') return false
+
+  try {
+    return JSON.stringify(value).length <= 16_384
+  } catch {
+    return false
+  }
+}
+
+function isOptionalIsoTimestamp(value: unknown): value is string | undefined {
+  return value === undefined || (
+    typeof value === 'string'
+    && value.length <= 64
+    && !Number.isNaN(Date.parse(value))
+  )
+}
+
+function invalidToolRunInput(input: CreateToolRunInput, userId: string): boolean {
+  return !isBoundedNonEmptyString(userId, 200)
+    || !isBoundedNonEmptyString(input.conversationId, 200)
+    || !isBoundedNonEmptyString(input.userMessageId, 200)
+    || !isBoundedNonEmptyString(input.turnId, 200)
+    || !isFiniteNonNegativeInteger(input.providerRound)
+    || !isBoundedNonEmptyString(input.callId, 200)
+    || !isBoundedNonEmptyString(input.toolName, 100)
+    || !isBoundedRecord(input.validatedArguments)
+    || !toolRunStatuses[input.status]
+    || !toolRunReasonCodes[input.reasonCode]
+    || (input.reasonDetail !== undefined && typeof input.reasonDetail !== 'string')
+    || (input.dispatchBudgetMs !== undefined && !isFiniteNonNegativeInteger(input.dispatchBudgetMs))
+    || !isOptionalIsoTimestamp(input.startedAt)
+    || !isOptionalIsoTimestamp(input.completedAt)
+    || (input.elapsedMs !== undefined && !isFiniteNonNegativeInteger(input.elapsedMs))
+    || !isBoundedRecord(input.telemetry)
+}
+
+function persistedToolRunFromStored(row: StoredToolRun): PersistedToolRun {
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    analysisId: row.analysis_id,
+    userId: row.user_id,
+    userMessageId: row.user_message_id,
+    assistantMessageId: row.assistant_message_id,
+    turnId: row.turn_id,
+    providerRound: row.provider_round,
+    callId: row.call_id,
+    toolName: row.tool_name,
+    validatedArguments: row.validated_arguments,
+    status: row.status,
+    reasonCode: row.reason_code,
+    reasonDetail: row.reason_detail,
+    dispatchBudgetMs: row.dispatch_budget_ms,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    elapsedMs: row.elapsed_ms,
+    telemetry: row.telemetry,
+    createdAt: row.created_at,
+  }
+}
+
+export async function createToolRun(
+  supabase: AdminSupabaseClient,
+  userId: string,
+  input: CreateToolRunInput,
+): Promise<PersistedToolRun> {
+  if (invalidToolRunInput(input, userId)) {
+    throw new Error('Invalid tool-run diagnostic input')
+  }
+
+  const { data, error } = await supabase.rpc('record_scoped_tool_run' as never, {
+    p_user_id: userId,
+    p_conversation_id: input.conversationId,
+    p_user_message_id: input.userMessageId,
+    p_turn_id: input.turnId,
+    p_provider_round: input.providerRound,
+    p_call_id: input.callId,
+    p_tool_name: input.toolName,
+    p_validated_arguments: input.validatedArguments,
+    p_status: input.status,
+    p_reason_code: input.reasonCode,
+    p_reason_detail: input.reasonDetail === undefined || input.reasonCode === 'none'
+      ? null
+      : safeReasonDetails[input.reasonCode],
+    p_dispatch_budget_ms: input.dispatchBudgetMs ?? null,
+    p_started_at: input.startedAt ?? null,
+    p_completed_at: input.completedAt ?? null,
+    p_elapsed_ms: input.elapsedMs ?? null,
+    p_telemetry: input.telemetry,
+  } as never)
+
+  if (error || !Array.isArray(data) || data.length !== 1) {
+    throw new Error('Unable to persist tool-run diagnostic')
+  }
+
+  return persistedToolRunFromStored(data[0] as StoredToolRun)
+}
+
+export async function linkToolRunsToAssistantMessage(
+  supabase: AdminSupabaseClient,
+  userId: string,
+  input: LinkToolRunsToAssistantMessageInput,
+): Promise<number> {
+  if (
+    !isBoundedNonEmptyString(userId, 200)
+    || !isBoundedNonEmptyString(input.conversationId, 200)
+    || !isBoundedNonEmptyString(input.turnId, 200)
+    || !isBoundedNonEmptyString(input.assistantMessageId, 200)
+  ) {
+    throw new Error('Invalid tool-run diagnostic input')
+  }
+
+  const { data, error } = await supabase.rpc('link_scoped_tool_runs_to_assistant_message' as never, {
+    p_user_id: userId,
+    p_conversation_id: input.conversationId,
+    p_turn_id: input.turnId,
+    p_assistant_message_id: input.assistantMessageId,
+  } as never)
+
+  if (error || !Number.isSafeInteger(data) || data < 0) {
+    throw new Error('Unable to persist tool-run diagnostic')
+  }
+
+  return data
 }

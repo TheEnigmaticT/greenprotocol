@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { assistantMessageCitations, receiptFromStoredAction } from '@/lib/talk-about-this/repository'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  assistantMessageCitations,
+  createToolRun,
+  linkToolRunsToAssistantMessage,
+  receiptFromStoredAction,
+} from '@/lib/talk-about-this/repository'
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 const literatureCitation: Citation = {
@@ -103,5 +108,111 @@ describe('receiptFromStoredAction', () => {
       revision_number: 9,
       completed_at: null,
     })).toBeNull()
+  })
+})
+
+describe('tool-run diagnostics', () => {
+  const toolRunInput = {
+    conversationId: 'conversation-1',
+    userMessageId: 'message-1',
+    turnId: 'turn-1',
+    providerRound: 0,
+    callId: 'call-1',
+    toolName: 'lookup_chem21_solvent',
+    validatedArguments: { chemical: 'dichloromethane' },
+    status: 'timed_out' as const,
+    reasonCode: 'deadline_exceeded' as const,
+    reasonDetail: 'provider error: sk-should-never-be-persisted',
+    dispatchBudgetMs: 5000,
+    startedAt: '2026-08-12T00:00:00.000Z',
+    completedAt: '2026-08-12T00:00:05.000Z',
+    elapsedMs: 5000,
+    telemetry: {},
+  }
+
+  it('records a bounded owner-scoped diagnostic through the RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{
+        id: 'run-1',
+        status: 'timed_out',
+        reason_code: 'deadline_exceeded',
+      }],
+      error: null,
+    })
+
+    const result = await createToolRun({ rpc } as never, 'user-1', toolRunInput)
+
+    expect(result.status).toBe('timed_out')
+    expect(rpc).toHaveBeenCalledWith('record_scoped_tool_run', expect.objectContaining({
+      p_user_id: 'user-1',
+      p_conversation_id: 'conversation-1',
+      p_user_message_id: 'message-1',
+      p_status: 'timed_out',
+      p_reason_code: 'deadline_exceeded',
+      p_reason_detail: 'The tool did not finish before its dispatch deadline.',
+    }))
+  })
+
+  it('rejects invalid local diagnostic values before calling the RPC', async () => {
+    const rpc = vi.fn()
+
+    await expect(createToolRun({ rpc } as never, 'user-1', {
+      ...toolRunInput,
+      callId: '',
+    })).rejects.toThrow('Invalid tool-run diagnostic input')
+
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('throws a bounded persistence error when recording fails', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: 'connection details and secret' },
+    })
+
+    await expect(createToolRun({ rpc } as never, 'user-1', toolRunInput))
+      .rejects.toThrow('Unable to persist tool-run diagnostic')
+    await expect(createToolRun({ rpc } as never, 'user-1', toolRunInput))
+      .rejects.not.toThrow('connection details and secret')
+  })
+
+  it('links only the server-owned turn through the RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: 1, error: null })
+
+    await expect(linkToolRunsToAssistantMessage({ rpc } as never, 'user-1', {
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      assistantMessageId: 'assistant-message-1',
+    })).resolves.toBe(1)
+
+    expect(rpc).toHaveBeenCalledWith('link_scoped_tool_runs_to_assistant_message', {
+      p_user_id: 'user-1',
+      p_conversation_id: 'conversation-1',
+      p_turn_id: 'turn-1',
+      p_assistant_message_id: 'assistant-message-1',
+    })
+  })
+
+  it('returns zero when no diagnostics are linkable', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: 0, error: null })
+
+    await expect(linkToolRunsToAssistantMessage({ rpc } as never, 'user-1', {
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      assistantMessageId: 'assistant-message-1',
+    })).resolves.toBe(0)
+  })
+
+  it('throws a bounded persistence error when linking fails', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: 'permission details and secret' },
+    })
+
+    await expect(linkToolRunsToAssistantMessage({ rpc } as never, 'user-1', {
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      assistantMessageId: 'assistant-message-1',
+    })).rejects.toThrow('Unable to persist tool-run diagnostic')
   })
 })
