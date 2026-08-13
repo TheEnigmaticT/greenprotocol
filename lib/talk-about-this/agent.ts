@@ -166,7 +166,6 @@ function fingerprint(call: ScopedToolCall): string {
 function dependsOnCanonicalSmiles(call: ChatToolCall): string | null {
   try {
     const argumentsValue = parseArguments(call)
-    if (call.name === 'calculate_rdkit_properties') return typeof argumentsValue.chemical === 'string' ? argumentsValue.chemical.trim() : null
     if (call.name === 'screen_solvent_candidates') return typeof argumentsValue.solute === 'string' ? argumentsValue.solute.trim() : null
     if (call.name === 'lookup_experimental_solvent_evidence'
       && argumentsValue.mode !== 'density'
@@ -435,42 +434,41 @@ export async function runScopedToolChat({
   const answerParts: string[] = []
   const telemetry: ChatLatencyTelemetry = {}
 
-  const emitDiagnostic = async (
+  const emitDiagnostic = (
     call: ChatToolCall,
     providerRound: number,
     validatedArguments: Record<string, unknown>,
     diagnostic: ToolDiagnostic,
     timing: { dispatchBudgetMs?: number, startedAt?: string, elapsedMs?: number, telemetry?: Record<string, unknown> } = {},
   ) => {
+    const toolName = isToolName(call.name) ? call.name : 'unsupported_tool'
     const data = {
       callId: call.id,
-      tool: call.name,
-      source: sourceForTool(call.name as ToolName),
+      tool: toolName,
+      source: isToolName(call.name) ? sourceForTool(call.name) : 'local evidence',
       status: diagnostic.status,
       reasonCode: diagnostic.reasonCode,
       userNote: diagnostic.userNote,
     }
     if (diagnostic.status !== 'completed') onEvent('tool-failed', data)
     if (!onToolRun) return
-    try {
-      await onToolRun({
-        turnId,
-        providerRound,
-        callId: call.id,
-        toolName: call.name,
-        validatedArguments,
-        status: diagnostic.status,
-        reasonCode: diagnostic.reasonCode,
-        ...(diagnostic.reasonDetail ? { reasonDetail: diagnostic.reasonDetail } : {}),
-        ...(timing.dispatchBudgetMs === undefined ? {} : { dispatchBudgetMs: timing.dispatchBudgetMs }),
-        ...(timing.startedAt ? { startedAt: timing.startedAt } : {}),
-        completedAt: new Date().toISOString(),
-        ...(timing.elapsedMs === undefined ? {} : { elapsedMs: timing.elapsedMs }),
-        telemetry: timing.telemetry ?? {},
-      })
-    } catch (error) {
-      console.error('Scoped tool diagnostic callback failed', { turnId, callId: call.id, tool: call.name, error })
-    }
+    void Promise.resolve().then(() => onToolRun({
+      turnId,
+      providerRound,
+      callId: call.id,
+      toolName,
+      validatedArguments,
+      status: diagnostic.status,
+      reasonCode: diagnostic.reasonCode,
+      ...(diagnostic.reasonDetail ? { reasonDetail: diagnostic.reasonDetail } : {}),
+      ...(timing.dispatchBudgetMs === undefined ? {} : { dispatchBudgetMs: timing.dispatchBudgetMs }),
+      ...(timing.startedAt ? { startedAt: timing.startedAt } : {}),
+      completedAt: new Date().toISOString(),
+      ...(timing.elapsedMs === undefined ? {} : { elapsedMs: timing.elapsedMs }),
+      telemetry: timing.telemetry ?? {},
+    })).catch(() => {
+      console.error('Scoped tool diagnostic callback failed', { turnId, callId: call.id })
+    })
   }
 
   const completedDiagnostic: ToolDiagnostic = {
@@ -545,7 +543,6 @@ export async function runScopedToolChat({
     conversation.push({ role: 'assistant', content: turnText.join(''), toolCalls })
     telemetry.scheduling = { requestedCount: toolCalls.length, dispatchedCount: 0, deduplicatedCount: 0 }
     const results = new Map<string, ToolResult>()
-    const diagnostics: Promise<void>[] = []
     const prevalidated = new Map<string, ScopedToolCall>()
     const dependent = new Set<string>()
     const duplicateOf = new Map<string, string>()
@@ -556,13 +553,13 @@ export async function runScopedToolChat({
       if (index >= MAX_TOOL_CALLS_PER_TURN) {
         const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason: null, skippedForLimit: true })
         results.set(call.id, failureResult(call, diagnostic.userNote))
-        diagnostics.push(emitDiagnostic(call, round, {}, diagnostic))
+        emitDiagnostic(call, round, {}, diagnostic)
         continue
       }
       if (performance.now() >= toolLoopDeadline) {
         const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason: 'deadline' })
         results.set(call.id, failureResult(call, diagnostic.userNote))
-        diagnostics.push(emitDiagnostic(call, round, {}, diagnostic))
+        emitDiagnostic(call, round, {}, diagnostic)
         continue
       }
       try {
@@ -575,7 +572,7 @@ export async function runScopedToolChat({
         console.error('Scoped tool request rejected', { turnId, callId: call.id, tool: call.name, error })
         const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason: null, invalidRequest: true })
         results.set(call.id, failureResult(call, diagnostic.userNote))
-        diagnostics.push(emitDiagnostic(call, round, {}, diagnostic))
+        emitDiagnostic(call, round, {}, diagnostic)
       }
     }
 
@@ -589,7 +586,7 @@ export async function runScopedToolChat({
           } catch {
             const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason: null })
             results.set(call.id, failureResult(call, diagnostic.userNote))
-            diagnostics.push(emitDiagnostic(call, round, {}, diagnostic))
+            emitDiagnostic(call, round, {}, diagnostic)
             return
           }
         }
@@ -623,21 +620,21 @@ export async function runScopedToolChat({
             const retrievalAttempt = retrievalAttemptTelemetry(call, result)
             if (retrievalAttempt) telemetry.retrievalAttempts = [...(telemetry.retrievalAttempts ?? []), retrievalAttempt].slice(-5)
           }
-          diagnostics.push(emitDiagnostic(call, round, validatedArguments, diagnostic, {
+          emitDiagnostic(call, round, validatedArguments, diagnostic, {
             dispatchBudgetMs: Math.round(remainingMs),
             startedAt,
             elapsedMs: Math.round(performance.now() - startedMs),
-          }))
+          })
         } catch (error) {
           console.error('Scoped tool execution failed', { turnId, callId: call.id, tool: call.name, error })
           const abortReason = signal?.aborted ? 'client' : (timeoutSignal.aborted || performance.now() >= toolLoopDeadline ? 'deadline' : null)
           const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason })
           results.set(id, failureResult(call, diagnostic.userNote))
-          diagnostics.push(emitDiagnostic(call, round, validatedArguments, diagnostic, {
+          emitDiagnostic(call, round, validatedArguments, diagnostic, {
             dispatchBudgetMs: Math.round(remainingMs),
             startedAt,
             elapsedMs: Math.round(performance.now() - startedMs),
-          }))
+          })
         }
       }))
     }
@@ -655,11 +652,10 @@ export async function runScopedToolChat({
       const validatedArguments = Object.fromEntries(Object.entries(scoped).filter(([key]) => key !== 'id' && key !== 'name'))
       const diagnostic = diagnosticForResult(call, primaryResult)
       if (diagnostic.status === 'completed') appendToolComplete(call, primaryResult)
-      diagnostics.push(emitDiagnostic(call, round, validatedArguments, diagnostic, {
+      emitDiagnostic(call, round, validatedArguments, diagnostic, {
         telemetry: { deduplicatedFromCallId: primaryCallId },
-      }))
+      })
     }
-    await Promise.all(diagnostics)
     for (const call of toolCalls) {
       const result = results.get(call.id) ?? failureResult(call, 'The tool could not complete the request.')
       conversation.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify(result) })

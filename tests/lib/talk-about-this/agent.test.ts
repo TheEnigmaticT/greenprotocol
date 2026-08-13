@@ -543,7 +543,7 @@ describe('literature evidence propagation', () => {
     }))
   })
 
-  it('runs independent calls concurrently and delays same-round RDKit until PubChem returns', async () => {
+  it('starts RDKit with PubChem while keeping same-round screening dependent', async () => {
     const order: string[] = []
     let pass = 0
     let releasePubChem: (() => void) | undefined
@@ -554,9 +554,9 @@ describe('literature evidence propagation', () => {
         if (pass === 1) {
           yield {
             toolCalls: [
-              { id: 'chem21', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) },
               { id: 'pubchem', name: 'lookup_pubchem_profile', arguments: JSON.stringify({ chemical: 'DMF' }) },
               { id: 'rdkit', name: 'calculate_rdkit_properties', arguments: JSON.stringify({ chemical: 'DMF' }) },
+              { id: 'screen', name: 'screen_solvent_candidates', arguments: JSON.stringify({ solute: 'DMF', currentSolvent: 'DMF', temperatureK: 298.15 }) },
             ],
           }
           return
@@ -579,11 +579,11 @@ describe('literature evidence propagation', () => {
       onEvent: () => undefined,
     })
     await vi.waitFor(() => expect(order).toContain('start:lookup_pubchem_profile'))
-    expect(order).toContain('start:lookup_chem21_solvent')
-    expect(order).not.toContain('start:calculate_rdkit_properties')
+    expect(order).toContain('start:calculate_rdkit_properties')
+    expect(order).not.toContain('start:screen_solvent_candidates')
     releasePubChem!()
     await pending
-    expect(order.indexOf('start:calculate_rdkit_properties')).toBeGreaterThan(order.indexOf('end:lookup_pubchem_profile'))
+    expect(order.indexOf('start:screen_solvent_candidates')).toBeGreaterThan(order.indexOf('end:lookup_pubchem_profile'))
   })
 
   it('defers same-round screening and solubility evidence until PubChem supplies canonical SMILES', async () => {
@@ -656,6 +656,98 @@ describe('literature evidence propagation', () => {
       event: 'tool-failed',
       data: expect.objectContaining({ callId: 'late', status: 'cancelled', reasonCode: 'client_cancelled' }),
     }))
+  })
+
+  it('continues to the next provider round when diagnostic persistence never resolves', async () => {
+    let requests = 0
+    const provider: ChatProvider = {
+      async *stream() {
+        requests += 1
+        if (requests === 1) {
+          yield { toolCalls: [{ id: 'chem21', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) }] }
+          return
+        }
+        yield { text: 'Done.' }
+      },
+    }
+    const pending = runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => chem21Result,
+      onEvent: () => undefined,
+      turnId: 'turn-stalled-diagnostic',
+      onToolRun: async () => new Promise<void>(() => undefined),
+    })
+
+    await vi.waitFor(() => expect(requests).toBe(2))
+    await expect(pending).resolves.toMatchObject({ answer: 'Done.' })
+  })
+
+  it('continues after diagnostic persistence rejects without logging the error payload', async () => {
+    const error = new Error('secret-token=abc123')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    let requests = 0
+    const provider: ChatProvider = {
+      async *stream() {
+        requests += 1
+        if (requests === 1) {
+          yield { toolCalls: [{ id: 'chem21', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) }] }
+          return
+        }
+        yield { text: 'Done.' }
+      },
+    }
+
+    await expect(runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => chem21Result,
+      onEvent: () => undefined,
+      turnId: 'turn-rejected-diagnostic',
+      onToolRun: async () => { throw error },
+    })).resolves.toMatchObject({ answer: 'Done.' })
+    await vi.waitFor(() => expect(consoleError).toHaveBeenCalledWith(
+      'Scoped tool diagnostic callback failed',
+      { turnId: 'turn-rejected-diagnostic', callId: 'chem21' },
+    ))
+    expect(consoleError).not.toHaveBeenCalledWith(
+      'Scoped tool diagnostic callback failed',
+      expect.objectContaining({ error: expect.anything() }),
+    )
+  })
+
+  it('persists unsupported tool calls under a fixed safe name', async () => {
+    const diagnostics: Array<Record<string, unknown>> = []
+    let pass = 0
+    const provider: ChatProvider = {
+      async *stream() {
+        pass += 1
+        if (pass === 1) {
+          yield { toolCalls: [{ id: 'unsupported', name: 'secret-token=abc123', arguments: '{}' }] }
+          return
+        }
+        yield { text: 'Unsupported request rejected.' }
+      },
+    }
+
+    await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => chem21Result,
+      onEvent: () => undefined,
+      turnId: 'turn-unsupported',
+      onToolRun: async diagnostic => { diagnostics.push(diagnostic) },
+    })
+
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      callId: 'unsupported',
+      toolName: 'unsupported_tool',
+      reasonCode: 'invalid_request',
+    }))
+    expect(JSON.stringify(diagnostics)).not.toContain('secret-token')
   })
 
   it('rounds scheduling diagnostics and treats unavailable results as failed', async () => {
