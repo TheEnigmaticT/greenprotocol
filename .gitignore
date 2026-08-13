@@ -63,3 +63,7 @@ tmp/repo-cleanup-2026-07-01/
 tmp/benchmarks/
 /tmp/
 services/chemistry/data/solvent-evidence/*.sqlite*
+
+# Local operational metadata and agent execution ledgers.
+/supabase/.temp/
+/.superpowers/
