@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createHash } from 'node:crypto'
 import type { AnalysisResult, Citation, LiteratureEvidenceMatch } from '@/lib/types'
 import type { TalkAboutContext, TalkAboutScope } from '@/lib/talk-about-this/context'
+import { isPersistedEvidence, type PersistedEvidence, type PersistedEvidenceReceipt } from '@/lib/talk-about-this/evidence'
 import type { AdminSupabaseClient } from '@/lib/supabase/admin'
 
 export interface StoredAnalysis {
@@ -75,6 +76,7 @@ export interface StoredLiteratureCitation extends Citation {
     | 'pageStart'
     | 'pageEnd'
     | 'quote'
+    | 'similarity'
     | 'applicability'
     | 'limitations'
     | 'candidateStatus'
@@ -111,6 +113,69 @@ export interface TalkMessage {
   status: 'streaming' | 'complete' | 'failed' | 'cancelled'
   ttft_ms: number | null
   created_at: string
+}
+
+export interface PersistedChatMessage {
+  id: string
+  role: TalkMessage['role']
+  content: string
+  citations: string[]
+  status: TalkMessage['status']
+  ttftMs: number | null
+  createdAt: string
+}
+
+export type { PersistedEvidence, PersistedEvidenceReceipt }
+
+function canonicallyOrderedMessages(messages: readonly TalkMessage[]): TalkMessage[] {
+  return [...messages].sort((left, right) => (
+    left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id)
+  ))
+}
+
+function isStoredLiteratureCitation(
+  citation: StoredMessageCitation,
+): citation is StoredLiteratureCitation {
+  return typeof citation !== 'string' && 'source_id' in citation
+}
+
+function storedLiteratureEvidence(citation: StoredMessageCitation): PersistedEvidence | null {
+  if (!isStoredLiteratureCitation(citation)) return null
+  return isPersistedEvidence(citation.evidence) ? citation.evidence : null
+}
+
+export function conversationHistoryForUi(messages: readonly TalkMessage[]): PersistedChatMessage[] {
+  return canonicallyOrderedMessages(messages).map(message => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    citations: message.citations.flatMap(citation => {
+      if (typeof citation === 'string') return [citation]
+      const evidence = storedLiteratureEvidence(citation)
+      return evidence ? [evidence.id] : []
+    }),
+    status: message.status,
+    ttftMs: message.ttft_ms,
+    createdAt: message.created_at,
+  }))
+}
+
+export function evidenceReceiptsForUi(
+  messages: readonly TalkMessage[],
+): PersistedEvidenceReceipt[] {
+  const evidenceIds = new Set<string>()
+  const receipts: PersistedEvidenceReceipt[] = []
+
+  for (const message of canonicallyOrderedMessages(messages)) {
+    for (const citation of message.citations) {
+      const evidence = storedLiteratureEvidence(citation)
+      if (!evidence || evidenceIds.has(evidence.id)) continue
+      evidenceIds.add(evidence.id)
+      receipts.push({ evidence, receivedAt: message.created_at })
+    }
+  }
+
+  return receipts
 }
 
 export async function loadOwnedAnalysis(
@@ -250,6 +315,7 @@ export function assistantMessageCitations(
         quote: evidence.quote,
         applicability: evidence.applicability,
         limitations: evidence.limitations,
+        similarity: evidence.similarity,
         candidateStatus: evidence.candidateStatus,
       },
     })
@@ -292,6 +358,7 @@ export async function listConversationMessages(
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
     .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
 
   if (error) {
     throw new Error(`Failed to load conversation messages: ${error.message}`)

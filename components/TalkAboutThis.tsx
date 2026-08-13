@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import type { TalkAboutScope } from '@/lib/talk-about-this/context'
 import type { LiteratureEvidenceMatch } from '@/lib/types'
+import { isPersistedEvidence } from '@/lib/talk-about-this/evidence'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -100,29 +101,7 @@ export function applyRecommendationApprovedEvent(
 }
 
 function isLiteratureEvidence(value: unknown): value is LiteratureEvidenceMatch {
-  if (!value || typeof value !== 'object') return false
-  const evidence = value as Record<string, unknown>
-
-  return typeof evidence.id === 'string'
-    && Boolean(evidence.id.trim())
-    && typeof evidence.sourceDocumentId === 'string'
-    && Boolean(evidence.sourceDocumentId.trim())
-    && typeof evidence.title === 'string'
-    && Boolean(evidence.title.trim())
-    && typeof evidence.pageStart === 'number'
-    && Number.isSafeInteger(evidence.pageStart)
-    && evidence.pageStart > 0
-    && typeof evidence.pageEnd === 'number'
-    && Number.isSafeInteger(evidence.pageEnd)
-    && evidence.pageEnd >= evidence.pageStart
-    && typeof evidence.quote === 'string'
-    && Boolean(evidence.quote.trim())
-    && typeof evidence.candidateStatus === 'string'
-    && Boolean(evidence.candidateStatus.trim())
-    && typeof evidence.similarity === 'number'
-    && Number.isFinite(evidence.similarity)
-    && (!('applicability' in evidence) || evidence.applicability === undefined || typeof evidence.applicability === 'string')
-    && (!('limitations' in evidence) || evidence.limitations === undefined || typeof evidence.limitations === 'string')
+  return isPersistedEvidence(value)
 }
 
 export function evidenceFromEvent(event: string, data: Record<string, unknown>): LiteratureEvidenceMatch[] {

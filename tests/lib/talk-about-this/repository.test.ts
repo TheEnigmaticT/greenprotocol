@@ -3,10 +3,14 @@ import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   assistantMessageCitations,
+  conversationHistoryForUi,
   createToolRun,
+  evidenceReceiptsForUi,
   linkToolRunsToAssistantMessage,
+  listConversationMessages,
   receiptFromStoredAction,
 } from '@/lib/talk-about-this/repository'
+import { evidenceFromEvent } from '@/components/TalkAboutThis'
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 const literatureCitation: Citation = {
@@ -45,6 +49,7 @@ describe('assistantMessageCitations', () => {
         applicability: 'DMF replacement',
         limitations: 'Candidate evidence only.',
         candidateStatus: 'candidate_pending_adjudication',
+        similarity: 0.98,
       },
     }])
   })
@@ -79,6 +84,115 @@ describe('assistantMessageCitations', () => {
         }],
       },
     }])
+  })
+})
+
+describe('persisted conversation projections', () => {
+  const persistedLiteratureCitation = {
+    ...literatureCitation,
+    evidence: {
+      id: 'doi:p3:u1',
+      sourceDocumentId: 'doi:p3',
+      doi: '10.1000/example',
+      title: 'A source',
+      pageStart: 3,
+      pageEnd: 3,
+      quote: 'DMF comparison.',
+      similarity: 0.98,
+      applicability: 'DMF replacement',
+      limitations: 'Candidate evidence only.',
+      candidateStatus: 'candidate_pending_adjudication',
+    },
+  }
+
+  it('projects canonically ordered messages and safe deduplicated evidence receipts', () => {
+    const messages = [{
+      id: 'message-b',
+      role: 'assistant' as const,
+      content: 'Evidence found.',
+      citations: [persistedLiteratureCitation, { telemetry: { clock: 'performance.now' as const, routeStartedAt: 1 } }],
+      status: 'complete' as const,
+      ttft_ms: 25,
+      created_at: '2026-08-12T00:00:00.000Z',
+    }, {
+      id: 'message-a',
+      role: 'user' as const,
+      content: 'Is this significant?',
+      citations: ['context-citation'],
+      status: 'complete' as const,
+      ttft_ms: null,
+      created_at: '2026-08-12T00:00:00.000Z',
+    }, {
+      id: 'message-c',
+      role: 'assistant' as const,
+      content: 'Duplicate evidence.',
+      citations: [persistedLiteratureCitation],
+      status: 'complete' as const,
+      ttft_ms: null,
+      created_at: '2026-08-12T00:00:01.000Z',
+    }]
+
+    expect(conversationHistoryForUi(messages)).toEqual([{
+      id: 'message-a',
+      role: 'user',
+      content: 'Is this significant?',
+      citations: ['context-citation'],
+      status: 'complete',
+      ttftMs: null,
+      createdAt: '2026-08-12T00:00:00.000Z',
+    }, {
+      id: 'message-b',
+      role: 'assistant',
+      content: 'Evidence found.',
+      citations: ['doi:p3:u1'],
+      status: 'complete',
+      ttftMs: 25,
+      createdAt: '2026-08-12T00:00:00.000Z',
+    }, {
+      id: 'message-c',
+      role: 'assistant',
+      content: 'Duplicate evidence.',
+      citations: ['doi:p3:u1'],
+      status: 'complete',
+      ttftMs: null,
+      createdAt: '2026-08-12T00:00:01.000Z',
+    }])
+    expect(evidenceReceiptsForUi(messages)).toEqual([{
+      evidence: persistedLiteratureCitation.evidence,
+      receivedAt: '2026-08-12T00:00:00.000Z',
+    }])
+    expect(evidenceFromEvent('done', {
+      evidence: evidenceReceiptsForUi(messages).map(receipt => receipt.evidence),
+    })).toEqual([persistedLiteratureCitation.evidence])
+  })
+
+  it('does not render stored literature citations lacking finite similarity', () => {
+    const { similarity: _similarity, ...legacyEvidence } = persistedLiteratureCitation.evidence
+    expect(evidenceReceiptsForUi([{
+      id: 'message-1',
+      role: 'assistant',
+      content: 'Legacy evidence.',
+      citations: [{ ...literatureCitation, evidence: legacyEvidence } as never],
+      status: 'complete',
+      ttft_ms: null,
+      created_at: '2026-08-12T00:00:00.000Z',
+    }])).toEqual([])
+  })
+
+  it('orders persisted message queries by timestamp then ID', async () => {
+    const query = {
+      eq: vi.fn(),
+      order: vi.fn(),
+    }
+    query.eq.mockReturnValue(query)
+    query.order.mockReturnValueOnce(query).mockResolvedValueOnce({ data: [], error: null })
+    const select = vi.fn().mockReturnValue({ eq: query.eq })
+    const from = vi.fn().mockReturnValue({ select })
+
+    await listConversationMessages({ from } as never, 'user-1', 'conversation-1')
+
+    expect(query.order).toHaveBeenCalledWith('created_at', { ascending: true })
+    expect(query.order).toHaveBeenCalledWith('id', { ascending: true })
   })
 })
 
