@@ -2,9 +2,19 @@ import { runScopedToolChat } from '@/lib/talk-about-this/agent'
 import { firstForwardedDeltaMs } from '@/lib/talk-about-this/latency'
 import { createConfiguredChatProvider, type ChatMessage } from '@/lib/talk-about-this/chat-provider'
 import { executeScopedTool } from '@/lib/talk-about-this/tools'
-import { assistantMessageCitations, createMessage, listConversationMessages, loadOwnedConversation, type RetrievalAttemptTelemetry, type StoredMessageTelemetry } from '@/lib/talk-about-this/repository'
-import { approveScopedRecommendation, isExplicitScopedApprovalRequest } from '@/lib/talk-about-this/actions'
+import {
+  assistantMessageCitations,
+  createMessage,
+  createToolRun,
+  linkToolRunsToAssistantMessage,
+  listConversationMessages,
+  loadOwnedConversation,
+  type RetrievalAttemptTelemetry,
+  type StoredMessageTelemetry,
+} from '@/lib/talk-about-this/repository'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { approveScopedRecommendation, isExplicitScopedApprovalRequest } from '@/lib/talk-about-this/actions'
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -48,13 +58,50 @@ export function mergeActivityTelemetry(
     retrievalAttempts: [...(current.retrievalAttempts ?? []), attempt].slice(-MAX_RETRIEVAL_ATTEMPTS),
   }
 }
+function schedulingTelemetry(value: unknown): StoredMessageTelemetry['telemetry']['scheduling'] | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const scheduling = value as Record<string, unknown>
+  const values = ['requestedCount', 'dispatchedCount', 'deduplicatedCount'].map(key => scheduling[key])
+  if (!values.every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)) return undefined
+  const [requestedCount, dispatchedCount, deduplicatedCount] = values as number[]
+  if (dispatchedCount > requestedCount || deduplicatedCount > requestedCount) return undefined
+  return { requestedCount, dispatchedCount, deduplicatedCount }
+}
+
+function mergeTerminalTelemetry(
+  current: StoredMessageTelemetry['telemetry'],
+  value: { scheduling?: unknown },
+): StoredMessageTelemetry['telemetry'] {
+  const scheduling = schedulingTelemetry(value.scheduling)
+  const { scheduling: _scheduling, ...safeTelemetry } = value
+  return {
+    ...current,
+    ...safeTelemetry,
+    ...(scheduling ? { scheduling } : {}),
+  }
+}
+
 
 export function activityPayload(data: Record<string, unknown>): Record<string, unknown> {
-  return {
+  const failure = data.status === 'failed'
+    || data.status === 'timed_out'
+    || data.status === 'cancelled'
+    || data.status === 'skipped_limit'
+  const base = {
     callId: typeof data.callId === 'string' ? data.callId : undefined,
     tool: typeof data.tool === 'string' ? data.tool : undefined,
     status: typeof data.status === 'string' ? data.status : undefined,
     source: typeof data.source === 'string' ? data.source : undefined,
+  }
+  if (failure) {
+    return {
+      ...base,
+      reasonCode: typeof data.reasonCode === 'string' ? data.reasonCode : undefined,
+      userNote: typeof data.userNote === 'string' ? data.userNote : undefined,
+    }
+  }
+  return {
+    ...base,
     classification: typeof data.classification === 'string' ? data.classification : undefined,
     measurementCount: typeof data.measurementCount === 'number' ? data.measurementCount : undefined,
     datasetSources: Array.isArray(data.datasetSources)
@@ -176,13 +223,14 @@ export async function POST(
   }
 
   const previousMessages = await listConversationMessages(supabase, user.id, conversationId)
-  await createMessage(supabase, user.id, conversationId, {
+  const userMessage = await createMessage(supabase, user.id, conversationId, {
     role: 'user',
     content,
     citations: [],
     status: 'complete',
     ttft_ms: null,
   })
+  const turnId = crypto.randomUUID()
 
   const encoder = new TextEncoder()
   const abortController = new AbortController()
@@ -220,19 +268,33 @@ export async function POST(
             messages,
             signal: abortController.signal,
             executeTool: (call, signal) => executeScopedTool(conversation.context_snapshot, call, signal),
+            onToolRun: async input => {
+              try {
+                await createToolRun(createAdminClient(), user.id, {
+                  ...input,
+                  conversationId,
+                  userMessageId: userMessage.id,
+                })
+              } catch {
+                console.error('Scoped chat tool diagnostic persistence failed', {
+                  conversationId,
+                  turnId,
+                  callId: input.callId,
+                  toolName: input.toolName,
+                })
+              }
+            },
+            turnId,
             onEvent: (event, data) => {
               ttftMs = firstForwardedDeltaMs(ttftMs, event, startedAt, Date.now())
-              const activity = event === 'tool-complete' ? activityPayload(data) : data
+              const activity = event === 'tool-complete' || event === 'tool-failed' ? activityPayload(data) : data
               if (event === 'tool-complete') latencyTelemetry = mergeActivityTelemetry(latencyTelemetry, activity)
               send(event, activity)
             },
           })
           answer = result.answer
           literatureCitations = result.citations
-          latencyTelemetry = {
-            ...latencyTelemetry,
-            ...result.telemetry,
-          }
+          latencyTelemetry = mergeTerminalTelemetry(latencyTelemetry, result.telemetry)
           literatureEvidence = result.evidence
         } catch (error) {
           status = abortController.signal.aborted ? 'cancelled' : 'failed'
@@ -255,21 +317,45 @@ export async function POST(
             latencyTelemetry,
           )
 
-          await createMessage(supabase, user.id, conversationId, {
-            role: 'assistant',
-            content: answer || (status === 'cancelled' ? 'Response cancelled.' : 'Unable to generate a response.'),
-            citations,
-            status,
-            ttft_ms: ttftMs,
-          })
-          send('done', {
-            status,
-            ttftMs,
-            citationIds,
-            evidence: literatureEvidence,
-            telemetry: latencyTelemetry,
-          })
-          controller.close()
+          try {
+            const assistantMessage = await createMessage(supabase, user.id, conversationId, {
+              role: 'assistant',
+              content: answer || (status === 'cancelled' ? 'Response cancelled.' : 'Unable to generate a response.'),
+              citations,
+              status,
+              ttft_ms: ttftMs,
+            })
+            try {
+              await linkToolRunsToAssistantMessage(createAdminClient(), user.id, {
+                conversationId,
+                turnId,
+                assistantMessageId: assistantMessage.id,
+              })
+            } catch {
+              console.error('Scoped chat tool diagnostic linking failed', {
+                conversationId,
+                turnId,
+                assistantMessageId: assistantMessage.id,
+              })
+            }
+          } catch {
+            status = 'failed'
+            console.error('Scoped chat assistant message persistence failed', {
+              conversationId,
+              turnId,
+              event: 'assistant_message_persistence_failed',
+            })
+            send('error', { error: 'Chat response could not be saved.' })
+          } finally {
+            send('done', {
+              status,
+              ttftMs,
+              citationIds,
+              evidence: literatureEvidence,
+              telemetry: latencyTelemetry,
+            })
+            controller.close()
+          }
         }
       })()
     },

@@ -101,6 +101,11 @@ export interface StoredMessageTelemetry {
     initialProviderFirstTextAt?: number
     finalProviderFirstTextAt?: number
     retrievalAttempts?: RetrievalAttemptTelemetry[]
+    scheduling?: {
+      requestedCount: number
+      dispatchedCount: number
+      deduplicatedCount: number
+    }
   }
 }
 
