@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { parseOpenConversationResponse, type RecommendationApprovalReceipt } from '@/components/TalkAboutThis'
 import { applyRecommendationApproval, reconcilePersistedRevision, type AnalysisData } from '@/app/analyze/[id]/page'
-import type { RecommendationApprovalReceipt } from '@/components/TalkAboutThis'
 
 const data: AnalysisData = {
   id: 'analysis-1',
@@ -51,4 +51,55 @@ describe('analysis persistence reconciliation', () => {
     expect(current.revisionNumber).toBe(6)
     expect(current.analysis.recommendations[0].isAccepted).toBe(true)
   })
+})
+
+describe('scoped conversation opening state', () => {
+  const scope = { kind: 'recommendation', recommendationId: 'rec-1' } as const
+  const evidence = {
+    id: 'evidence-1',
+    sourceDocumentId: 'doi:10.1000/example',
+    title: 'Scoped evidence',
+    pageStart: 12,
+    pageEnd: 12,
+    quote: 'Relevant support.',
+    similarity: 0.9,
+    candidateStatus: 'adjudicated',
+  }
+
+  it('validates and hydrates a resumed server payload with persisted transcript state', () => {
+    const response = parseOpenConversationResponse(scope, {
+      conversationId: 'conversation-1',
+      disposition: 'resumed',
+      scope,
+      contextHash: 'a'.repeat(64),
+      noDirectEvidence: false,
+      messages: [{
+        id: 'message-1',
+        role: 'assistant',
+        content: 'Persisted answer.',
+        citations: ['evidence-1'],
+        status: 'complete',
+        ttftMs: 123,
+        createdAt: '2026-08-12T00:00:00.000Z',
+      }],
+      evidenceReceipts: [{ evidence, receivedAt: '2026-08-12T00:00:00.000Z' }],
+      approvalReceipt: {
+        recommendationId: 'rec-1',
+        label: 'Use ethyl acetate',
+        alreadyAccepted: false,
+        actionId: 'approval-1',
+        revisionNumber: 7,
+        receivedAt: '2026-08-12T00:00:00.000Z',
+      },
+    })
+
+    expect(response).toMatchObject({
+      conversationId: 'conversation-1',
+      disposition: 'resumed',
+      messages: [{ id: 'message-1', content: 'Persisted answer.' }],
+      evidenceReceipts: [{ evidence }],
+      approvalReceipt: { actionId: 'approval-1' },
+    })
+  })
+
 })

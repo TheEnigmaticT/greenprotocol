@@ -2,16 +2,12 @@
 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { FormEvent, useEffect, useRef, useState } from 'react'
-import type { TalkAboutScope } from '@/lib/talk-about-this/context'
+import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from 'react'
+import { parseTalkAboutScope, type TalkAboutScope } from '@/lib/talk-about-this/context'
 import type { LiteratureEvidenceMatch } from '@/lib/types'
-import { isPersistedEvidence } from '@/lib/talk-about-this/evidence'
-
-interface ChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-  citations?: string[]
-}
+import { isPersistedEvidence, type PersistedEvidenceReceipt } from '@/lib/talk-about-this/evidence'
+import type { PersistedChatMessage } from '@/lib/talk-about-this/repository'
+interface ChatMessage extends PersistedChatMessage {}
 
 interface ChatActivity {
   callId: string
@@ -21,10 +17,7 @@ interface ChatActivity {
 }
 
 
-interface EvidenceReceipt {
-  evidence: LiteratureEvidenceMatch
-  receivedAt: string
-}
+interface EvidenceReceipt extends PersistedEvidenceReceipt {}
 type TerminalStatus = 'complete' | 'failed' | 'cancelled'
 
 export interface RecommendationApprovalReceipt {
@@ -37,6 +30,165 @@ export interface RecommendationApprovalReceipt {
 
 export interface PersistedRecommendationApprovalReceipt extends RecommendationApprovalReceipt {
   receivedAt: string
+}
+
+export interface VerificationNote {
+  source: string
+  reasonCode: string
+  text: string
+}
+
+export interface GroupedVerificationNote extends VerificationNote {
+  count: number
+}
+
+interface OpenConversationResponse {
+  conversationId: string
+  scope: TalkAboutScope
+  contextHash: string
+  noDirectEvidence: boolean
+  disposition: 'created' | 'resumed'
+  messages: ChatMessage[]
+  evidenceReceipts: EvidenceReceipt[]
+  approvalReceipt: PersistedRecommendationApprovalReceipt | null
+}
+
+export function isNewConversationCommand(value: string): boolean {
+  const command = value.trim()
+  return command === '/new' || command === '/clear'
+}
+
+export function verificationNoteFromEvent(
+  event: string,
+  data: Record<string, unknown>,
+): VerificationNote | null {
+  if (
+    event !== 'tool-failed'
+    || typeof data.tool !== 'string'
+    || !data.tool.trim()
+    || typeof data.status !== 'string'
+    || !data.status.trim()
+    || typeof data.source !== 'string'
+    || !data.source.trim()
+    || typeof data.reasonCode !== 'string'
+    || !data.reasonCode.trim()
+    || typeof data.userNote !== 'string'
+    || !data.userNote.trim()
+  ) return null
+
+  return {
+    source: data.source,
+    reasonCode: data.reasonCode,
+    text: data.userNote,
+  }
+}
+
+export function groupVerificationNotes(
+  notes: readonly VerificationNote[],
+): GroupedVerificationNote[] {
+  const groups = new Map<string, GroupedVerificationNote>()
+
+  for (const note of notes) {
+    const key = `${note.source}:${note.reasonCode}`
+    const existing = groups.get(key)
+    if (existing) {
+      existing.count += 1
+    } else {
+      groups.set(key, { ...note, count: 1 })
+    }
+  }
+
+  return [...groups.values()]
+}
+
+export function handleComposerKeyDown(
+  event: ReactKeyboardEvent<HTMLTextAreaElement>,
+  isSending: boolean,
+  draft: string,
+) {
+  if (event.key !== 'Enter' || event.shiftKey) return
+  event.preventDefault()
+  if (!isSending && draft.trim()) event.currentTarget.form?.requestSubmit()
+}
+
+function isPersistedChatMessage(value: unknown): value is ChatMessage {
+  if (!value || typeof value !== 'object') return false
+  const message = value as Record<string, unknown>
+
+  return typeof message.id === 'string'
+    && Boolean(message.id.trim())
+    && (message.role === 'user' || message.role === 'assistant')
+    && typeof message.content === 'string'
+    && Array.isArray(message.citations)
+    && message.citations.every(citation => typeof citation === 'string')
+    && (message.status === 'streaming'
+      || message.status === 'complete'
+      || message.status === 'failed'
+      || message.status === 'cancelled')
+    && (message.ttftMs === null || (typeof message.ttftMs === 'number' && Number.isFinite(message.ttftMs)))
+    && typeof message.createdAt === 'string'
+    && Boolean(message.createdAt.trim())
+}
+
+function isEvidenceReceipt(value: unknown): value is EvidenceReceipt {
+  if (!value || typeof value !== 'object') return false
+  const receipt = value as Record<string, unknown>
+  return isPersistedEvidence(receipt.evidence)
+    && typeof receipt.receivedAt === 'string'
+    && Boolean(receipt.receivedAt.trim())
+}
+
+export function parseOpenConversationResponse(
+  scope: TalkAboutScope,
+  value: unknown,
+): OpenConversationResponse | null {
+  if (!value || typeof value !== 'object') return null
+  const response = value as Record<string, unknown>
+  const approvalReceipt = response.approvalReceipt === null
+    ? null
+    : parsePersistedRecommendationApprovalReceipt(scope, response.approvalReceipt)
+
+  let responseScope: TalkAboutScope
+  try {
+    responseScope = parseTalkAboutScope(response.scope)
+  } catch {
+    return null
+  }
+
+  const scopesMatch = scope.kind === responseScope.kind
+    && (scope.kind === 'principle'
+      ? scope.principleNumber === (responseScope as Extract<TalkAboutScope, { kind: 'principle' }>).principleNumber
+      : 'recommendationId' in scope && 'recommendationId' in responseScope
+        ? scope.recommendationId === responseScope.recommendationId
+        : 'recommendationIndex' in scope && 'recommendationIndex' in responseScope
+          ? scope.recommendationIndex === responseScope.recommendationIndex
+          : false)
+
+  if (
+    typeof response.conversationId !== 'string'
+    || !response.conversationId.trim()
+    || !scopesMatch
+    || typeof response.contextHash !== 'string'
+    || !response.contextHash.trim()
+    || typeof response.noDirectEvidence !== 'boolean'
+    || (response.disposition !== 'created' && response.disposition !== 'resumed')
+    || !Array.isArray(response.messages)
+    || !response.messages.every(isPersistedChatMessage)
+    || !Array.isArray(response.evidenceReceipts)
+    || !response.evidenceReceipts.every(isEvidenceReceipt)
+    || (response.approvalReceipt !== null && !approvalReceipt)
+  ) return null
+
+  return {
+    conversationId: response.conversationId,
+    scope: responseScope,
+    contextHash: response.contextHash,
+    noDirectEvidence: response.noDirectEvidence,
+    disposition: response.disposition,
+    messages: response.messages,
+    evidenceReceipts: response.evidenceReceipts,
+    approvalReceipt,
+  }
 }
 
 export function parsePersistedRecommendationApprovalReceipt(
@@ -201,12 +353,10 @@ export function activityForEvent(event: string, data: Record<string, unknown>): 
     }
   }
   if (event === 'tool-failed') {
-    const source = sourceLabels(tool, data)
     return {
       callId,
       state: 'failed',
       label: `${tool.replaceAll('_', ' ')} unavailable`,
-      detail: `Source: ${source} · Status: unavailable · ${typeof data.reason === 'string' ? data.reason : 'The lookup could not be completed.'}`,
     }
   }
   return null
@@ -297,6 +447,8 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
   const [approvalReceipt, setApprovalReceipt] = useState<RecommendationApprovalReceipt | null>(null)
   const [evidenceReceipts, setEvidenceReceipts] = useState<EvidenceReceipt[]>([])
   const [approvalReceivedAt, setApprovalReceivedAt] = useState<string | null>(null)
+  const [conversationDisposition, setConversationDisposition] = useState<'created' | 'resumed' | null>(null)
+  const [verificationNotes, setVerificationNotes] = useState<VerificationNote[]>([])
   const abortRef = useRef<AbortController | null>(null)
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null)
   const sendLockedRef = useRef(false)
@@ -311,38 +463,45 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
   useEffect(() => {
     if (!isOpen) return
     messageInputRef.current?.focus()
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') close()
     }
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
   }, [isOpen])
 
-  const openConversation = async () => {
-    if (!analysisId) return
+  const openConversation = async (newConversation = false) => {
+    if (!analysisId || isStarting || isSending) return
     setIsStarting(true)
     setError(null)
     try {
       const response = await fetch('/api/talk-about-this', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ analysisId, scope }),
+        body: JSON.stringify({ analysisId, scope, newConversation }),
       })
-      const body = await response.json() as {
-        conversationId?: string
-        approvalReceipt?: unknown
-        error?: string
+      const body = await response.json() as unknown
+      const conversation = parseOpenConversationResponse(scope, body)
+      if (!response.ok || !conversation) {
+        const failure = body && typeof body === 'object' && typeof (body as Record<string, unknown>).error === 'string'
+          ? String((body as Record<string, unknown>).error)
+          : 'Unable to open chat'
+        throw new Error(failure)
       }
-      if (!response.ok || !body.conversationId) {
-        throw new Error(body.error || 'Unable to open chat')
+
+      setConversationId(conversation.conversationId)
+      setConversationDisposition(conversation.disposition)
+      setMessages(conversation.messages)
+      setEvidenceReceipts(conversation.evidenceReceipts)
+      setApprovalReceipt(conversation.approvalReceipt)
+      setApprovalReceivedAt(conversation.approvalReceipt?.receivedAt ?? null)
+      approvedActionIdsRef.current = new Set(conversation.approvalReceipt ? [conversation.approvalReceipt.actionId] : [])
+      if (newConversation) {
+        setDraft('')
+        setActivities([])
+        setError(null)
+        setVerificationNotes([])
       }
-      setConversationId(body.conversationId)
-      setMessages([])
-      setEvidenceReceipts([])
-      const persistedReceipt = parsePersistedRecommendationApprovalReceipt(scope, body.approvalReceipt)
-      setApprovalReceipt(persistedReceipt)
-      setApprovalReceivedAt(persistedReceipt?.receivedAt ?? null)
-      approvedActionIdsRef.current = new Set(persistedReceipt ? [persistedReceipt.actionId] : [])
       setIsOpen(true)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to open chat')
@@ -354,15 +513,36 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
   const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const content = draft.trim()
+    if (isNewConversationCommand(content)) {
+      await openConversation(true)
+      return
+    }
     if (!conversationId || !content || isSending || sendLockedRef.current) return
     sendLockedRef.current = true
     // Keep a durable approval receipt visible while the follow-up response streams.
 
+    const createdAt = new Date().toISOString()
     setDraft('')
     setActivities([])
     setError(null)
     setIsSending(true)
-    setMessages(current => [...current, { role: 'user', content }, { role: 'assistant', content: '' }])
+    setMessages(current => [...current, {
+      id: `local-user-${createdAt}`,
+      role: 'user',
+      content,
+      citations: [],
+      status: 'complete',
+      ttftMs: null,
+      createdAt,
+    }, {
+      id: `local-assistant-${createdAt}`,
+      role: 'assistant',
+      content: '',
+      citations: [],
+      status: 'streaming',
+      ttftMs: null,
+      createdAt,
+    }])
 
     const abortController = new AbortController()
     abortRef.current = abortController
@@ -413,6 +593,10 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
               if (existingIndex === -1) return [...current, activity]
               return current.map((item, index) => index === existingIndex ? activity : item)
             })
+          }
+          const verificationNote = verificationNoteFromEvent(parsed.event, parsed.data)
+          if (verificationNote) {
+            setVerificationNotes(current => [...current, verificationNote])
           }
           const citationIds = parsed.data.citationIds
           if (parsed.event === 'done' && Array.isArray(citationIds)) {
@@ -469,11 +653,13 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
   }
 
 
+  const groupedNotes = groupVerificationNotes(verificationNotes)
+
   return (
     <>
       <button
         type="button"
-        onClick={openConversation}
+        onClick={() => void openConversation()}
         disabled={!analysisId || isStarting}
         className="text-xs px-3 py-1.5 rounded border font-bold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         style={{ color: '#1C3822', borderColor: '#2D4A3A', background: '#F6F3EB' }}
@@ -490,12 +676,22 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#78716C' }}>Scoped scientific discussion</p>
+                  <p aria-live="polite" className="mt-1 text-xs font-bold uppercase tracking-wider" style={{ color: '#2D4A3A' }}>
+                    {conversationDisposition === 'created'
+                      ? 'New scoped chat'
+                      : conversationDisposition === 'resumed'
+                        ? 'Resumed chat'
+                        : ''}
+                  </p>
                   <h2 className="mt-1 text-lg font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C1917' }}>{title}</h2>
                   <p className="mt-1 text-xs" style={{ color: '#57534E' }}>
                     {evidenceState === 'sourced' ? 'Direct evidence is included in this discussion.' : 'Model-inferred — no direct evidence located.'}
                   </p>
                 </div>
-                <button type="button" onClick={close} className="text-sm font-bold" style={{ color: '#57534E' }}>Close</button>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => void openConversation(true)} disabled={isStarting || isSending} className="text-sm font-bold disabled:opacity-50" style={{ color: '#1C3822' }}>New chat</button>
+                  <button type="button" onClick={close} className="text-sm font-bold" style={{ color: '#57534E' }}>Close</button>
+                </div>
               </div>
               <DiscussionScopeInstruction scope={scope} />
             </header>
@@ -536,6 +732,16 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
                   ))}
                 </section>
               )}
+              {groupedNotes.length > 0 && (
+                <details className="rounded-lg border p-3 text-xs" aria-label="Verification notes" style={{ borderColor: '#D6D0C4', background: '#F6F3EB', color: '#57534E' }}>
+                  <summary>Verification notes ({groupedNotes.length})</summary>
+                  {groupedNotes.map(note => (
+                    <p key={`${note.source}:${note.reasonCode}`} className="mt-1">
+                      {note.text}{note.count > 1 ? ` (${note.count} lookups)` : ''}
+                    </p>
+                  ))}
+                </details>
+              )}
               {error && <p className="text-xs" style={{ color: '#B45309' }}>{error}</p>}
             </div>
             <form onSubmit={sendMessage} className="border-t p-4" style={{ borderColor: '#D6D0C4' }}>
@@ -563,7 +769,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
                   Notify me when a background response is ready
                 </label>
               )}
-              <textarea ref={messageInputRef} id="talk-about-this-message" value={draft} onChange={event => setDraft(event.target.value)} maxLength={4000} rows={3} placeholder="Ask about this recommendation…" className="w-full rounded border p-3 text-sm" style={{ borderColor: '#D6D0C4', color: '#1C1917' }} disabled={isSending} />
+              <textarea ref={messageInputRef} id="talk-about-this-message" value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => handleComposerKeyDown(event, isSending, draft)} maxLength={4000} rows={3} placeholder="Ask about this recommendation…" className="w-full rounded border p-3 text-sm" style={{ borderColor: '#D6D0C4', color: '#1C1917' }} disabled={isSending} />
               <div className="mt-2 flex items-center justify-between gap-3">
                 <button type="button" onClick={() => abortRef.current?.abort()} disabled={!isSending} className="text-xs font-bold uppercase tracking-wider disabled:opacity-50" style={{ color: '#78716C' }}>Stop</button>
                 <button type="submit" disabled={!draft.trim() || isSending} className="rounded px-4 py-2 text-xs font-bold uppercase tracking-wider disabled:opacity-50" style={{ background: '#1C3822', color: '#F6F3EB' }}>{isSending ? 'Responding…' : 'Send'}</button>

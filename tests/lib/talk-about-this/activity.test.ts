@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
-import { applyRecommendationApprovedEvent, ApprovalReceiptCard, ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, parsePersistedRecommendationApprovalReceipt, parseRecommendationApprovedEvent } from '@/components/TalkAboutThis'
+import { describe, expect, it, vi } from 'vitest'
+import { applyRecommendationApprovedEvent, ApprovalReceiptCard, ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, groupVerificationNotes, handleComposerKeyDown, isNewConversationCommand, parsePersistedRecommendationApprovalReceipt, parseRecommendationApprovedEvent, verificationNoteFromEvent } from '@/components/TalkAboutThis'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import { EvidenceAtlasTalkControl } from '@/components/AnalysisResults'
 import { activityData } from '@/lib/talk-about-this/agent'
@@ -82,6 +82,69 @@ describe('activityForEvent', () => {
 
     expect(activity).toMatchObject({ state: 'failed', label: 'PubChem GHS profile unavailable' })
     expect(activity?.detail).toContain('GHS information is unknown, not safe')
+  })
+})
+
+describe('conversation commands and verification notes', () => {
+  it('recognizes only exact trimmed new-conversation commands', () => {
+    expect(isNewConversationCommand(' /new ')).toBe(true)
+    expect(isNewConversationCommand('/clear')).toBe(true)
+    expect(isNewConversationCommand('/clear later')).toBe(false)
+    expect(isNewConversationCommand('new')).toBe(false)
+  })
+
+  it('uses only safe verification fields and groups repeated notes', () => {
+    const note = verificationNoteFromEvent('tool-failed', {
+      tool: 'lookup_chem21_solvent',
+      status: 'timed_out',
+      source: 'CHEM21',
+      reasonCode: 'deadline_exceeded',
+      userNote: 'Couldn’t verify CHEM21 data before the response deadline.',
+      reason: 'raw upstream diagnostic',
+      reasonDetail: 'raw connection details',
+    })
+
+    expect(note).toEqual({
+      source: 'CHEM21',
+      reasonCode: 'deadline_exceeded',
+      text: 'Couldn’t verify CHEM21 data before the response deadline.',
+    })
+    expect(JSON.stringify(note)).not.toContain('raw')
+    expect(groupVerificationNotes([note!, note!, {
+      source: 'PubChem GHS',
+      reasonCode: 'source_unavailable',
+      text: 'Couldn’t verify the PubChem GHS profile.',
+    }])).toEqual([
+      {
+        source: 'CHEM21',
+        reasonCode: 'deadline_exceeded',
+        text: 'Couldn’t verify CHEM21 data before the response deadline.',
+        count: 2,
+      },
+      {
+        source: 'PubChem GHS',
+        reasonCode: 'source_unavailable',
+        text: 'Couldn’t verify the PubChem GHS profile.',
+        count: 1,
+      },
+    ])
+  })
+
+  it('submits only unmodified Enter from the composer', () => {
+    const requestSubmit = vi.fn()
+    const preventDefault = vi.fn()
+    const event = (key: string, shiftKey: boolean) => ({
+      key,
+      shiftKey,
+      preventDefault,
+      currentTarget: { form: { requestSubmit } },
+    }) as unknown as Parameters<typeof handleComposerKeyDown>[0]
+
+    handleComposerKeyDown(event('Enter', true), false, 'Question')
+    handleComposerKeyDown(event('Enter', false), false, 'Question')
+
+    expect(requestSubmit).toHaveBeenCalledTimes(1)
+    expect(preventDefault).toHaveBeenCalledTimes(1)
   })
 })
 
