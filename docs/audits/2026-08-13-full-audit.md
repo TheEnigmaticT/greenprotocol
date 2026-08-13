@@ -125,6 +125,20 @@ Overall code quality: **C+ — "a prototype that grew a real product inside it."
 
 ---
 
+## P0 remediation status (2026-08-13)
+
+Code fixes landed on `main` (verified: `tsc` clean, 190 vitest pass, 55 Python pass + 2 pre-existing env failures unrelated to these changes, lint errors 10→6 all pre-existing):
+
+- ✅ **Converter `NameError`** — added `from synonyms import resolve_synonym` to `converter.py`; regression test `test_converter.py` (offline) guards it.
+- ✅ **Literature-table RLS** — migration `20260814000000_secure_literature_tables.sql` enables RLS + public-read + revokes anon/authenticated writes on all three tables; anon-key fallback dropped from all 5 ingestion scripts. *Ops: apply the migration to the live DB and inspect for already-injected rows (P0.5).*
+- ✅ **DOZN removed entirely** (partnership didn't happen) — deleted the unauthenticated export route, the Apps Script, the `dozn_equivalent_score` field, README/task cruft.
+- ✅ **Chemistry service fails closed** — `main.py` refuses to boot without `CHEMISTRY_SERVICE_TOKEN` unless `CHEMISTRY_SERVICE_ALLOW_ANONYMOUS=1`; per-request check hardened; `test_service_auth.py` covers it; infra doc corrected. *Ops: redeploy the service, rotate the July Anthropic key + service token, verify/drop `exec_sql` (P0.5).*
+- ✅ **Session accept/reject** — `app/analyze/page.tsx` now sends `expected_revision_number` and reconciles from the response (fixes the silent 400 / lost decisions).
+- ✅ **Honest degraded state** — `data_source:"error"` now counts as unresolved; `chemistryDataStatus` carries `deterministicScoringAvailable` and stops claiming "all reference data available"/"queued" when scoring didn't run; `ChemistryDataNotice` shows a distinct "scoring unavailable" state.
+- ✅ **Local cruft** — deleted `apply_migration.js` / `check_lit.js` (hardcoded JWTs + `exec_sql` call site).
+
+**Still open before promoting to production:** the P0.5 live-verification/ops items above (migration apply, service redeploy, key rotation, `exec_sql` check, confirm production project ref). Then P1 (impact-math honesty, wire 5 missing scorers, retry/backoff, rescore-loads-owned-row).
+
 ## Reconciliation — second adversarial audit (2026-08-13, Opus 4.8)
 
 An independent adversarial audit reviewed both the codebase and this report. **The central diagnosis was confirmed** — it independently *reproduced* the converter `NameError` (`converter.convert('DMF','1 mL')` → `NameError: name 'resolve_synonym' is not defined`), confirmed the configured chemistry service was unreachable, and confirmed the dishonest "all reference data was available" status path (`pipeline.ts:761` classifies only `not_found`, never `"error"`, as unresolved → `:1025-1030` reports success). All Critical/High correctness findings above (7/12 principles, P2 unavailable, P1 `round(None)` crash, impact overstatement, projected-vs-server formula divergence, regrade-destroys-baseline, no retry, timeout risk, JSONB system-of-record, profile `user_id` leak, dead provenance validator, chat raw errors, 250 ms diagnostic race) were independently confirmed.

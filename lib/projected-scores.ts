@@ -222,7 +222,6 @@ export function projectScores(analysis: AnalysisResult): DeterministicScores | n
     scores: projectedScores,
     total_score: totalScoreRounded,
     max_possible: maxPossible,
-    dozn_equivalent_score: Math.round(pct * 10) / 10, // 0-100 scale
     grade,
     smiles_extraction: original.smiles_extraction,
     yield_extraction: original.yield_extraction,

@@ -24,8 +24,23 @@ from cas_lookup import get_cas
 from contextlib import asynccontextmanager
 import asyncio
 
+# Auth posture: the token is REQUIRED. An unauthenticated deployment of this
+# service exposes /batch, /score, and /assistant-tools — the latter two can burn
+# the Anthropic key — which is exactly the July 2026 incident (a publicly tunneled
+# scorer with no auth). Fail closed: refuse to boot without a token unless an
+# operator explicitly opts into anonymous mode for local development.
+ALLOW_ANONYMOUS = os.getenv("CHEMISTRY_SERVICE_ALLOW_ANONYMOUS") == "1"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not os.getenv("CHEMISTRY_SERVICE_TOKEN") and not ALLOW_ANONYMOUS:
+        raise RuntimeError(
+            "CHEMISTRY_SERVICE_TOKEN is not set. Refusing to start an "
+            "unauthenticated chemistry service. Set CHEMISTRY_SERVICE_TOKEN, or "
+            "set CHEMISTRY_SERVICE_ALLOW_ANONYMOUS=1 to allow anonymous access "
+            "(local development only)."
+        )
     # Load the seeded PubChem cache (name -> cid, hcodes, smiles, MW, density)
     # for the common-chemical set so scoring has hazard data without a live
     # PubChem round-trip per chemical.
@@ -42,7 +57,14 @@ def require_service_token(
     x_chemistry_service_token: str | None = Header(default=None),
 ) -> None:
     configured_token = os.getenv("CHEMISTRY_SERVICE_TOKEN")
-    if configured_token and not secrets.compare_digest(x_chemistry_service_token or "", configured_token):
+    if not configured_token:
+        # No token configured. Startup already refused this unless the operator
+        # opted into anonymous mode, so honor that opt-in here and otherwise
+        # refuse the request rather than silently serving it open (fail closed).
+        if ALLOW_ANONYMOUS:
+            return
+        raise HTTPException(status_code=503, detail="Chemistry service auth is not configured")
+    if not secrets.compare_digest(x_chemistry_service_token or "", configured_token):
         raise HTTPException(status_code=401, detail="Invalid chemistry service token")
 @app.get("/health")
 def health():

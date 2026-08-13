@@ -9,7 +9,10 @@ import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Service role only: literature tables are RLS-locked (writes revoked from anon).
+// The anon key can no longer write here, so never fall back to it.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+if (!SUPABASE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for literature ingestion')
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)

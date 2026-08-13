@@ -113,4 +113,4 @@ cd services/chemistry
 docker compose up -d --build
 ```
 
-Keep `/health` public for uptime checks. `/convert`, `/batch`, and `/score` require `X-Chemistry-Service-Token` whenever `CHEMISTRY_SERVICE_TOKEN` is set in the service environment.
+Keep `/health` public for uptime checks. `/batch`, `/score`, and `/assistant-tools` require `X-Chemistry-Service-Token`. The service **fails closed**: it refuses to start unless `CHEMISTRY_SERVICE_TOKEN` is set. For local development only, you may set `CHEMISTRY_SERVICE_ALLOW_ANONYMOUS=1` to run without a token — never do this on a network-reachable deployment.

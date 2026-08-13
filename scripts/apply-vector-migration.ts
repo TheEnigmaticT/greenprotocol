@@ -8,7 +8,10 @@ import fs from 'fs'
 import path from 'path'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Service role only: literature tables are RLS-locked (writes revoked from anon).
+// The anon key can no longer write here, so never fall back to it.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+if (!SUPABASE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for literature ingestion')
 
 async function main() {
   console.log('Applying vector search migration...\n')
@@ -23,7 +26,9 @@ async function main() {
     .map(s => s.trim())
     .filter(s => s.length > 0 && !s.startsWith('--'))
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+  // SUPABASE_KEY is guaranteed non-null by the module-level guard above;
+  // TS loses that narrowing across this function boundary.
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY!)
 
   console.log(`Executing ${statements.length} SQL statements...\n`)
 

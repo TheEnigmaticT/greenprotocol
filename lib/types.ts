@@ -204,7 +204,6 @@ export interface DeterministicScores {
   scores: PrincipleScore[]
   total_score: number
   max_possible: number
-  dozn_equivalent_score?: number // 0-100 scale for Merck/Sigma-Aldrich calibration
   grade: string
   smiles_extraction: Record<string, unknown>
   yield_extraction: Record<string, unknown>
@@ -223,6 +222,10 @@ export interface EnrichedChemical extends ParsedChemical {
 
 export interface ChemistryDataStatus {
   pending: boolean
+  // False when the chemistry service was unreachable or /score failed, so no
+  // reference-grounded deterministic scores were produced and the analysis is
+  // LLM-assisted only. The UI must not imply reference data was available.
+  deterministicScoringAvailable: boolean
   unresolvedChemicals: string[]
   message: string
 }

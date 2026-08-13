@@ -68,11 +68,17 @@ function AnalyzePageContent() {
       searchParams: new URLSearchParams(newAnalysisRequested ? 'new=1' : ''),
     }))
     setPersistError(null)
+    revisionRef.current = 1
     setLoaded(true)
   }, [newAnalysisRequested])
 
   // Debounced persist to Supabase when recommendations are accepted/rejected
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Optimistic-concurrency cursor. A freshly-analyzed row starts at revision 1
+  // (gpc_analyses.revision_number DEFAULT 1); the PATCH route requires the
+  // expected revision and a DB trigger enforces increment-by-one, so we must
+  // send it and advance from each server response. Omitting it 400s every save.
+  const revisionRef = useRef(1)
 
   const persistToApi = useCallback((analysisId: string, analysisResult: AnalysisResult) => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -81,10 +87,21 @@ function AnalyzePageContent() {
         const res = await fetch(`/api/analyses/${analysisId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ analysis_result: analysisResult }),
+          body: JSON.stringify({
+            analysis_result: analysisResult,
+            expected_revision_number: revisionRef.current,
+          }),
         })
+        if (res.status === 409) {
+          setPersistError('This analysis was updated elsewhere. Reload the page before saving more changes.')
+          return
+        }
         if (!res.ok) {
           throw new Error(`PATCH /api/analyses/${analysisId} returned ${res.status}`)
+        }
+        const payload = await res.json() as { revisionNumber?: number }
+        if (typeof payload.revisionNumber === 'number') {
+          revisionRef.current = payload.revisionNumber
         }
         setPersistError(null)
       } catch (err) {

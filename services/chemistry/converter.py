@@ -6,6 +6,7 @@ from chem21 import get_vetted_evidence
 from ghs import lookup_hcodes_with_details
 from pubchem import lookup_chemical
 from cas_lookup import get_cas
+from synonyms import resolve_synonym
 import cache
 
 try:

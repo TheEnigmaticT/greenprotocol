@@ -118,7 +118,6 @@ API routes:
 - `GET /api/analyses`: list analyses for current user
 - `GET/PATCH /api/analyses/[id]`: fetch or update a saved analysis
 - `POST /api/rescore`: rerun deterministic scoring after accepted changes
-- `GET /api/export/dozn/[id]`: DOZN export path
 
 ## Data Model
 

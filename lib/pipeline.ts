@@ -758,7 +758,10 @@ export async function analyzeProtocol(
         for (const chem of step.chemicals) {
           if (batchIdx < batchResult.results.length) {
             const conv = batchResult.results[batchIdx]
-            if (conv.data_source === 'not_found' || conv.warnings.some(w => w.toLowerCase().includes('not found'))) {
+            // 'error' = the service threw while converting this chemical (e.g. the
+            // June–Aug converter NameError). It must count as unresolved just like
+            // 'not_found', otherwise a fully-broken batch reports zero problems.
+            if (conv.data_source === 'not_found' || conv.data_source === 'error' || conv.warnings.some(w => w.toLowerCase().includes('not found'))) {
               unresolvedChemicals.add(conv.chemical_name || chem.name)
             }
             chem.quantityKg = conv.quantity_kg ?? chem.quantityKg
@@ -1023,11 +1026,17 @@ export async function analyzeProtocol(
     analysisMetadata: metadata,
     wasteAnalysis,
     chemistryDataStatus: {
-      pending: unresolvedChemicals.size > 0,
+      // If deterministic scoring never ran (service down / scoring failed) the
+      // notice must show even when unresolvedChemicals is empty — an empty set
+      // there means "we never checked," not "everything was fine."
+      pending: unresolvedChemicals.size > 0 || deterministicScores === undefined,
+      deterministicScoringAvailable: deterministicScores !== undefined,
       unresolvedChemicals: Array.from(unresolvedChemicals).sort((a, b) => a.localeCompare(b)),
-      message: unresolvedChemicals.size > 0
-        ? 'We could not retrieve every chemical reference record live. This analysis used the best data available, and queued the missing items so the analysis can be re-run when updated reference data is available.'
-        : 'All requested chemical reference data was available from cache or bundled sources.',
+      message: deterministicScores === undefined
+        ? 'Deterministic chemistry scoring was unavailable for this analysis — the chemistry reference service could not be reached. The recommendations below are LLM-assisted only; reference-grounded scores were not applied. Re-run when the service is available.'
+        : unresolvedChemicals.size > 0
+          ? 'We could not retrieve every chemical reference record live. This analysis used the best data available, and queued the missing items so the analysis can be re-run when updated reference data is available.'
+          : 'All requested chemical reference data was available from cache or bundled sources.',
     },
     // v0.7: Re-evaluation statistics
     reevaluationStats,
