@@ -155,55 +155,30 @@ describe('tool-run diagnostics', () => {
     }))
   })
 
-  it('redacts token-bearing values from diagnostic JSON RPC payloads', async () => {
+  it('persists only a deterministic digest and length for arbitrary tool argument strings', async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [{ id: 'run-1', status: 'timed_out', reason_code: 'deadline_exceeded' }],
       error: null,
     })
+    const rawInput = 'qx9_Bearer-format-value-that-is-not-a-keyword-or-secret'
 
     await createToolRun({ rpc } as never, 'user-1', {
       ...toolRunInput,
-      validatedArguments: {
-        chemical: 'dichloromethane',
-        apiKey: 'sk-validated-arguments-secret',
-        nestedError: { message: 'database password: secret' },
-      },
+      validatedArguments: { chemical: rawInput, query: 'raw error payload' },
       telemetry: {
         elapsedMs: 5000,
-        providerError: 'Bearer telemetry-secret',
-        request: { authorization: 'token secret' },
+        startedAt: 'raw arbitrary telemetry string',
       },
     })
 
     expect(rpc).toHaveBeenCalledWith('record_scoped_tool_run', expect.objectContaining({
-      p_validated_arguments: { chemical: 'dichloromethane' },
+      p_validated_arguments: {
+        chemical_digest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        chemical_length: rawInput.length,
+      },
       p_telemetry: { elapsedMs: 5000 },
     }))
-  })
-
-  it('omits free-form query and telemetry strings even under allowed keys', async () => {
-    const rpc = vi.fn().mockResolvedValue({
-      data: [{ id: 'run-1', status: 'timed_out', reason_code: 'deadline_exceeded' }],
-      error: null,
-    })
-
-    await createToolRun({ rpc } as never, 'user-1', {
-      ...toolRunInput,
-      validatedArguments: {
-        chemical: 'dichloromethane',
-        query: 'Bearer query-secret caused provider error',
-      },
-      telemetry: {
-        elapsedMs: 5000,
-        startedAt: 'token telemetry-secret',
-        completedAt: 'raw error with password',
-      },
-    })
-
-    expect(rpc).toHaveBeenCalledWith('record_scoped_tool_run', expect.objectContaining({
-      p_validated_arguments: { chemical: 'dichloromethane' },
-      p_telemetry: { elapsedMs: 5000 },
-    }))
+    expect(JSON.stringify(rpc.mock.calls[0][1])).not.toContain(rawInput)
   })
 
   it('declares authenticated browser roles unable to execute diagnostic RPCs', () => {

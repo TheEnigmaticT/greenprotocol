@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { createHash } from 'node:crypto'
 import type { AnalysisResult, Citation, LiteratureEvidenceMatch } from '@/lib/types'
 import type { TalkAboutContext, TalkAboutScope } from '@/lib/talk-about-this/context'
 import type { AdminSupabaseClient } from '@/lib/supabase/admin'
@@ -407,84 +408,70 @@ const safeReasonDetails: Record<Exclude<ToolRunReasonCode, 'none'>, string> = {
   diagnostic_write_failed: 'Tool diagnostic persistence failed.',
 }
 
-const validatedArgumentKeys: Record<string, 'string' | 'number' | 'string_array'> = {
-  chemical: 'string',
-  mode: 'string',
-  solvent: 'string',
-  solute: 'string',
-  coSolvent: 'string',
-  fractionSolvent: 'number',
-  fractionType: 'string',
-  temperatureK: 'number',
-  currentSolvent: 'string',
-  signalGroups: 'string_array',
+type DiagnosticArgumentKind = 'digest' | 'number' | 'string_array_digest'
+
+const telemetryKeys: Record<string, true> = {
+  elapsedMs: true,
+  queueMs: true,
+  executionMs: true,
+  attempt: true,
+  providerRound: true,
 }
 
-const telemetryKeys: Record<string, 'number'> = {
-  elapsedMs: 'number',
-  queueMs: 'number',
-  executionMs: 'number',
-  attempt: 'number',
-  providerRound: 'number',
-}
-
-const toolRunArgumentSchemas: Record<string, Record<string, 'string' | 'number' | 'string_array'>> = {
-  lookup_chem21_solvent: { chemical: 'string' },
-  lookup_pubchem_profile: { chemical: 'string' },
-  calculate_rdkit_properties: { chemical: 'string' },
+const toolRunArgumentSchemas: Record<string, Record<string, DiagnosticArgumentKind>> = {
+  lookup_chem21_solvent: { chemical: 'digest' },
+  lookup_pubchem_profile: { chemical: 'digest' },
+  calculate_rdkit_properties: { chemical: 'digest' },
   lookup_experimental_solvent_evidence: {
-    mode: 'string',
-    solvent: 'string',
-    solute: 'string',
-    coSolvent: 'string',
+    mode: 'digest',
+    solvent: 'digest',
+    solute: 'digest',
+    coSolvent: 'digest',
     fractionSolvent: 'number',
-    fractionType: 'string',
+    fractionType: 'digest',
     temperatureK: 'number',
   },
-  lookup_solvent_hazard_profile: { solvent: 'string' },
+  lookup_solvent_hazard_profile: { solvent: 'digest' },
   screen_solvent_candidates: {
-    solute: 'string',
-    currentSolvent: 'string',
+    solute: 'digest',
+    currentSolvent: 'digest',
     temperatureK: 'number',
   },
-  search_scoped_literature_evidence: { signalGroups: 'string_array' },
+  search_scoped_literature_evidence: { signalGroups: 'string_array_digest' },
 }
 
-const sensitiveDiagnosticValue = /(?:\b(?:api[_ -]?key|authorization|bearer|token|secret|password|credential|error|exception)\b|(?:sk|pk)_[A-Za-z0-9_-]{8,})/i
-
-function redactDiagnosticRecord(
+function diagnosticArgumentProjection(
   value: Record<string, unknown>,
-  allowedKeys: Record<string, 'string' | 'number' | 'string_array'>,
-): Record<string, string | number | string[]> {
-  const redacted: Record<string, string | number | string[]> = {}
+  schema: Record<string, DiagnosticArgumentKind>,
+): Record<string, number | string> {
+  const projected: Record<string, number | string> = {}
 
   for (const [key, candidate] of Object.entries(value)) {
-    const expectedType = allowedKeys[key]
-    if (
-      expectedType === 'string'
-      && typeof candidate === 'string'
-      && candidate.length > 0
-      && candidate.length <= 100
-      && !sensitiveDiagnosticValue.test(candidate)
-    ) {
-      redacted[key] = candidate
-    } else if (expectedType === 'number' && typeof candidate === 'number' && Number.isFinite(candidate)) {
-      redacted[key] = candidate
-    } else if (
-      expectedType === 'string_array'
-      && Array.isArray(candidate)
-      && candidate.length <= 20
-      && candidate.every(item => (
-        typeof item === 'string'
-        && item.length <= 100
-        && !sensitiveDiagnosticValue.test(item)
-      ))
-    ) {
-      redacted[key] = candidate
+    const kind = schema[key]
+    if (kind === 'number' && typeof candidate === 'number' && Number.isFinite(candidate)) {
+      projected[key] = candidate
+    } else if (kind === 'digest' && typeof candidate === 'string') {
+      projected[`${key}_digest`] = createHash('sha256').update(candidate).digest('hex')
+      projected[`${key}_length`] = candidate.length
+    } else if (kind === 'string_array_digest' && Array.isArray(candidate) && candidate.every(item => typeof item === 'string')) {
+      projected[`${key}_digest`] = createHash('sha256').update(JSON.stringify(candidate)).digest('hex')
+      projected[`${key}_count`] = candidate.length
     }
   }
 
-  return redacted
+  return projected
+}
+
+function telemetryProjection(value: Record<string, unknown>): Record<string, number> {
+  const projected: Record<string, number> = {}
+
+  for (const [key, candidate] of Object.entries(value)) {
+    if (telemetryKeys[key] && typeof candidate === 'number' && Number.isFinite(candidate)) {
+      projected[key] = candidate
+    }
+  }
+
+  return projected
 }
 
 function isBoundedNonEmptyString(value: unknown, maximumLength: number): value is string {
@@ -574,7 +561,7 @@ export async function createToolRun(
     p_provider_round: input.providerRound,
     p_call_id: input.callId,
     p_tool_name: input.toolName,
-    p_validated_arguments: redactDiagnosticRecord(
+    p_validated_arguments: diagnosticArgumentProjection(
       input.validatedArguments,
       toolRunArgumentSchemas[input.toolName] ?? {},
     ),
@@ -587,7 +574,7 @@ export async function createToolRun(
     p_started_at: input.startedAt ?? null,
     p_completed_at: input.completedAt ?? null,
     p_elapsed_ms: input.elapsedMs ?? null,
-    p_telemetry: redactDiagnosticRecord(input.telemetry, telemetryKeys),
+    p_telemetry: telemetryProjection(input.telemetry),
   } as never)
 
   if (error || !Array.isArray(data) || data.length !== 1) {
