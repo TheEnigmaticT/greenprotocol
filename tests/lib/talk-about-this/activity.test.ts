@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { applyRecommendationApprovedEvent, ApprovalReceiptCard, ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, groupVerificationNotes, handleComposerKeyDown, isNewConversationCommand, parsePersistedRecommendationApprovalReceipt, parseRecommendationApprovedEvent, verificationNoteFromEvent } from '@/components/TalkAboutThis'
+import { applyRecommendationApprovedEvent, ApprovalReceiptCard, ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, focusMessageComposer, groupVerificationNotes, handleComposerKeyDown, isNewConversationCommand, parsePersistedRecommendationApprovalReceipt, parseRecommendationApprovedEvent, verificationNoteFromEvent } from '@/components/TalkAboutThis'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import { EvidenceAtlasTalkControl } from '@/components/AnalysisResults'
 import { activityData } from '@/lib/talk-about-this/agent'
@@ -145,6 +145,16 @@ describe('conversation commands and verification notes', () => {
 
     expect(requestSubmit).toHaveBeenCalledTimes(1)
     expect(preventDefault).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('composer focus after conversation opening', () => {
+  it('returns focus to the composer after a successful new chat opening', () => {
+    const focus = vi.fn()
+
+    focusMessageComposer({ current: { focus } })
+
+    expect(focus).toHaveBeenCalledTimes(1)
   })
 })
 

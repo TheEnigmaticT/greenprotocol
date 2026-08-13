@@ -111,6 +111,12 @@ export function handleComposerKeyDown(
   if (!isSending && draft.trim()) event.currentTarget.form?.requestSubmit()
 }
 
+export function focusMessageComposer(
+  ref: { current: Pick<HTMLTextAreaElement, 'focus'> | null },
+) {
+  ref.current?.focus()
+}
+
 function isPersistedChatMessage(value: unknown): value is ChatMessage {
   if (!value || typeof value !== 'object') return false
   const message = value as Record<string, unknown>
@@ -462,7 +468,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
   useEffect(() => () => abortRef.current?.abort(), [])
   useEffect(() => {
     if (!isOpen) return
-    messageInputRef.current?.focus()
+    focusMessageComposer(messageInputRef)
     const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') close()
     }
@@ -502,6 +508,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
         setError(null)
         setVerificationNotes([])
       }
+      focusMessageComposer(messageInputRef)
       setIsOpen(true)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to open chat')
