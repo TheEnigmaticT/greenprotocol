@@ -44,10 +44,10 @@ def score_p6(
         return PrincipleScore(
             principle_number=6,
             principle_name="Design for Energy Efficiency",
-            score=0.0, normalized=0.0,
-            details={"note": "No temperature data found"},
-            confidence="partial",
-            data_sources=["protocol_parse"],
+            score=-1.0, normalized=-1.0,
+            details={"note": "Energy efficiency unavailable — no temperature data found"},
+            confidence="unavailable",
+            data_sources=[],
         )
 
     # Score: deviation of 0=0, 50=5, 100+=10
