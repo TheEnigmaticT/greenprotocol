@@ -10,6 +10,7 @@ import {
   type ToolResult,
 } from '@/lib/talk-about-this/tools'
 import type { RetrievalAttemptTelemetry } from '@/lib/talk-about-this/repository'
+import type { CreateToolRunInput, ToolRunReasonCode, ToolRunStatus } from '@/lib/talk-about-this/repository'
 import type { Citation, EvidenceSignalGroup, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const MAX_TOOL_ROUNDS = 4
@@ -25,6 +26,8 @@ export interface ScopedToolChatRequest {
   signal?: AbortSignal
   executeTool: (call: ScopedToolCall, signal?: AbortSignal) => Promise<ToolResult>
   onEvent: (event: ChatLifecycleEvent, data: Record<string, unknown>) => void
+  turnId?: string
+  onToolRun?: (input: Omit<CreateToolRunInput, 'conversationId' | 'userMessageId'>) => Promise<void>
   now?: () => number
 }
 
@@ -39,6 +42,11 @@ export interface ChatLatencyTelemetry {
   initialProviderFirstTextAt?: number
   finalProviderFirstTextAt?: number
   retrievalAttempts?: RetrievalAttemptTelemetry[]
+  scheduling?: {
+    requestedCount: number
+    dispatchedCount: number
+    deduplicatedCount: number
+  }
 }
 
 function isToolName(name: string): name is ToolName {
@@ -74,6 +82,99 @@ function failureResult(call: ChatToolCall, reason: string): ToolResult {
     citations: [],
     warnings: [reason],
   }
+}
+
+interface ToolDiagnostic {
+  status: ToolRunStatus
+  reasonCode: ToolRunReasonCode
+  reasonDetail?: string
+  userNote: string
+}
+
+const safeReasonDetails: Record<Exclude<ToolRunReasonCode, 'none'>, string> = {
+  deadline_exceeded: 'The tool did not finish before its dispatch deadline.',
+  client_cancelled: 'The client cancelled the tool request.',
+  call_limit_exceeded: 'The tool call limit was reached.',
+  invalid_request: 'The tool request was invalid.',
+  tool_error: 'The tool could not complete the request.',
+  diagnostic_write_failed: 'Tool diagnostic persistence failed.',
+}
+
+function sourceForTool(tool: ToolName): string {
+  switch (tool) {
+    case 'lookup_chem21_solvent': return 'CHEM21'
+    case 'lookup_pubchem_profile': return 'PubChem GHS'
+    case 'search_scoped_literature_evidence': return 'scoped literature evidence'
+    default: return 'local evidence'
+  }
+}
+
+function diagnosticForFailure(input: {
+  tool: ToolName
+  source: string
+  abortReason: 'deadline' | 'client' | null
+  skippedForLimit?: boolean
+  invalidRequest?: boolean
+}): ToolDiagnostic {
+  if (input.skippedForLimit) {
+    return {
+      status: 'skipped_limit',
+      reasonCode: 'call_limit_exceeded',
+      reasonDetail: safeReasonDetails.call_limit_exceeded,
+      userNote: 'The tool call limit was reached.',
+    }
+  }
+  if (input.abortReason === 'deadline') {
+    return {
+      status: 'timed_out',
+      reasonCode: 'deadline_exceeded',
+      reasonDetail: safeReasonDetails.deadline_exceeded,
+      userNote: `${input.source} did not finish before the tool deadline.`,
+    }
+  }
+  if (input.abortReason === 'client') {
+    return {
+      status: 'cancelled',
+      reasonCode: 'client_cancelled',
+      reasonDetail: safeReasonDetails.client_cancelled,
+      userNote: 'The tool request was cancelled.',
+    }
+  }
+  const reasonCode: ToolRunReasonCode = input.invalidRequest ? 'invalid_request' : 'tool_error'
+  return {
+    status: 'failed',
+    reasonCode,
+    reasonDetail: safeReasonDetails[reasonCode],
+    userNote: `${input.source} could not complete the request.`,
+  }
+}
+
+function fingerprint(call: ScopedToolCall): string {
+  const normalize = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(normalize)
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => [key, normalize(item)]))
+    }
+    return value
+  }
+  const { id: _id, ...normalizedArguments } = call
+  return JSON.stringify(normalize({ name: call.name, normalizedArguments }))
+}
+
+function dependsOnCanonicalSmiles(call: ChatToolCall): string | null {
+  try {
+    const argumentsValue = parseArguments(call)
+    if (call.name === 'calculate_rdkit_properties') return typeof argumentsValue.chemical === 'string' ? argumentsValue.chemical.trim() : null
+    if (call.name === 'screen_solvent_candidates') return typeof argumentsValue.solute === 'string' ? argumentsValue.solute.trim() : null
+    if (call.name === 'lookup_experimental_solvent_evidence'
+      && argumentsValue.mode !== 'density'
+      && typeof argumentsValue.solute === 'string') return argumentsValue.solute.trim()
+  } catch {
+    // Full parsing happens in the immutable validation pass.
+  }
+  return null
 }
 
 function parseArguments(call: ChatToolCall): Record<string, unknown> {
@@ -322,15 +423,91 @@ export async function runScopedToolChat({
   signal,
   executeTool,
   onEvent,
+  turnId = '',
+  onToolRun,
   now = performance.now.bind(performance),
 }: ScopedToolChatRequest): Promise<ChatRunResult> {
   const conversation = [...messages]
   const canonicalSmilesByChemical = new Map<string, string>()
-  const toolLoopDeadline = Date.now() + TOOL_LOOP_TIMEOUT_MS
+  const toolLoopDeadline = performance.now() + TOOL_LOOP_TIMEOUT_MS
   const citationsById = new Map<string, Citation>()
   const evidenceById = new Map<string, LiteratureEvidenceMatch>()
   const answerParts: string[] = []
   const telemetry: ChatLatencyTelemetry = {}
+
+  const emitDiagnostic = async (
+    call: ChatToolCall,
+    providerRound: number,
+    validatedArguments: Record<string, unknown>,
+    diagnostic: ToolDiagnostic,
+    timing: { dispatchBudgetMs?: number, startedAt?: string, elapsedMs?: number, telemetry?: Record<string, unknown> } = {},
+  ) => {
+    const data = {
+      callId: call.id,
+      tool: call.name,
+      source: sourceForTool(call.name as ToolName),
+      status: diagnostic.status,
+      reasonCode: diagnostic.reasonCode,
+      userNote: diagnostic.userNote,
+    }
+    if (diagnostic.status !== 'completed') onEvent('tool-failed', data)
+    if (!onToolRun) return
+    try {
+      await onToolRun({
+        turnId,
+        providerRound,
+        callId: call.id,
+        toolName: call.name,
+        validatedArguments,
+        status: diagnostic.status,
+        reasonCode: diagnostic.reasonCode,
+        ...(diagnostic.reasonDetail ? { reasonDetail: diagnostic.reasonDetail } : {}),
+        ...(timing.dispatchBudgetMs === undefined ? {} : { dispatchBudgetMs: timing.dispatchBudgetMs }),
+        ...(timing.startedAt ? { startedAt: timing.startedAt } : {}),
+        completedAt: new Date().toISOString(),
+        ...(timing.elapsedMs === undefined ? {} : { elapsedMs: timing.elapsedMs }),
+        telemetry: timing.telemetry ?? {},
+      })
+    } catch (error) {
+      console.error('Scoped tool diagnostic callback failed', { turnId, callId: call.id, tool: call.name, error })
+    }
+  }
+
+  const completedDiagnostic: ToolDiagnostic = {
+    status: 'completed',
+    reasonCode: 'none',
+    userNote: 'The tool completed.',
+  }
+
+  const diagnosticForResult = (call: ChatToolCall, result: ToolResult): ToolDiagnostic =>
+    result.status === 'ok'
+      ? completedDiagnostic
+      : diagnosticForFailure({
+        tool: call.name as ToolName,
+        source: sourceForTool(call.name as ToolName),
+        abortReason: null,
+      })
+
+  const appendToolComplete = (call: ChatToolCall, result: ToolResult) => {
+    if (result.operation === 'literature_evidence') {
+      const evidence = Array.isArray(result.data.evidence)
+        ? result.data.evidence.filter((item): item is LiteratureEvidenceMatch => item !== null && typeof item === 'object'
+          && typeof (item as LiteratureEvidenceMatch).id === 'string').slice(0, 5)
+        : []
+      for (const match of evidence) evidenceById.set(match.id, match)
+      for (const citation of result.citations) citationsById.set(citation.source_id, citation)
+      const retrievalAttempt = retrievalAttemptTelemetry(call, result)
+      if (retrievalAttempt) telemetry.retrievalAttempts = [...(telemetry.retrievalAttempts ?? []), retrievalAttempt].slice(-5)
+      onEvent('tool-complete', {
+        ...activityData(call, result),
+        evidence,
+        citations: result.citations.slice(0, 5),
+        telemetry: telemetryForActivity(result.telemetry ?? {}),
+      })
+      return
+    }
+    onEvent('tool-complete', activityData(call, result))
+  }
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     const turnText: string[] = []
@@ -350,9 +527,7 @@ export async function runScopedToolChat({
         if (roundFirstTextAt === undefined) {
           const firstTextAt = now()
           roundFirstTextAt = firstTextAt
-          if (round === 0 && telemetry.initialProviderFirstTextAt === undefined) {
-            telemetry.initialProviderFirstTextAt = firstTextAt
-          }
+          if (round === 0 && telemetry.initialProviderFirstTextAt === undefined) telemetry.initialProviderFirstTextAt = firstTextAt
         }
         onEvent('delta', { text: event.text })
       }
@@ -360,69 +535,133 @@ export async function runScopedToolChat({
     }
 
     if (!toolCalls.length) {
-      if (roundFirstTextAt !== undefined && telemetry.finalProviderFirstTextAt === undefined) {
-        telemetry.finalProviderFirstTextAt = roundFirstTextAt
-      }
+      if (roundFirstTextAt !== undefined && telemetry.finalProviderFirstTextAt === undefined) telemetry.finalProviderFirstTextAt = roundFirstTextAt
       const answer = answerParts.join('')
       if (!answer) throw new Error('Model returned neither text nor a tool request')
-      return {
-        answer,
-        citations: [...citationsById.values()],
-        evidence: [...evidenceById.values()],
-        telemetry,
-      }
+      return { answer, citations: [...citationsById.values()], evidence: [...evidenceById.values()], telemetry }
     }
     if (round === MAX_TOOL_ROUNDS) throw new Error('Model exceeded the maximum number of tool rounds')
 
     conversation.push({ role: 'assistant', content: turnText.join(''), toolCalls })
+    telemetry.scheduling = { requestedCount: toolCalls.length, dispatchedCount: 0, deduplicatedCount: 0 }
+    const results = new Map<string, ToolResult>()
+    const diagnostics: Promise<void>[] = []
+    const prevalidated = new Map<string, ScopedToolCall>()
+    const dependent = new Set<string>()
+    const duplicateOf = new Map<string, string>()
+    const primaryByFingerprint = new Map<string, string>()
+
     for (const [index, call] of toolCalls.entries()) {
       onEvent('tool-start', { callId: call.id, tool: call.name })
-      let result: ToolResult
-      const remainingMs = toolLoopDeadline - Date.now()
-      if (index >= MAX_TOOL_CALLS_PER_TURN || remainingMs <= 0) {
-        const reason = index >= MAX_TOOL_CALLS_PER_TURN
-          ? `Tool request exceeds the maximum of ${MAX_TOOL_CALLS_PER_TURN} calls per response turn`
-          : 'Tool execution deadline exceeded'
-        result = failureResult(call, reason)
-        onEvent('tool-failed', { callId: call.id, tool: call.name, reason })
-      } else {
-        try {
-          const timeoutSignal = AbortSignal.timeout(Math.min(TOOL_CALL_TIMEOUT_MS, remainingMs))
-          const toolSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
-          const scopedCall = parseScopedToolCall(context, call, canonicalSmilesByChemical)
-          result = await executeTool(scopedCall, toolSignal)
-          if (scopedCall.name === 'lookup_pubchem_profile' && result.operation === 'pubchem' && result.status === 'ok') {
-            const canonicalSmiles = result.data.canonical_smiles
-            if (typeof canonicalSmiles === 'string' && canonicalSmiles) {
-              canonicalSmilesByChemical.set(scopedCall.chemical.toLowerCase(), canonicalSmiles)
-            }
-          }
-          if (result.operation === 'literature_evidence') {
-            const evidence = Array.isArray(result.data.evidence)
-              ? result.data.evidence.filter((item): item is LiteratureEvidenceMatch => item !== null && typeof item === 'object'
-                && typeof (item as LiteratureEvidenceMatch).id === 'string').slice(0, 5)
-              : []
-            for (const match of evidence) evidenceById.set(match.id, match)
-            for (const citation of result.citations) citationsById.set(citation.source_id, citation)
-            const retrievalAttempt = retrievalAttemptTelemetry(call, result)
-            if (retrievalAttempt) {
-              telemetry.retrievalAttempts = [...(telemetry.retrievalAttempts ?? []), retrievalAttempt].slice(-5)
-            }
-            onEvent('tool-complete', {
-              ...activityData(call, result),
-              evidence,
-              citations: result.citations.slice(0, 5),
-              telemetry: telemetryForActivity(result.telemetry ?? {}),
-            })
-          } else {
-            onEvent('tool-complete', activityData(call, result))
-          }
-        } catch (error) {
-          const reason = error instanceof Error ? error.message : 'Tool request failed'
-          result = failureResult(call, reason)
-          onEvent('tool-failed', { callId: call.id, tool: call.name, reason })
-        }
+      if (index >= MAX_TOOL_CALLS_PER_TURN) {
+        const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason: null, skippedForLimit: true })
+        results.set(call.id, failureResult(call, diagnostic.userNote))
+        diagnostics.push(emitDiagnostic(call, round, {}, diagnostic))
+        continue
       }
+      if (performance.now() >= toolLoopDeadline) {
+        const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason: 'deadline' })
+        results.set(call.id, failureResult(call, diagnostic.userNote))
+        diagnostics.push(emitDiagnostic(call, round, {}, diagnostic))
+        continue
+      }
+      try {
+        const solute = dependsOnCanonicalSmiles(call)
+        const provisionalSmiles = solute ? new Map([[solute.toLowerCase(), '__deferred__']]) : canonicalSmilesByChemical
+        const scoped = parseScopedToolCall(context, call, provisionalSmiles)
+        prevalidated.set(call.id, scoped)
+        if (solute) dependent.add(call.id)
+      } catch (error) {
+        console.error('Scoped tool request rejected', { turnId, callId: call.id, tool: call.name, error })
+        const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason: null, invalidRequest: true })
+        results.set(call.id, failureResult(call, diagnostic.userNote))
+        diagnostics.push(emitDiagnostic(call, round, {}, diagnostic))
+      }
+    }
+
+    const executeWave = async (ids: string[]) => {
+      await Promise.all(ids.map(async id => {
+        const call = toolCalls.find(item => item.id === id)!
+        let scoped = prevalidated.get(id)!
+        if (dependent.has(id)) {
+          try {
+            scoped = parseScopedToolCall(context, call, canonicalSmilesByChemical)
+          } catch {
+            const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason: null })
+            results.set(call.id, failureResult(call, diagnostic.userNote))
+            diagnostics.push(emitDiagnostic(call, round, {}, diagnostic))
+            return
+          }
+        }
+        const key = fingerprint(scoped)
+        const primaryCallId = primaryByFingerprint.get(key)
+        const validatedArguments = Object.fromEntries(Object.entries(scoped).filter(([key]) => key !== 'id' && key !== 'name'))
+        if (primaryCallId) {
+          telemetry.scheduling!.deduplicatedCount += 1
+          duplicateOf.set(id, primaryCallId)
+          return
+        }
+        primaryByFingerprint.set(key, id)
+        const remainingMs = Math.max(0, toolLoopDeadline - performance.now())
+        const timeoutSignal = AbortSignal.timeout(Math.min(TOOL_CALL_TIMEOUT_MS, remainingMs))
+        const toolSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+        const startedAt = new Date().toISOString()
+        const startedMs = performance.now()
+        telemetry.scheduling!.dispatchedCount += 1
+        try {
+          if (toolSignal.aborted) throw new Error('aborted')
+          const result = await executeTool(scoped, toolSignal)
+          if (toolSignal.aborted) throw new Error('aborted')
+          results.set(id, result)
+          if (scoped.name === 'lookup_pubchem_profile' && result.operation === 'pubchem' && result.status === 'ok') {
+            const canonicalSmiles = result.data.canonical_smiles
+            if (typeof canonicalSmiles === 'string' && canonicalSmiles) canonicalSmilesByChemical.set(scoped.chemical.toLowerCase(), canonicalSmiles)
+          }
+          const diagnostic = diagnosticForResult(call, result)
+          if (diagnostic.status === 'completed') appendToolComplete(call, result)
+          else {
+            const retrievalAttempt = retrievalAttemptTelemetry(call, result)
+            if (retrievalAttempt) telemetry.retrievalAttempts = [...(telemetry.retrievalAttempts ?? []), retrievalAttempt].slice(-5)
+          }
+          diagnostics.push(emitDiagnostic(call, round, validatedArguments, diagnostic, {
+            dispatchBudgetMs: Math.round(remainingMs),
+            startedAt,
+            elapsedMs: Math.round(performance.now() - startedMs),
+          }))
+        } catch (error) {
+          console.error('Scoped tool execution failed', { turnId, callId: call.id, tool: call.name, error })
+          const abortReason = signal?.aborted ? 'client' : (timeoutSignal.aborted || performance.now() >= toolLoopDeadline ? 'deadline' : null)
+          const diagnostic = diagnosticForFailure({ tool: call.name as ToolName, source: sourceForTool(call.name as ToolName), abortReason })
+          results.set(id, failureResult(call, diagnostic.userNote))
+          diagnostics.push(emitDiagnostic(call, round, validatedArguments, diagnostic, {
+            dispatchBudgetMs: Math.round(remainingMs),
+            startedAt,
+            elapsedMs: Math.round(performance.now() - startedMs),
+          }))
+        }
+      }))
+    }
+
+    const firstWave = [...prevalidated.keys()].filter(id => !dependent.has(id))
+    await executeWave(firstWave)
+    const secondWave = [...prevalidated.keys()].filter(id => dependent.has(id))
+    await executeWave(secondWave)
+    for (const [id, primaryCallId] of duplicateOf) {
+      const call = toolCalls.find(item => item.id === id)!
+      const primaryResult = results.get(primaryCallId)
+      if (!primaryResult) continue
+      results.set(id, primaryResult)
+      const scoped = prevalidated.get(id)!
+      const validatedArguments = Object.fromEntries(Object.entries(scoped).filter(([key]) => key !== 'id' && key !== 'name'))
+      const diagnostic = diagnosticForResult(call, primaryResult)
+      if (diagnostic.status === 'completed') appendToolComplete(call, primaryResult)
+      diagnostics.push(emitDiagnostic(call, round, validatedArguments, diagnostic, {
+        telemetry: { deduplicatedFromCallId: primaryCallId },
+      }))
+    }
+    await Promise.all(diagnostics)
+    for (const call of toolCalls) {
+      const result = results.get(call.id) ?? failureResult(call, 'The tool could not complete the request.')
       conversation.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify(result) })
     }
   }

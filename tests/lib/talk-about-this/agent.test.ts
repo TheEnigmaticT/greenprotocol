@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseScopedToolCall, runScopedToolChat } from '@/lib/talk-about-this/agent'
 import type { ChatProvider } from '@/lib/talk-about-this/chat-provider'
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
@@ -138,7 +138,7 @@ describe('runScopedToolChat', () => {
       now: () => clock += 100,
     })
 
-    expect(result.telemetry).toEqual({
+    expect(result.telemetry).toMatchObject({
       initialProviderFirstTextAt: 200,
       retrievalAttempts: [{
         callId: 'lit-1',
@@ -149,6 +149,7 @@ describe('runScopedToolChat', () => {
         rpcFinishedAt: 140,
       }],
       finalProviderFirstTextAt: 300,
+      scheduling: { requestedCount: 1, dispatchedCount: 1, deduplicatedCount: 0 },
     })
     expect(events).toContainEqual(expect.objectContaining({
       event: 'tool-complete',
@@ -221,9 +222,11 @@ describe('runScopedToolChat', () => {
         embeddingStartedAt: 100,
       },
     ])
-    expect(events.filter(({ event }) => event === 'tool-complete').at(-1)).toEqual(expect.objectContaining({
+    expect(events.filter(({ event }) => event === 'tool-failed').at(-1)).toEqual(expect.objectContaining({
       data: expect.objectContaining({
-        telemetry: { embeddingStartedAt: 100 },
+        callId: 'lit-2',
+        status: 'failed',
+        reasonCode: 'tool_error',
       }),
     }))
   })
@@ -257,9 +260,10 @@ describe('runScopedToolChat', () => {
       now: () => clock += 100,
     })
 
-    expect(result.telemetry).toEqual({
+    expect(result.telemetry).toMatchObject({
       initialProviderFirstTextAt: 200,
       finalProviderFirstTextAt: 400,
+      scheduling: { requestedCount: 1, dispatchedCount: 1, deduplicatedCount: 0 },
     })
   })
 
@@ -295,10 +299,10 @@ describe('runScopedToolChat', () => {
       onEvent: (event, data) => events.push({ event, data }),
     })).resolves.toMatchObject({ answer: 'The scoped result is available.' })
 
-    expect(executions).toBe(3)
+    expect(executions).toBe(1)
     expect(events).toContainEqual(expect.objectContaining({
       event: 'tool-failed',
-      data: expect.objectContaining({ callId: 'tool-3', reason: expect.stringContaining('maximum') }),
+      data: expect.objectContaining({ callId: 'tool-3', status: 'skipped_limit', reasonCode: 'call_limit_exceeded' }),
     }))
   })
 
@@ -367,7 +371,8 @@ describe('runScopedToolChat', () => {
       event: 'tool-failed',
       data: expect.objectContaining({
         callId: 'screen-1',
-        reason: 'Resolve the scoped solute with PubChem before screening',
+        status: 'failed',
+        reasonCode: 'tool_error',
       }),
     }))
   })
@@ -534,7 +539,313 @@ describe('literature evidence propagation', () => {
     expect(result.answer).toBe('Literature evidence was unavailable.')
     expect(events).toContainEqual(expect.objectContaining({
       event: 'tool-failed',
-      data: expect.objectContaining({ callId: 'lit-abort', reason: 'literature request aborted' }),
+      data: expect.objectContaining({ callId: 'lit-abort', status: 'failed', reasonCode: 'tool_error' }),
     }))
+  })
+
+  it('runs independent calls concurrently and delays same-round RDKit until PubChem returns', async () => {
+    const order: string[] = []
+    let pass = 0
+    let releasePubChem: (() => void) | undefined
+    const pubChem = new Promise<void>(resolve => { releasePubChem = resolve })
+    const provider: ChatProvider = {
+      async *stream() {
+        pass += 1
+        if (pass === 1) {
+          yield {
+            toolCalls: [
+              { id: 'chem21', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) },
+              { id: 'pubchem', name: 'lookup_pubchem_profile', arguments: JSON.stringify({ chemical: 'DMF' }) },
+              { id: 'rdkit', name: 'calculate_rdkit_properties', arguments: JSON.stringify({ chemical: 'DMF' }) },
+            ],
+          }
+          return
+        }
+        yield { text: 'Done.' }
+      },
+    }
+    const pending = runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async call => {
+        order.push(`start:${call.name}`)
+        if (call.name === 'lookup_pubchem_profile') await pubChem
+        order.push(`end:${call.name}`)
+        return call.name === 'lookup_pubchem_profile'
+          ? { ...chem21Result, operation: 'pubchem', data: { canonical_smiles: 'CN(C)C=O' } }
+          : chem21Result
+      },
+      onEvent: () => undefined,
+    })
+    await vi.waitFor(() => expect(order).toContain('start:lookup_pubchem_profile'))
+    expect(order).toContain('start:lookup_chem21_solvent')
+    expect(order).not.toContain('start:calculate_rdkit_properties')
+    releasePubChem!()
+    await pending
+    expect(order.indexOf('start:calculate_rdkit_properties')).toBeGreaterThan(order.indexOf('end:lookup_pubchem_profile'))
+  })
+
+  it('defers same-round screening and solubility evidence until PubChem supplies canonical SMILES', async () => {
+    const executed: unknown[] = []
+    let pass = 0
+    const provider: ChatProvider = {
+      async *stream() {
+        pass += 1
+        if (pass === 1) {
+          yield {
+            toolCalls: [
+              { id: 'pubchem', name: 'lookup_pubchem_profile', arguments: JSON.stringify({ chemical: 'DMF' }) },
+              { id: 'screen', name: 'screen_solvent_candidates', arguments: JSON.stringify({ solute: 'DMF', currentSolvent: 'DMF', temperatureK: 298.15 }) },
+              { id: 'solubility', name: 'lookup_experimental_solvent_evidence', arguments: JSON.stringify({ mode: 'single_solubility', solute: 'DMF', solvent: 'DMF', temperatureK: 298.15 }) },
+            ],
+          }
+          return
+        }
+        yield { text: 'Done.' }
+      },
+    }
+    await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Screen DMF.' }],
+      executeTool: async call => {
+        executed.push(call)
+        return call.name === 'lookup_pubchem_profile'
+          ? { ...chem21Result, operation: 'pubchem', data: { canonical_smiles: 'CN(C)C=O' } }
+          : chem21Result
+      },
+      onEvent: () => undefined,
+    })
+    expect(executed).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'screen', canonicalSoluteSmiles: 'CN(C)C=O' }),
+      expect.objectContaining({ id: 'solubility', canonicalSoluteSmiles: 'CN(C)C=O' }),
+    ]))
+  })
+
+  it('discards a result that resolves after client cancellation', async () => {
+    const controller = new AbortController()
+    const events: Array<{ event: string, data: Record<string, unknown> }> = []
+    let pass = 0
+    const provider: ChatProvider = {
+      async *stream() {
+        pass += 1
+        if (pass === 1) {
+          yield { toolCalls: [{ id: 'late', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) }] }
+          return
+        }
+        yield { text: 'Cancelled.' }
+      },
+    }
+    await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      signal: controller.signal,
+      executeTool: async () => {
+        controller.abort()
+        return chem21Result
+      },
+      onEvent: (event, data) => events.push({ event, data }),
+    })
+    expect(events).not.toContainEqual(expect.objectContaining({
+      event: 'tool-complete',
+      data: expect.objectContaining({ callId: 'late' }),
+    }))
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'tool-failed',
+      data: expect.objectContaining({ callId: 'late', status: 'cancelled', reasonCode: 'client_cancelled' }),
+    }))
+  })
+
+  it('rounds scheduling diagnostics and treats unavailable results as failed', async () => {
+    const diagnostics: Array<Record<string, unknown>> = []
+    const events: Array<{ event: string, data: Record<string, unknown> }> = []
+    let pass = 0
+    const provider: ChatProvider = {
+      async *stream() {
+        pass += 1
+        if (pass === 1) {
+          yield { toolCalls: [{ id: 'unavailable', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) }] }
+          return
+        }
+        yield { text: 'Unavailable.' }
+      },
+    }
+    await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => ({ ...chem21Result, status: 'unavailable' }),
+      onEvent: (event, data) => events.push({ event, data }),
+      turnId: 'turn-rounded',
+      onToolRun: async diagnostic => { diagnostics.push(diagnostic) },
+    })
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      status: 'failed',
+      reasonCode: 'tool_error',
+      dispatchBudgetMs: expect.any(Number),
+      elapsedMs: expect.any(Number),
+    }))
+    const diagnostic = diagnostics[0]
+    expect(Number.isInteger(diagnostic.dispatchBudgetMs as number)).toBe(true)
+    expect(Number.isInteger(diagnostic.elapsedMs as number)).toBe(true)
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'tool-failed',
+      data: expect.objectContaining({ callId: 'unavailable', status: 'failed', reasonCode: 'tool_error' }),
+    }))
+    expect(events).not.toContainEqual(expect.objectContaining({
+      event: 'tool-complete',
+      data: expect.objectContaining({ callId: 'unavailable' }),
+    }))
+  })
+
+  it('preserves a failed primary result for a duplicate diagnostic', async () => {
+    const diagnostics: Array<Record<string, unknown>> = []
+    let pass = 0
+    const provider: ChatProvider = {
+      async *stream() {
+        pass += 1
+        if (pass === 1) {
+          yield {
+            toolCalls: [
+              { id: 'primary', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) },
+              { id: 'duplicate', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) },
+            ],
+          }
+          return
+        }
+        yield { text: 'Unavailable.' }
+      },
+    }
+    await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => ({ ...chem21Result, status: 'unavailable' }),
+      onEvent: () => undefined,
+      turnId: 'turn-duplicate-failed',
+      onToolRun: async diagnostic => { diagnostics.push(diagnostic) },
+    })
+    expect(diagnostics.find(diagnostic => diagnostic.callId === 'duplicate')).toMatchObject({
+      status: 'failed',
+      reasonCode: 'tool_error',
+      telemetry: { deduplicatedFromCallId: 'primary' },
+    })
+  })
+})
+
+describe('scheduled scoped tool calls', () => {
+  it('deduplicates validated calls while preserving original tool-message order', async () => {
+    const requests: unknown[] = []
+    const diagnostics: Array<Record<string, unknown>> = []
+    let pass = 0
+    const provider: ChatProvider = {
+      async *stream(request) {
+        requests.push(request)
+        pass += 1
+        if (pass === 1) {
+          yield {
+            toolCalls: [
+              { id: 'call-b', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) },
+              { id: 'call-a', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) },
+            ],
+          }
+          return
+        }
+        yield { text: 'Done.' }
+      },
+    }
+    const executeTool = vi.fn(async () => chem21Result)
+
+    await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool,
+      onEvent: () => undefined,
+      turnId: 'turn-1',
+      onToolRun: async diagnostic => { diagnostics.push(diagnostic) },
+    })
+
+    expect(executeTool).toHaveBeenCalledTimes(1)
+    expect(diagnostics).toHaveLength(2)
+    expect(diagnostics[1]).toMatchObject({
+      callId: 'call-a',
+      status: 'completed',
+      telemetry: { deduplicatedFromCallId: 'call-b' },
+    })
+    expect(requests[1]).toMatchObject({
+      messages: expect.arrayContaining([
+        expect.objectContaining({ role: 'tool', toolCallId: 'call-b' }),
+        expect.objectContaining({ role: 'tool', toolCallId: 'call-a' }),
+      ]),
+    })
+  })
+
+  it('normalizes unsafe tool failures before events and diagnostics', async () => {
+    const events: Array<{ event: string, data: Record<string, unknown> }> = []
+    const diagnostics: Array<Record<string, unknown>> = []
+    let pass = 0
+    const provider: ChatProvider = {
+      async *stream() {
+        pass += 1
+        if (pass === 1) {
+          yield { toolCalls: [{ id: 'unsafe', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) }] }
+          return
+        }
+        yield { text: 'Unavailable.' }
+      },
+    }
+
+    await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => { throw new Error('secret-token=abc123') },
+      onEvent: (event, data) => events.push({ event, data }),
+      turnId: 'turn-unsafe',
+      onToolRun: async diagnostic => { diagnostics.push(diagnostic) },
+    })
+
+    expect(events.find(({ event }) => event === 'tool-failed')).toMatchObject({
+      data: { status: 'failed', reasonCode: 'tool_error', userNote: expect.any(String) },
+    })
+    expect(JSON.stringify(events)).not.toContain('secret-token')
+    expect(JSON.stringify(diagnostics)).not.toContain('secret-token')
+  })
+
+  it('classifies a fourth request as a skipped call-limit diagnostic', async () => {
+    const diagnostics: Array<Record<string, unknown>> = []
+    let pass = 0
+    const provider: ChatProvider = {
+      async *stream() {
+        pass += 1
+        if (pass === 1) {
+          yield {
+            toolCalls: [0, 1, 2, 3].map(index => ({
+              id: `limit-${index}`,
+              name: 'lookup_chem21_solvent' as const,
+              arguments: JSON.stringify({ chemical: 'DMF' }),
+            })),
+          }
+          return
+        }
+        yield { text: 'Done.' }
+      },
+    }
+    await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => chem21Result,
+      onEvent: () => undefined,
+      turnId: 'turn-limit',
+      onToolRun: async diagnostic => { diagnostics.push(diagnostic) },
+    })
+    expect(diagnostics.find(diagnostic => diagnostic.callId === 'limit-3')).toMatchObject({
+      status: 'skipped_limit',
+      reasonCode: 'call_limit_exceeded',
+    })
   })
 })
