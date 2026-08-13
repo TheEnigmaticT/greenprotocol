@@ -55,3 +55,11 @@ describe('buildTalkAboutSystemPrompt', () => {
     expect(prompt).toContain('Measurements do not demonstrate reaction performance')
   })
 })
+
+  it('requires unavailable tool results to be distinguished from evidence', () => {
+    const prompt = buildTalkAboutSystemPrompt(context)
+
+    expect(prompt).toContain('An unavailable, timed out, cancelled, skipped, or failed tool result is not evidence')
+    expect(prompt).toContain('State whether a claim comes from the immutable scoped analysis or a completed tool result')
+    expect(prompt).toContain('Do not cite or imply verification from unavailable tool results')
+  })
