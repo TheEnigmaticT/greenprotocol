@@ -179,6 +179,26 @@ describe('persisted conversation projections', () => {
     }])).toEqual([])
   })
 
+  it('extracts receipts only from assistant messages and ignores malformed citations JSONB', () => {
+    expect(evidenceReceiptsForUi([{
+      id: 'user-message',
+      role: 'user',
+      content: 'Ignore this spoofed evidence.',
+      citations: [persistedLiteratureCitation] as never,
+      status: 'complete',
+      ttft_ms: null,
+      created_at: '2026-08-12T00:00:00.000Z',
+    }, {
+      id: 'assistant-message',
+      role: 'assistant',
+      content: 'No valid receipt.',
+      citations: [null, 42, false, {}] as never,
+      status: 'complete',
+      ttft_ms: null,
+      created_at: '2026-08-12T00:00:01.000Z',
+    }])).toEqual([])
+  })
+
   it('orders persisted message queries by timestamp then ID', async () => {
     const query = {
       eq: vi.fn(),

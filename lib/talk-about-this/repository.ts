@@ -134,9 +134,10 @@ function canonicallyOrderedMessages(messages: readonly TalkMessage[]): TalkMessa
 }
 
 function isStoredLiteratureCitation(
-  citation: StoredMessageCitation,
+  citation: unknown,
 ): citation is StoredLiteratureCitation {
-  return typeof citation !== 'string' && 'source_id' in citation
+  if (!citation || typeof citation !== 'object') return false
+  return 'source_id' in citation
 }
 
 function storedLiteratureEvidence(citation: StoredMessageCitation): PersistedEvidence | null {
@@ -167,6 +168,7 @@ export function evidenceReceiptsForUi(
   const receipts: PersistedEvidenceReceipt[] = []
 
   for (const message of canonicallyOrderedMessages(messages)) {
+    if (message.role !== 'assistant') continue
     for (const citation of message.citations) {
       const evidence = storedLiteratureEvidence(citation)
       if (!evidence || evidenceIds.has(evidence.id)) continue
