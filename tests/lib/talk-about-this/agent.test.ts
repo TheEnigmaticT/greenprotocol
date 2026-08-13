@@ -670,6 +670,7 @@ describe('literature evidence propagation', () => {
         yield { text: 'Done.' }
       },
     }
+    const diagnostic = Promise.withResolvers<void>()
     const pending = runScopedToolChat({
       provider,
       context,
@@ -677,11 +678,42 @@ describe('literature evidence propagation', () => {
       executeTool: async () => chem21Result,
       onEvent: () => undefined,
       turnId: 'turn-stalled-diagnostic',
-      onToolRun: async () => new Promise<void>(() => undefined),
+      onToolRun: async () => diagnostic.promise,
     })
 
     await vi.waitFor(() => expect(requests).toBe(2))
     await expect(pending).resolves.toMatchObject({ answer: 'Done.' })
+  })
+  it('exposes diagnostics that settle after the tool loop without delaying the next provider round', async () => {
+    let requests = 0
+    const diagnostic = Promise.withResolvers<void>()
+    const provider: ChatProvider = {
+      async *stream() {
+        requests += 1
+        if (requests === 1) {
+          yield { toolCalls: [{ id: 'chem21', name: 'lookup_chem21_solvent', arguments: JSON.stringify({ chemical: 'DMF' }) }] }
+          return
+        }
+        yield { text: 'Done.' }
+      },
+    }
+
+    const result = await runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => chem21Result,
+      onEvent: () => undefined,
+      onToolRun: async () => diagnostic.promise,
+    })
+
+    expect(requests).toBe(2)
+    let settled = false
+    void result.diagnosticPersistence.then(() => { settled = true })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    diagnostic.resolve()
+    await expect(result.diagnosticPersistence).resolves.toBeUndefined()
   })
 
   it('continues after diagnostic persistence rejects without logging the error payload', async () => {

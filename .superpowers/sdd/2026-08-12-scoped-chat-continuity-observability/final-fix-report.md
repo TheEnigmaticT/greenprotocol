@@ -16,3 +16,9 @@ Completed.
 
 ## Concerns
 - Authenticated smoke and warm-TTFT verification remain external blockers and were not run in this focused patch.
+
+## Final Re-review Repair
+- `runScopedToolChat` now exposes a `diagnosticPersistence` handle for its detached fail-open diagnostic callbacks without awaiting them during provider scheduling.
+- The message route waits at most 250 ms for that handle after assistant-message persistence and before linking tool runs; settlement failures and timeouts log only `conversationId` and `turnId`, then linking and terminal SSE closure still run.
+- Red tests observed the missing settlement handle and premature linking. Final verification passed: `npx vitest run tests/lib/talk-about-this/agent.test.ts tests/lib/talk-about-this/latency.test.ts tests/lib/talk-about-this/messages-route.test.ts` (37 tests) and `npx tsc --noEmit`.
+- Concern: the 250 ms terminal persistence bound intentionally leaves diagnostics that outlive it unlinked rather than delaying the scientific response or SSE terminal closure indefinitely.

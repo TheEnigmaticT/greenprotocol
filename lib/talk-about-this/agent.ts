@@ -35,6 +35,7 @@ export interface ChatRunResult {
   telemetry: ChatLatencyTelemetry
   answer: string
   citations: Citation[]
+  diagnosticPersistence: Promise<void>
   evidence: LiteratureEvidenceMatch[]
 }
 
@@ -433,6 +434,7 @@ export async function runScopedToolChat({
   const evidenceById = new Map<string, LiteratureEvidenceMatch>()
   const answerParts: string[] = []
   const telemetry: ChatLatencyTelemetry = {}
+  const diagnosticWrites: Promise<void>[] = []
 
   const emitDiagnostic = (
     call: ChatToolCall,
@@ -452,7 +454,7 @@ export async function runScopedToolChat({
     }
     if (diagnostic.status !== 'completed') onEvent('tool-failed', data)
     if (!onToolRun) return
-    void Promise.resolve().then(() => onToolRun({
+    const diagnosticWrite = Promise.resolve().then(() => onToolRun({
       turnId,
       providerRound,
       callId: call.id,
@@ -469,6 +471,7 @@ export async function runScopedToolChat({
     })).catch(() => {
       console.error('Scoped tool diagnostic callback failed', { turnId, callId: call.id })
     })
+    diagnosticWrites.push(diagnosticWrite)
   }
 
   const completedDiagnostic: ToolDiagnostic = {
@@ -536,7 +539,13 @@ export async function runScopedToolChat({
       if (roundFirstTextAt !== undefined && telemetry.finalProviderFirstTextAt === undefined) telemetry.finalProviderFirstTextAt = roundFirstTextAt
       const answer = answerParts.join('')
       if (!answer) throw new Error('Model returned neither text nor a tool request')
-      return { answer, citations: [...citationsById.values()], evidence: [...evidenceById.values()], telemetry }
+      return {
+        answer,
+        citations: [...citationsById.values()],
+        evidence: [...evidenceById.values()],
+        telemetry,
+        diagnosticPersistence: Promise.all(diagnosticWrites).then(() => undefined),
+      }
     }
     if (round === MAX_TOOL_ROUNDS) throw new Error('Model exceeded the maximum number of tool rounds')
 

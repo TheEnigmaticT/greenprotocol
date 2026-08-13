@@ -20,6 +20,27 @@ import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 export const runtime = 'nodejs'
 
 const MAX_RETRIEVAL_ATTEMPTS = 5
+const TERMINAL_DIAGNOSTIC_SETTLEMENT_MS = 250
+
+async function awaitDiagnosticPersistence(
+  diagnosticPersistence: Promise<void>,
+  identifiers: { conversationId: string, turnId: string },
+): Promise<void> {
+  const timeout = Promise.withResolvers<void>()
+  const timeoutId = setTimeout(timeout.resolve, TERMINAL_DIAGNOSTIC_SETTLEMENT_MS)
+  try {
+    const timedOut = await Promise.race([
+      diagnosticPersistence.then(() => false, () => false),
+      timeout.promise.then(() => true),
+    ])
+    if (timedOut) {
+      console.error('Scoped chat tool diagnostic settlement timed out', identifiers)
+    }
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 
 function stageTelemetry(value: unknown): Omit<RetrievalAttemptTelemetry, 'callId' | 'status'> | undefined {
   if (!value || typeof value !== 'object') return undefined
@@ -253,6 +274,7 @@ export async function POST(
         const send = (event: string, data: Record<string, unknown>) => {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
         }
+        let diagnosticPersistence = Promise.resolve()
 
         try {
           send('conversation', { conversationId })
@@ -296,6 +318,7 @@ export async function POST(
           literatureCitations = result.citations
           latencyTelemetry = mergeTerminalTelemetry(latencyTelemetry, result.telemetry)
           literatureEvidence = result.evidence
+          diagnosticPersistence = result.diagnosticPersistence ?? Promise.resolve()
         } catch (error) {
           status = abortController.signal.aborted ? 'cancelled' : 'failed'
           console.error('Chat response failed', error)
@@ -325,6 +348,7 @@ export async function POST(
               status,
               ttft_ms: ttftMs,
             })
+            await awaitDiagnosticPersistence(diagnosticPersistence, { conversationId, turnId })
             try {
               await linkToolRunsToAssistantMessage(createAdminClient(), user.id, {
                 conversationId,

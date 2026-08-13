@@ -347,6 +347,59 @@ describe('scoped conversation message route diagnostics', () => {
     expect(body).not.toContain('raw internal timeout detail')
   })
 
+  it('waits for a delayed diagnostic write before linking its terminal assistant message', async () => {
+    configureMessageRoute()
+    const diagnostic = Promise.withResolvers<void>()
+    repository.createToolRun.mockImplementationOnce(() => diagnostic.promise)
+    runScopedToolChat.mockImplementationOnce(async input => ({
+      answer: 'Answer survives.',
+      citations: [],
+      evidence: [],
+      telemetry: {},
+      diagnosticPersistence: input.onToolRun({
+        turnId: input.turnId!,
+        providerRound: 0,
+        callId: 'tool-call-1',
+        toolName: 'lookup_chem21_solvent',
+        validatedArguments: { chemical: 'DMF' },
+        status: 'completed',
+        reasonCode: 'none',
+        telemetry: {},
+      }),
+    }))
+
+    const response = await postMessage(messageRequest(), { params: Promise.resolve({ conversationId: 'conversation-1' }) })
+    const body = response.text()
+    await vi.waitFor(() => expect(repository.createToolRun).toHaveBeenCalledTimes(1))
+    expect(repository.linkToolRunsToAssistantMessage).not.toHaveBeenCalled()
+    diagnostic.resolve()
+
+    expect(parseSse(await body).find(event => event.event === 'done')?.data).toMatchObject({ status: 'complete' })
+    expect(repository.linkToolRunsToAssistantMessage).toHaveBeenCalledTimes(1)
+    expect(repository.createToolRun.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.linkToolRunsToAssistantMessage.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('bounds a never-settling diagnostic before linking and closing the terminal SSE', async () => {
+    configureMessageRoute()
+    const diagnostic = Promise.withResolvers<void>()
+    runScopedToolChat.mockResolvedValueOnce({
+      answer: 'Answer survives.',
+      citations: [],
+      evidence: [],
+      telemetry: {},
+      diagnosticPersistence: diagnostic.promise,
+    })
+
+    const response = await postMessage(messageRequest(), { params: Promise.resolve({ conversationId: 'conversation-1' }) })
+    const events = parseSse(await response.text())
+
+    expect(repository.linkToolRunsToAssistantMessage).toHaveBeenCalledTimes(1)
+    expect(events.filter(event => event.event === 'done')).toHaveLength(1)
+    expect(events.find(event => event.event === 'done')?.data).toMatchObject({ status: 'complete' })
+  })
+
   it('persists a cancelled response and emits one terminal done event', async () => {
     configureMessageRoute()
     runScopedToolChat.mockImplementationOnce(async input => {
