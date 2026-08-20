@@ -1,0 +1,61 @@
+backend:
+  name: github
+  repo: TheEnigmaticT/greenprotocol
+  branch: main
+  base_url: https://sveltia-cms-auth.tlongino.workers.dev
+  auth_endpoint: auth
+
+site_url: https://www.greenchemistry.ai
+display_url: https://www.greenchemistry.ai
+
+media_folder: "public/blog/media"
+public_folder: "/blog/media"
+publish_mode: simple
+
+collections:
+  - name: "posts"
+    label: "Blog Posts"
+    label_singular: "Blog Post"
+    folder: "content/blog"
+    create: true
+    slug: "{{slug}}"
+    extension: "md"
+    format: "frontmatter"
+    summary: "{{title}} — {{date | date('YYYY-MM-DD')}}"
+    sortable_fields: ["date", "title"]
+    view_filters:
+      - label: "Published"
+        field: draft
+        pattern: false
+      - label: "Drafts"
+        field: draft
+        pattern: true
+    fields:
+      - { name: title, label: "Title", widget: string }
+      - {
+          name: slug,
+          label: "URL Slug",
+          widget: string,
+          hint: "Appears in the URL as /blog/<slug>. Lowercase, dashes only.",
+        }
+      - {
+          name: date,
+          label: "Publish Date",
+          widget: datetime,
+          date_format: "YYYY-MM-DD",
+          time_format: "HH:mm",
+          format: "YYYY-MM-DDTHH:mm:ss.SSSZ",
+        }
+      - {
+          name: excerpt,
+          label: "Summary",
+          widget: text,
+          hint: "1-2 sentences. Shown on the blog index and used as meta description.",
+        }
+      - {
+          name: draft,
+          label: "Save as Draft",
+          widget: boolean,
+          default: true,
+        }
+      - { name: body, label: "Body", widget: markdown }
