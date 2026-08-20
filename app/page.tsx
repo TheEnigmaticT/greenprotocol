@@ -164,6 +164,10 @@ export default function LandingPage() {
               />
             </div>
             <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
+              <Link href="/blog" style={{
+                color:C.cream, fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,
+                letterSpacing:'0.06em', textDecoration:'none', display:'block',
+              }}>BLOG</Link>
               <Link href={NEW_ANALYSIS_HREF} style={{
                 background:C.gold, color:C.black,
                 fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,

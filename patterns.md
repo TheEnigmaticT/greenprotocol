@@ -33,3 +33,8 @@
 - Detail panels (`WasteDetailsPanel`) group metrics under small uppercase mono section labels (`var(--font-mono)`, `#78716C`) separated by `border-t` dividers (`#E7E5E4`). Numeric values use the mono font; labels use `#57534E`.
 - Metric grids use Tailwind responsive classes (`grid-cols-3 sm:grid-cols-5`) with `min-w-0` + `truncate` on values — no inline `gridTemplateColumns`.
 - Keep categorical badges (e.g. hazard segments) to a single restrained neutral style (`#F0EBE1` / `#78716C`) rather than one color per category, to avoid visual color overload.
+
+## Blog editorial surface
+- The public blog uses `content/blog/*.md` with simple YAML frontmatter and server-side Markdown rendering through `react-markdown` + `remark-gfm`.
+- `/blog` is the index and `/blog/[slug]` is statically generated from published posts; drafts remain hidden when `draft: true`.
+- Blog navigation keeps the same forest/gold brand palette, with a compact mono header and readable cream article canvas.
