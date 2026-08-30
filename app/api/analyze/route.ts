@@ -11,6 +11,7 @@ export const maxDuration = 300
 const DEFAULT_RUN_LIMIT = parseInt(process.env.ANALYSIS_RUN_LIMIT || '10', 10)
 const UNLIMITED_ANALYSIS_EMAILS = new Set([
   'trevor.longino+gc1@gmail.com',
+  'alana@concannon.ie',
 ])
 
 function hasUnlimitedAnalyses(email?: string): boolean {
