@@ -96,7 +96,14 @@ async def score_p11(
         f"Respond with ONLY the JSON object."
     )
 
-    response = await call_llm(prompt, system=SYSTEM_PROMPT)
+    response = None
+    for attempt in range(2):
+        response = await call_llm(prompt, system=SYSTEM_PROMPT)
+        if response:
+            break
+        if attempt == 0:
+            print("[p11] Empty LLM response; retrying once")
+
     if not response:
         return PrincipleScore(
             principle_number=11,

@@ -73,7 +73,7 @@ def score_p7(chemicals: list[ChemicalInput]) -> PrincipleScore:
             principle_name="Use of Renewable Feedstocks",
             score=5.0, normalized=0.5,
             details={"note": "No input chemicals identified"},
-            confidence="partial",
+            confidence="benchmark",
             data_sources=["renewable_db"],
         )
 

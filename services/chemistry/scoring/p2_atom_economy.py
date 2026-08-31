@@ -102,7 +102,7 @@ def score_p2(
             principle_number=2, principle_name="Atom Economy",
             score=5.0, normalized=0.5,
             details={"error": f"Invalid reaction SMILES format: {reaction_smiles}"},
-            confidence="estimated", data_sources=[],
+            confidence="model-inferred", data_sources=[],
         )
 
     reactant_smiles = [s.strip() for s in parts[0].split(".") if s.strip()]

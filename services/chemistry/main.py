@@ -6,8 +6,13 @@ from scoring.models import ScoringRequest, ScoringResponse
 from scoring.p1_waste_prevention import score_p1
 from scoring.p2_atom_economy import score_p2
 from scoring.p3_less_hazardous import score_p3
+from scoring.p4_product_toxicity import score_p4
 from scoring.p5_safer_solvents import score_p5
 from scoring.p6_energy_efficiency import score_p6
+from scoring.p7_renewable_feedstocks import score_p7
+from scoring.p8_reduce_derivatives import score_p8
+from scoring.p9_catalysis import score_p9
+from scoring.p10_degradation import score_p10
 from scoring.p11_realtime_analysis import score_p11
 from scoring.p12_accident_prevention import score_p12
 from scoring.waste_analysis import compute_waste_analysis
@@ -18,6 +23,7 @@ from models import BatchRequest, BatchResponse, ConvertResponse
 from assistant_tools import AssistantToolPayload, AssistantToolResponse, execute_assistant_tool
 from converter import convert
 from yield_extractor import extract_yield_and_type
+from smiles_extractor import extract_reaction_smiles
 import cache as chem_cache
 from synonyms import resolve_synonym
 from cas_lookup import get_cas
@@ -143,8 +149,23 @@ async def score_protocol(request: ScoringRequest):
         except Exception as e:
             print(f"[score] yield extraction failed: {e}")
 
+    # Extract reaction SMILES when the caller did not provide one. This keeps
+    # P2 deterministic while using the existing surgical LLM extractor only
+    # when necessary.
+    smiles_metadata: dict = {"provided": bool(request.reaction_smiles), "llm_called": False}
+    reaction_smiles = request.reaction_smiles
+    if not reaction_smiles and request.protocol_text:
+        try:
+            reaction_smiles, smiles_metadata = await extract_reaction_smiles(
+                request.protocol_text,
+                [{"name": c.name, "role": c.role, "quantity": c.quantity} for c in request.chemicals],
+            )
+        except Exception as e:
+            print(f"[score] reaction SMILES extraction failed: {e}")
+            smiles_metadata = {"provided": False, "llm_called": True, "error": str(e)}
+
     # Calculate scores
-    p2 = score_p2(reaction_smiles=request.reaction_smiles)
+    p2 = score_p2(reaction_smiles=reaction_smiles)
     ae_pct = p2.details.get("atom_economy_pct")
     benchmark = yield_info.get("benchmark", {})
 
@@ -158,8 +179,13 @@ async def score_protocol(request: ScoringRequest):
         benchmark_pmi=benchmark.get("typical_pmi"),
     )
     p3 = score_p3(chemicals=request.chemicals, hcodes_map=hcodes_map)
+    p4 = score_p4(chemicals=request.chemicals, hcodes_map=hcodes_map)
     p5 = score_p5(chemicals=request.chemicals)
     p6 = score_p6(steps=request.steps)
+    p7 = score_p7(chemicals=request.chemicals)
+    p8 = await score_p8(steps=request.steps, protocol_text=request.protocol_text)
+    p9 = score_p9(chemicals=request.chemicals)
+    p10 = score_p10(chemicals=request.chemicals, hcodes_map=hcodes_map)
     p11 = await score_p11(steps=request.steps, protocol_text=request.protocol_text)
     p12 = score_p12(chemicals=request.chemicals, hcodes_map=hcodes_map)
 
@@ -188,7 +214,7 @@ async def score_protocol(request: ScoringRequest):
     )
 
     # Roll-up score and letter grade (lower is greener)
-    all_scores = [p1, p2, p3, p5, p6, p11, p12]
+    all_scores = [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12]
     available = [s for s in all_scores if s.score >= 0]
     total_score = round(sum(s.score for s in available), 2)
     max_possible = float(len(available) * 10)
@@ -210,5 +236,6 @@ async def score_protocol(request: ScoringRequest):
         max_possible=max_possible,
         grade=grade,
         waste_analysis=waste,
+        smiles_extraction=smiles_metadata,
         yield_extraction=yield_extraction,
     )

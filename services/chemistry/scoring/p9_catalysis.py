@@ -85,7 +85,7 @@ def score_p9(chemicals: list[ChemicalInput]) -> PrincipleScore:
             principle_name="Use of Catalysts",
             score=0.0, normalized=0.0,
             details={"note": "No reagents identified"},
-            confidence="partial",
+            confidence="benchmark",
             data_sources=["protocol_parse"],
         )
 
