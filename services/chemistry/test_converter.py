@@ -66,3 +66,18 @@ def test_convert_does_not_raise_nameerror(monkeypatch):
     # not the data_source="error" the outage produced.
     assert result.quantity_g == round(10 * 0.944, 6)
     assert result.quantity_mol is not None
+
+
+def test_indefinite_material_is_not_sent_to_pubchem_or_marked_missing(monkeypatch):
+    _offline(monkeypatch)
+
+    async def fail_lookup(_name):
+        raise AssertionError("indefinite materials must not be sent to PubChem")
+
+    monkeypatch.setattr(converter, "lookup_chemical", fail_lookup)
+    result = asyncio.run(converter.convert("brine", "100 mL"))
+
+    assert result.chemical_name == "brine"
+    assert result.data_source == "indefinite"
+    assert result.quantity_kg is None
+    assert any("indefinite composition" in warning for warning in result.warnings)

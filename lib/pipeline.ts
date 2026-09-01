@@ -740,6 +740,7 @@ export async function analyzeProtocol(
   let enrichedChemicals: EnrichedChemical[] | undefined
   let wasteAnalysis: WasteAnalysis | undefined
   const unresolvedChemicals = new Set<string>()
+  const indefiniteChemicals = new Set<string>()
 
   const serviceUp = await isServiceAvailable()
   if (serviceUp) {
@@ -761,7 +762,9 @@ export async function analyzeProtocol(
             // 'error' = the service threw while converting this chemical (e.g. the
             // June–Aug converter NameError). It must count as unresolved just like
             // 'not_found', otherwise a fully-broken batch reports zero problems.
-            if (conv.data_source === 'not_found' || conv.data_source === 'error' || conv.warnings.some(w => w.toLowerCase().includes('not found'))) {
+            if (conv.data_source === 'indefinite') {
+              indefiniteChemicals.add(conv.chemical_name || chem.name)
+            } else if (conv.data_source === 'not_found' || conv.data_source === 'error' || conv.warnings.some(w => w.toLowerCase().includes('not found'))) {
               unresolvedChemicals.add(conv.chemical_name || chem.name)
             }
             chem.quantityKg = conv.quantity_kg ?? chem.quantityKg
@@ -1032,11 +1035,14 @@ export async function analyzeProtocol(
       pending: unresolvedChemicals.size > 0 || deterministicScores === undefined,
       deterministicScoringAvailable: deterministicScores !== undefined,
       unresolvedChemicals: Array.from(unresolvedChemicals).sort((a, b) => a.localeCompare(b)),
+      indefiniteChemicals: Array.from(indefiniteChemicals).sort((a, b) => a.localeCompare(b)),
       message: deterministicScores === undefined
         ? 'Deterministic chemistry scoring was unavailable for this analysis — the chemistry reference service could not be reached. The recommendations below are LLM-assisted only; reference-grounded scores were not applied. Re-run when the service is available.'
         : unresolvedChemicals.size > 0
           ? 'We could not retrieve every chemical reference record live. This analysis used the best data available, and queued the missing items so the analysis can be re-run when updated reference data is available.'
-          : 'All requested chemical reference data was available from cache or bundled sources.',
+          : indefiniteChemicals.size > 0
+            ? 'Some protocol materials have indefinite composition and cannot be analyzed as single chemicals. They are excluded from PubChem recovery and chemistry scoring.'
+            : 'All requested chemical reference data was available from cache or bundled sources.',
     },
     // v0.7: Re-evaluation statistics
     reevaluationStats,

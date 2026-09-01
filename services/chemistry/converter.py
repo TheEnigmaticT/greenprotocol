@@ -4,10 +4,19 @@ from models import ConvertResponse
 from parser import parse_quantity
 from chem21 import get_vetted_evidence
 from ghs import lookup_hcodes_with_details
-from pubchem import lookup_chemical
+from pubchem import lookup_chemical, get_last_lookup_failure
 from cas_lookup import get_cas
 from synonyms import resolve_synonym
+from reference_store import get_reference_store
 import cache
+
+
+# These protocol materials are mixtures or undefined compositions rather than
+# single compounds. They cannot receive a meaningful PubChem molecular
+# reference and must not be reported as recoverable lookup misses.
+INDEFINITE_CHEMICALS = {
+    "brine",
+}
 
 try:
     from rdkit import Chem
@@ -44,8 +53,21 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
     resolved_name = resolve_synonym(chemical_name)
     was_synonym = resolved_name.lower() != chemical_name.lower().strip()
 
-    # Check cache first
+    if resolved_name.lower().strip() in INDEFINITE_CHEMICALS:
+        warnings.append(
+            "This material has an indefinite composition and cannot be analyzed as a single chemical."
+        )
+        return _build_response(
+            {}, chemical_name, resolved_name, quantity,
+            data_source="indefinite", cached=False, warnings=warnings,
+        )
+
+    # Check process/seed cache, then the durable shared cache.
     cached_data = cache.get(resolved_name)
+    if not cached_data:
+        cached_data = await get_reference_store().get_cache(resolved_name)
+        if cached_data:
+            cache.put(resolved_name, cached_data)
     if cached_data:
         # Re-fetch evidence even for cached if it's missing (migration support)
         if "ghs_hazards" not in cached_data or "green_alternatives" not in cached_data:
@@ -82,18 +104,31 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
         pubchem_data["citations"] = evidence["citations"]
         
         cache.put(resolved_name, pubchem_data)
+        # Durable writes are best-effort for successful foreground lookups.
+        await get_reference_store().upsert_cache(resolved_name, pubchem_data)
         return _build_response(
             pubchem_data, chemical_name, resolved_name, quantity,
             data_source=pubchem_data.get("_data_source", "pubchem"),
             cached=False, warnings=warnings,
         )
 
-    # RDKit fallback — can only help if we somehow have SMILES
+    failure = get_last_lookup_failure() or {"status": "retryable", "error_code": "network"}
+    failure_status = failure.get("status")
+    if failure_status == "terminal_not_found":
+        reference_status = "terminal_not_found"
+    elif failure_status == "retryable":
+        queued = await get_reference_store().enqueue_miss(
+            resolved_name, retryable=True, http_status=failure.get("http_status"), error_code=failure.get("error_code", "network")
+        )
+        reference_status = "queued" if queued else "unavailable"
+    else:
+        reference_status = "unavailable"
+
     warnings.append(f"Chemical '{resolved_name}' not found in PubChem")
-    cache.add_missing(resolved_name)
     return _build_response(
         {}, chemical_name, resolved_name, quantity,
         data_source="not_found", cached=False, warnings=warnings,
+        reference_status=reference_status, reference_queued=reference_status == "queued",
     )
 
 
@@ -105,6 +140,8 @@ def _build_response(
     data_source: str,
     cached: bool,
     warnings: list[str],
+    reference_status: str = "available",
+    reference_queued: bool = False,
 ) -> ConvertResponse:
     mw = chem_data.get("molecular_weight")
     density = chem_data.get("density_g_per_ml")
@@ -169,5 +206,8 @@ def _build_response(
         citations=chem_data.get("citations", []),
         data_source=data_source,
         cached=cached,
+        reference_status=reference_status,
+        reference_queued=reference_queued,
+        reference_queueed=reference_queued,
         warnings=warnings,
     )

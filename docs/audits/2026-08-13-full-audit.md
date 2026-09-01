@@ -29,7 +29,7 @@ Overall code quality: **C+ — "a prototype that grew a real product inside it."
 **Fix:** new migration enabling RLS on all three tables + public-read-only policy + `REVOKE INSERT/UPDATE/DELETE FROM anon, authenticated`. Run ingestion with service-role key only (drop the anon fallback in e.g. `scripts/literature-ingestion/ingest-pmc.ts:15`). Inspect current table contents for injected rows.
 
 ### 3. Verify/drop `exec_sql` RPC in the live project
-`apply_migration.js:14` (tracked, root-level) calls `supabase.rpc('exec_sql', { sql })` with a hardcoded anon key. If an `exec_sql(sql text)` function exists in the live project and is executable by anon/authenticated, that's arbitrary SQL with a public key. It's not in any migration — it either never existed or was created manually. Note the script targets project `jjxvlofcnyiqrtvwccsq` while CLAUDE.md says `xwcviwzwedljuuyfduso` — confirm which is production.
+`apply_migration.js:14` (tracked, root-level) calls `supabase.rpc('exec_sql', { sql })` with a hardcoded anon key. If an `exec_sql(sql text)` function exists in the live project and is executable by anon/authenticated, that's arbitrary SQL with a public key. It's not in any migration — it either never existed or was created manually. The script targets the confirmed production project `jjxvlofcnyiqrtvwccsq`; the repository reference has been corrected.
 **Fix:** in SQL editor: `DROP FUNCTION IF EXISTS public.exec_sql(text);`. Delete `apply_migration.js` and `check_lit.js`.
 
 ### 4. Live accept/reject bug on the session page
@@ -177,7 +177,7 @@ An independent adversarial audit reviewed both the codebase and this report. **T
 **P0.5 — live verification (do before trusting the P0 severities; dashboard/CLI, not repo)**
 - Inspect live Supabase role grants on the three literature tables + confirm whether `public.exec_sql(text)` exists and is anon/authenticated-executable; check literature tables for already-injected rows.
 - Confirm the current `CHEMISTRY_SERVICE_URL` target and whether it's reachable/authenticated; confirm the July Anthropic key + `CHEMISTRY_SERVICE_TOKEN` were rotated.
-- Confirm which Supabase project is production (`jjxvlofcnyiqrtvwccsq` per `apply_migration.js` vs `xwcviwzwedljuuyfduso` per CLAUDE.md).
+- Confirmed: `jjxvlofcnyiqrtvwccsq` is the production Supabase project; repository references were updated on 2026-08-31.
 
 **P2 — structure for 0.8**
 11. `gpc_recommendation_decisions` table; blob becomes immutable; retire whole-blob PATCH + array-index jsonb_set.

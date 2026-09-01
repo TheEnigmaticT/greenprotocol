@@ -49,7 +49,7 @@ greenprotocol/
 
 ## Auth
 
-- **Provider:** Supabase Auth on existing CrowdTamers Supabase Workspace (ref: xwcviwzwedljuuyfduso)
+- **Provider:** Supabase Auth on the GreenChemistry.ai production Supabase project (ref: jjxvlofcnyiqrtvwccsq)
 - **Methods:** Google OAuth + email/password
 - **Table prefix:** `gpc_` on all custom tables
 - **Packages:** `@supabase/supabase-js`, `@supabase/ssr`

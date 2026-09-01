@@ -24,7 +24,7 @@ Next.js 15 (App Router), TypeScript, Tailwind v4, Supabase Auth, Claude Sonnet A
 
 ## Auth
 - Supabase Auth (Google OAuth + email/password)
-- CrowdTamers Supabase Workspace (ref: xwcviwzwedljuuyfduso)
+- GreenChemistry.ai production Supabase project (ref: jjxvlofcnyiqrtvwccsq)
 - All custom tables prefixed `gpc_`
 - Protected routes: `/analyze`
 - Public routes: `/`, `/login`

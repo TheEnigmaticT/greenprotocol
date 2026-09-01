@@ -9,7 +9,7 @@
     - `gpc_analyses`: View/Insert for `auth.uid() = user_id`.
     - `gpc_profiles`: View public, Insert/Update for `auth.uid() = user_id`.
 - **Auth Config:** Email confirmation, Google OAuth.
-- **Project Link:** Currently on `xwcviwzwedljuuyfduso` (shared workspace).
+- **Project Link:** Production is on `jjxvlofcnyiqrtvwccsq` (confirmed 2026-08-31).
 
 ## Migration Plan
 1. **Target:** Create new Supabase project "greenchemistry-ai-prod".

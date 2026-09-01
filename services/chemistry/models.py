@@ -23,6 +23,10 @@ class ConvertResponse(BaseModel):
     quantity_mol: float | None = Field(None)
     data_source: str = Field("unknown", description="pubchem, rdkit, cache, or synonym_table")
     cached: bool = False
+    reference_status: str = Field("available", description="available, queued, terminal_not_found, or unavailable")
+    reference_queued: bool = False
+    # Kept for compatibility with the original API contract spelling.
+    reference_queueed: bool = False
     warnings: list[str] = Field(default_factory=list)
     ghs_hazards: list[dict] = Field(default_factory=list, description="GHS H-codes and descriptions")
     green_alternatives: list[dict] = Field(default_factory=list, description="Citable alternatives with source evidence")

@@ -8,9 +8,9 @@
 
 **Tech Stack:** Next.js 15, TypeScript, Tailwind CSS v4, @supabase/ssr, @supabase/supabase-js, @anthropic-ai/sdk, npm
 
-**Supabase project:** CrowdTamers Supabase Workspace (ref: `xwcviwzwedljuuyfduso`)
-- URL: `https://xwcviwzwedljuuyfduso.supabase.co`
-- Anon key: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3Y3Zpd3p3ZWRsanV1eWZkdXNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2MTExMDAsImV4cCI6MjA1OTE4NzEwMH0.p7nzS3bQiitHwtN4Sl3mZjO4z7mSWAqKgyyw209eObs`
+**Supabase project:** CrowdTamers Supabase Workspace (ref: `jjxvlofcnyiqrtvwccsq`)
+- URL: `https://jjxvlofcnyiqrtvwccsq.supabase.co`
+- Anon key: obtain from the Supabase project settings; do not store credentials in tracked documentation.
 - ANTHROPIC_API_KEY is in `~/.zshrc` as env var
 
 **Reference project for patterns:** `/Users/ct-mac-mini/dev/ftracker/family-calorie-tracker` uses the same Supabase + Next.js App Router patterns.
@@ -54,8 +54,8 @@ npm install @supabase/ssr @supabase/supabase-js @anthropic-ai/sdk
 
 ```bash
 # /Users/ct-mac-mini/dev/greenprotocol/.env.local
-NEXT_PUBLIC_SUPABASE_URL=https://xwcviwzwedljuuyfduso.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3Y3Zpd3p3ZWRsanV1eWZkdXNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2MTExMDAsImV4cCI6MjA1OTE4NzEwMH0.p7nzS3bQiitHwtN4Sl3mZjO4z7mSWAqKgyyw209eObs
+NEXT_PUBLIC_SUPABASE_URL=https://jjxvlofcnyiqrtvwccsq.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<from Supabase project settings>
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 ```
 
@@ -64,8 +64,8 @@ Note: ANTHROPIC_API_KEY is inherited from shell env. The `${ANTHROPIC_API_KEY}` 
 Simplest approach: Only put the SUPABASE vars in .env.local. The ANTHROPIC_API_KEY is already in ~/.zshrc and will be available to the Next.js server process automatically.
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://xwcviwzwedljuuyfduso.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3Y3Zpd3p3ZWRsanV1eWZkdXNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2MTExMDAsImV4cCI6MjA1OTE4NzEwMH0.p7nzS3bQiitHwtN4Sl3mZjO4z7mSWAqKgyyw209eObs
+NEXT_PUBLIC_SUPABASE_URL=https://jjxvlofcnyiqrtvwccsq.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<from Supabase project settings>
 ```
 
 **Step 4: Create CLAUDE.md**
@@ -90,7 +90,7 @@ Next.js 15 (App Router), TypeScript, Tailwind v4, Supabase Auth, Claude Sonnet A
 
 ## Auth
 - Supabase Auth (Google OAuth + email/password)
-- CrowdTamers Supabase Workspace (ref: xwcviwzwedljuuyfduso)
+- CrowdTamers Supabase Workspace (ref: jjxvlofcnyiqrtvwccsq)
 - All custom tables prefixed `gpc_`
 - Protected routes: `/analyze`
 - Public routes: `/`, `/login`
@@ -763,7 +763,7 @@ await supabase.from('gpc_analyses').insert({
 Run an analysis, then check the table:
 
 ```bash
-supabase db query "SELECT id, created_at FROM gpc_analyses LIMIT 5" --project-ref xwcviwzwedljuuyfduso
+supabase db query "SELECT id, created_at FROM gpc_analyses LIMIT 5" --project-ref jjxvlofcnyiqrtvwccsq
 ```
 
 **Step 4: Commit**

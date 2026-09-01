@@ -227,6 +227,7 @@ export interface ChemistryDataStatus {
   // LLM-assisted only. The UI must not imply reference data was available.
   deterministicScoringAvailable: boolean
   unresolvedChemicals: string[]
+  indefiniteChemicals?: string[]
   message: string
 }
 

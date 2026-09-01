@@ -1,9 +1,19 @@
 """PubChem PUG-REST API client for chemical property lookups."""
+from __future__ import annotations
 
 import httpx
 import re
 import asyncio
+from contextvars import ContextVar
 from urllib.parse import quote
+
+
+_last_lookup_failure: ContextVar[dict | None] = ContextVar("last_lookup_failure", default=None)
+
+
+def get_last_lookup_failure() -> dict | None:
+    return _last_lookup_failure.get()
+
 from local_chem_data import lookup_local_properties
 
 PUBCHEM_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
@@ -48,13 +58,25 @@ def estimate_density_rdkit(smiles: str, mw: float) -> float | None:
 
 
 async def fetch_pubchem_json(url: str, label: str) -> dict | None:
+    from reference_recovery import classify_pubchem_status, full_jitter_backoff
+
     async with httpx.AsyncClient(timeout=TIMEOUT, headers=PUBCHEM_HEADERS) as client:
         for attempt in range(3):
-            resp = await client.get(url)
-            if resp.status_code == 200:
+            try:
+                resp = await client.get(url)
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError):
+                _last_lookup_failure.set({"status": "retryable", "error_code": "network"})
+                if attempt < 2:
+                    await asyncio.sleep(full_jitter_backoff(attempt))
+                    continue
+                return None
+            outcome, code = classify_pubchem_status(resp.status_code)
+            if outcome == "resolved":
+                _last_lookup_failure.set(None)
                 return resp.json()
-            if resp.status_code in {429, 500, 502, 503, 504} and attempt < 2:
-                await asyncio.sleep(0.5 * (attempt + 1))
+            _last_lookup_failure.set({"status": outcome, "error_code": code, "http_status": resp.status_code})
+            if outcome == "retryable" and attempt < 2:
+                await asyncio.sleep(full_jitter_backoff(attempt))
                 continue
             print(f"[pubchem] lookup failed for {label}: HTTP {resp.status_code}")
             return None
