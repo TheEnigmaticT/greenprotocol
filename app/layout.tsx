@@ -38,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="build-version" content="20260702-191905" />
+        <meta name="build-version" content="20260901-023800" />
       </head>
       <body
         className={`${ibmPlexMono.variable} ${libreBaskerville.variable} antialiased`}

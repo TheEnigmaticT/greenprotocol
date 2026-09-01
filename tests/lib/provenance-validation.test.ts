@@ -92,7 +92,7 @@ describe('Provenance Validation', () => {
         details: {},
         chemicals_flagged: [],
         data_sources: ['pubchem_ghs'],
-        confidence: 'estimated' as any,  // legacy value
+        confidence: 'estimated' as unknown as PrincipleScore['confidence'],  // legacy value
       }
 
       const errors = validateScore(score)

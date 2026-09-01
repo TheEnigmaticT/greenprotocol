@@ -13,7 +13,7 @@
  */
 
 import { analyzeProtocol } from '@/lib/pipeline'
-import { Recommendation } from '@/lib/types'
+import type { ProgressEvent } from '@/lib/types'
 import { readFileSync } from 'fs'
 
 interface BenchmarkMetrics {
@@ -37,13 +37,13 @@ interface BenchmarkMetrics {
   suppressionRate: number
 }
 
-function estimateTokens(recommendations: Recommendation[]): { input: number; output: number; cost: number } {
+function estimateTokens(recommendationCount: number): { input: number; output: number; cost: number } {
   // Rough estimates based on typical re-evaluation calls
   const inputTokensPerRec = 2000  // System prompt + recommendation + literature snippets
   const outputTokensPerRec = 400  // Re-evaluation result JSON
   
-  const input = recommendations.length * inputTokensPerRec
-  const output = recommendations.length * outputTokensPerRec
+  const input = recommendationCount * inputTokensPerRec
+  const output = recommendationCount * outputTokensPerRec
   
   // Claude Sonnet 4.5 pricing: $3/M input, $15/M output
   const costInput = (input / 1_000_000) * 3
@@ -62,7 +62,7 @@ async function benchmarkAnalysis(protocolText: string, protocolName: string): Pr
   let currentPhase = ''
   let phaseStart = 0
   
-  const onProgress = (event: any) => {
+  const onProgress = (event: ProgressEvent) => {
     if (event.type === 'phase') {
       if (currentPhase) {
         phaseTimings[currentPhase] = Date.now() - phaseStart
@@ -100,11 +100,7 @@ async function benchmarkAnalysis(protocolText: string, protocolName: string): Pr
   const suppressionRate = totalRecommendations > 0 ? (stats.suppressed / totalRecommendations) * 100 : 0
   
   // Estimate tokens for all recommendations (including suppressed ones)
-  const allRecommendations = [...result.recommendations]
-  for (let i = 0; i < stats.suppressed; i++) {
-    allRecommendations.push({} as any) // Placeholder for counting
-  }
-  const tokenEstimate = estimateTokens(allRecommendations)
+  const tokenEstimate = estimateTokens(totalRecommendations)
   
   const metrics: BenchmarkMetrics = {
     protocolName,

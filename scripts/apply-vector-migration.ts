@@ -47,7 +47,10 @@ async function main() {
       if (error) {
         // Try direct query if RPC doesn't work
         console.warn('  RPC exec failed, trying direct query...')
-        const { error: queryError } = await (supabase as any).sql(stmt)
+        const sqlClient = supabase as unknown as {
+          sql: (query: string) => Promise<{ error?: { message: string } | null }>
+        }
+        const { error: queryError } = await sqlClient.sql(stmt)
         
         if (queryError) {
           console.error(`  ✗ Failed:`, queryError.message)

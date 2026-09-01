@@ -7,7 +7,7 @@ import { parseTalkAboutScope, type TalkAboutScope } from '@/lib/talk-about-this/
 import type { LiteratureEvidenceMatch } from '@/lib/types'
 import { isPersistedEvidence, type PersistedEvidenceReceipt } from '@/lib/talk-about-this/evidence'
 import type { PersistedChatMessage } from '@/lib/talk-about-this/repository'
-interface ChatMessage extends PersistedChatMessage {}
+type ChatMessage = PersistedChatMessage
 
 interface ChatActivity {
   callId: string
@@ -17,7 +17,7 @@ interface ChatActivity {
 }
 
 
-interface EvidenceReceipt extends PersistedEvidenceReceipt {}
+type EvidenceReceipt = PersistedEvidenceReceipt
 type TerminalStatus = 'complete' | 'failed' | 'cancelled'
 
 export interface RecommendationApprovalReceipt {
