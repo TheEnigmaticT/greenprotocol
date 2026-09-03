@@ -61,7 +61,7 @@ Defaults:
 - Memory: `2Gi`
 - Timeout: `300s`
 - Concurrency: `4`
-- Min instances: `0`
+- Min instances: `1`
 - Max instances: `3`
 
 Override any default:
@@ -172,18 +172,18 @@ cache file, and posts hydrated entries back to `/cache/upsert`.
 
 ## Cost Notes
 
-This is configured for low idle cost with `--min-instances 0`. That means cold starts are possible, especially because RDKit increases image and import weight. If cold starts hurt demos, set `--min-instances 1` temporarily:
+The production default keeps one instance warm because RDKit increases image and import weight; this prevents cold starts from consuming the interactive tool deadline. Raise this temporarily for a high-traffic demo:
+
+```bash
+gcloud run services update greenchemistry-chemistry \
+  --region us-central1 \
+  --min-instances 2
+```
+
+Return to the production baseline after the demo:
 
 ```bash
 gcloud run services update greenchemistry-chemistry \
   --region us-central1 \
   --min-instances 1
-```
-
-Switch it back after the demo:
-
-```bash
-gcloud run services update greenchemistry-chemistry \
-  --region us-central1 \
-  --min-instances 0
 ```

@@ -85,7 +85,7 @@ fi
   --memory 2Gi \
   --timeout 300 \
   --concurrency 4 \
-  --min-instances 0 \
+  --min-instances 1 \
   --max-instances 3 \
   --set-env-vars "$ENV_VARS"
 

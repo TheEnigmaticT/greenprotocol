@@ -44,3 +44,8 @@
 - It embeds the HighLevel/LeadConnector form in a responsive iframe, keeping registration data collection in GHL rather than duplicating form fields in the app.
 - The page uses the established forest, gold, sage, and cream palette with a two-column desktop layout that collapses to one column below 800px.
 - External forms need an accessible iframe title and a generous mobile minimum height; test the full form at narrow widths after any GHL form changes.
+
+## Deterministic score recovery panel
+- Analysis routes show `DeterministicScoreRecovery` when deterministic scoring is explicitly unavailable and no deterministic scores exist.
+- The panel uses the existing cream/forest palette with the established red unavailable treatment, and its retry button calls the existing authenticated `/api/rescore` route.
+- Successful retries merge scores into the analysis through the existing update path, which also performs the revision-checked PATCH; failures remain visible in an alert.

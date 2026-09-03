@@ -10,7 +10,7 @@ We validate the reaction by checking atom conservation.
 Score: 0 (100% atom economy) to 10 (0% atom economy)
 """
 
-from scoring.models import PrincipleScore
+from scoring.models import PrincipleScore, ScoreProvenance
 
 try:
     from rdkit import Chem
@@ -171,7 +171,7 @@ def score_p2(
     score = round(10.0 * (1.0 - atom_economy_pct / 100.0), 2)
     score = max(0.0, min(10.0, score))
 
-    confidence = "calculated" if balanced else "partial"
+    confidence = ScoreProvenance.CALCULATED if balanced else ScoreProvenance.BENCHMARK
 
     return PrincipleScore(
         principle_number=2,

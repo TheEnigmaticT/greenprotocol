@@ -12,8 +12,10 @@ import FinalizedProtocol from '@/components/FinalizedProtocol'
 import ScoreCard from '@/components/ScoreCard'
 import UserMenu from '@/components/UserMenu'
 import ChemistryDataNotice from '@/components/ChemistryDataNotice'
+import DeterministicScoreRecovery from '@/components/DeterministicScoreRecovery'
 import ProtocolInput from '@/components/ProtocolInput'
 import { NEW_ANALYSIS_HREF, clearAnalysisSession, resolveAnalysisSession } from '@/lib/analysis-session'
+import { applyDeterministicScores, rescoreAnalysis } from '@/lib/rescore'
 
 interface StoredData {
   id?: string
@@ -38,6 +40,7 @@ function AnalyzePageContent() {
   const [data, setData] = useState<StoredData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [persistError, setPersistError] = useState<string | null>(null)
+  const [regradeError, setRegradeError] = useState<string | null>(null)
 
   function handleNewAnalysis() {
     const hasAccepted = data?.analysis.recommendations.some(r => r.isAccepted)
@@ -138,19 +141,13 @@ function AnalyzePageContent() {
   const handleRegrade = useCallback(async () => {
     if (!data) return
     setIsRegrading(true)
+    setRegradeError(null)
     try {
-      const res = await fetch('/api/rescore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ analysis: data.analysis }),
-      })
-      if (res.ok) {
-        const newScores = await res.json()
-        const updatedAnalysis = { ...data.analysis, deterministicScores: newScores }
-        handleUpdateAnalysis(updatedAnalysis)
-      }
+      const newScores = await rescoreAnalysis(data.analysis)
+      handleUpdateAnalysis(applyDeterministicScores(data.analysis, newScores))
     } catch (err) {
       console.error('Re-grade failed:', err)
+      setRegradeError('Unable to re-score this analysis. Please try again.')
     } finally {
       setIsRegrading(false)
     }
@@ -233,11 +230,13 @@ function AnalyzePageContent() {
 
         <ChemistryDataNotice status={data.analysis.chemistryDataStatus} />
 
-        {data.analysis.deterministicScores && (
+        {data.analysis.deterministicScores ? (
           <section className="p-6 rounded-xl print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
             <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} analysisId={data.id} />
           </section>
-        )}
+        ) : data.analysis.chemistryDataStatus?.deterministicScoringAvailable === false ? (
+          <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} />
+        ) : null}
 
         <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
           <FinalizedProtocol
