@@ -5,7 +5,15 @@ import DeterministicScoreRecovery from '@/components/DeterministicScoreRecovery'
 import { applyDeterministicScores, rescoreAnalysis } from '@/lib/rescore'
 import type { AnalysisResult, DeterministicScores } from '@/lib/types'
 
-const analysis = { protocolTitle: 'Test protocol' } as AnalysisResult
+const analysis = {
+  protocolTitle: 'Test protocol',
+  chemistryDataStatus: {
+    pending: true,
+    deterministicScoringAvailable: false,
+    unresolvedChemicals: ['unknown reagent'],
+    message: 'Deterministic chemistry scoring was unavailable.',
+  },
+} as AnalysisResult
 const scores = { grade: 'B', total_score: 12, max_possible: 120, scores: [] } as unknown as DeterministicScores
 
 describe('missing deterministic score recovery', () => {
@@ -34,6 +42,12 @@ describe('missing deterministic score recovery', () => {
       body: JSON.stringify({ analysis }),
     })
     expect(updated.deterministicScores).toBe(scores)
+    expect(updated.chemistryDataStatus).toEqual({
+      pending: true,
+      deterministicScoringAvailable: true,
+      unresolvedChemicals: ['unknown reagent'],
+      message: 'We could not retrieve every chemical reference record live. This analysis used the best data available, and queued the missing items so the analysis can be re-run when updated reference data is available.',
+    })
     vi.unstubAllGlobals()
   })
 
