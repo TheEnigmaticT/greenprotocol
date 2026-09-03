@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { scoreProtocol, batchConvert, isServiceAvailable } from '@/lib/chemistry-service'
 import { AnalysisResult } from '@/lib/types'
+import { shouldReuseStoredDeterministicScores } from '@/lib/scoring-snapshot'
 
 export async function POST(request: Request) {
   // Auth check
@@ -9,11 +10,6 @@ export async function POST(request: Request) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const serviceUp = await isServiceAvailable()
-  if (!serviceUp) {
-    return NextResponse.json({ error: 'Chemistry service unavailable' }, { status: 503 })
   }
 
   let analysis: AnalysisResult
@@ -25,6 +21,17 @@ export async function POST(request: Request) {
     }
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  // An unchanged analysis must retain its persisted deterministic score. Fresh
+  // extraction is reserved for an explicitly changed (accepted-swap) scenario.
+  if (shouldReuseStoredDeterministicScores(analysis)) {
+    return NextResponse.json(analysis.deterministicScores)
+  }
+
+  const serviceUp = await isServiceAvailable()
+  if (!serviceUp) {
+    return NextResponse.json({ error: 'Chemistry service unavailable' }, { status: 503 })
   }
 
   // Build the chemical list with accepted swaps applied
