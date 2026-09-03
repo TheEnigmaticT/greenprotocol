@@ -10,7 +10,6 @@ import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/liter
 import { buildSdsReferences } from '@/lib/sds'
 import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
 import { logLLMTrace, logDedupTrace } from '@/lib/trace'
-import type { CanonicalScoringSnapshot } from '@/lib/scoring-snapshot'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
@@ -140,7 +139,6 @@ interface CallContext {
   analysisId?: string
   analysisRunId?: string
   supabase?: SupabaseClient
-  canonicalScoringSnapshot?: CanonicalScoringSnapshot
 }
 
 async function callClaude<T>(
@@ -744,23 +742,8 @@ export async function analyzeProtocol(
   const unresolvedChemicals = new Set<string>()
   const indefiniteChemicals = new Set<string>()
 
-  const snapshot = context?.canonicalScoringSnapshot
-  const serviceUp = snapshot ? true : await isServiceAvailable()
-  if (snapshot) {
-    deterministicScores = snapshot.deterministicScores
-    enrichedChemicals = snapshot.enrichedChemicals
-    wasteAnalysis = snapshot.wasteAnalysis
-    onProgress?.({ type: 'phase', phase: 2, message: 'Reusing canonical chemistry scoring inputs...' })
-    for (const s of deterministicScores.scores) {
-      onProgress?.({
-        type: 'score',
-        principle: s.principle_number,
-        name: s.principle_name,
-        score: s.score,
-        confidence: s.confidence,
-      })
-    }
-  } else if (serviceUp) {
+  const serviceUp = await isServiceAvailable()
+  if (serviceUp) {
     // Rationalize: convert all chemicals to g/kg/mol
     onProgress?.({ type: 'phase', phase: 2, message: 'Converting quantities...' })
     const allChemicals = parsed.steps.flatMap(step =>

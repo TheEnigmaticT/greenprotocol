@@ -63,13 +63,6 @@ export async function buildCanonicalScoringSnapshot(
   }
 }
 
-export function shouldReuseStoredDeterministicScores(analysis: AnalysisResult): boolean {
-  return Boolean(
-    isComplete(analysis)
-    && !analysis.recommendations.some(recommendation => recommendation.isAccepted),
-  )
-}
-
 export async function shouldReuseCanonicalScoring(
   protocolText: string,
   snapshot: CanonicalScoringSnapshot | null | undefined,

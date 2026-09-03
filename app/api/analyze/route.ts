@@ -5,7 +5,7 @@ import { calculateEquivalencies } from '@/lib/equivalencies'
 import { AnalysisResult, ImpactDelta, ProgressEvent } from '@/lib/types'
 import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 import { getAnalysisMetadata } from '@/lib/version'
-import { buildCanonicalScoringSnapshot, protocolFingerprint, shouldReuseCanonicalScoring, type CanonicalScoringSnapshot } from '@/lib/scoring-snapshot'
+import { buildCanonicalScoringSnapshot, protocolFingerprint } from '@/lib/scoring-snapshot'
 
 export const maxDuration = 300
 
@@ -64,19 +64,6 @@ export async function POST(request: Request) {
   }
 
   const protocolFingerprintValue = await protocolFingerprint(protocolText)
-  const { data: snapshotRow, error: snapshotLookupError } = await supabase
-    .from('gpc_canonical_scoring_snapshots')
-    .select('snapshot')
-    .eq('user_id', user.id)
-    .eq('protocol_fingerprint', protocolFingerprintValue)
-    .maybeSingle()
-  if (snapshotLookupError) {
-    console.error('[analyze] canonical scoring snapshot lookup failed:', snapshotLookupError.message)
-  }
-  const candidateSnapshot = snapshotRow?.snapshot as CanonicalScoringSnapshot | undefined
-  const canonicalScoringSnapshot = await shouldReuseCanonicalScoring(protocolText, candidateSnapshot)
-    ? candidateSnapshot
-    : undefined
 
   const { data: analysisRun, error: analysisRunError } = await supabase
     .from('gpc_analysis_runs')
@@ -131,7 +118,6 @@ export async function POST(request: Request) {
         userId: user.id,
         analysisRunId: analysisRun.id,
         supabase,
-        canonicalScoringSnapshot,
       })
       console.log(`[pipeline ${elapsed()}s] analyzeProtocol complete`)
 

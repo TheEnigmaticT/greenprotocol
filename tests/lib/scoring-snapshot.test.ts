@@ -4,7 +4,6 @@ import {
   buildCanonicalScoringSnapshot,
   protocolFingerprint,
   shouldReuseCanonicalScoring,
-  shouldReuseStoredDeterministicScores,
 } from '@/lib/scoring-snapshot'
 
 const scores = {
@@ -62,21 +61,5 @@ describe('canonical scoring snapshots', () => {
         message: 'Incomplete',
       },
     })))).resolves.toBe(false)
-  })
-
-  it('does not re-score an unchanged analysis from mutable client fields', () => {
-    expect(shouldReuseStoredDeterministicScores(analysis())).toBe(true)
-    expect(shouldReuseStoredDeterministicScores(analysis({
-      recommendations: [{
-        stepNumber: 1,
-        principleNumbers: [5],
-        principleNames: ['Safer Solvents'],
-        severity: 'high',
-        original: { chemical: 'DMF', issue: 'hazardous' },
-        alternative: { chemical: 'DMSO', rationale: '', yieldImpact: '', caveats: '', evidenceBasis: '' },
-        confidenceLevel: 'high',
-        isAccepted: true,
-      }],
-    }))).toBe(false)
   })
 })
