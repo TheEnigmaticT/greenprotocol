@@ -437,6 +437,42 @@ describe('runScopedToolChat', () => {
     })
     expect(executed[1]).not.toHaveProperty('soluteSmiles')
   })
+
+  it('allows an approved chat tool call to exceed five seconds while staying within the chat budget', async () => {
+    let requests = 0
+    const provider: ChatProvider = {
+      async *stream(request) {
+        requests += 1
+        if (requests === 1) {
+          yield {
+            toolCalls: [{
+              id: 'slow-tool',
+              name: 'lookup_chem21_solvent',
+              arguments: JSON.stringify({ chemical: 'DMF' }),
+            }],
+          }
+          return
+        }
+        const toolResponse = request.messages.find(message => message.role === 'tool')
+        if (!toolResponse?.content.includes('"status":"ok"')) return
+        yield { text: 'The tool completed after the legacy five-second limit.' }
+      },
+    }
+
+    await expect(runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async (_call, signal) => await new Promise<ToolResult>((resolve, reject) => {
+        const timer = setTimeout(() => resolve(chem21Result), 5_500)
+        signal?.addEventListener('abort', () => {
+          clearTimeout(timer)
+          reject(new DOMException('Tool request aborted', 'AbortError'))
+        }, { once: true })
+      }),
+      onEvent: () => undefined,
+    })).resolves.toMatchObject({ answer: 'The tool completed after the legacy five-second limit.' })
+  }, 8_000)
 })
 
 describe('literature evidence propagation', () => {

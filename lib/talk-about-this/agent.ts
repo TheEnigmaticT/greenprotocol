@@ -15,7 +15,7 @@ import type { Citation, EvidenceSignalGroup, LiteratureEvidenceMatch } from '@/l
 
 export const MAX_TOOL_ROUNDS = 4
 export const MAX_TOOL_CALLS_PER_TURN = 3
-const TOOL_CALL_TIMEOUT_MS = 5_000
+const TOOL_CALL_TIMEOUT_MS = 10_000
 const TOOL_LOOP_TIMEOUT_MS = 12_000
 export type ChatLifecycleEvent = 'activity' | 'delta' | 'tool-start' | 'tool-complete' | 'tool-failed'
 
