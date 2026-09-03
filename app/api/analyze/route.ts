@@ -5,6 +5,7 @@ import { calculateEquivalencies } from '@/lib/equivalencies'
 import { AnalysisResult, ImpactDelta, ProgressEvent } from '@/lib/types'
 import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 import { getAnalysisMetadata } from '@/lib/version'
+import { buildCanonicalScoringSnapshot, protocolFingerprint, shouldReuseCanonicalScoring, type CanonicalScoringSnapshot } from '@/lib/scoring-snapshot'
 
 export const maxDuration = 300
 
@@ -62,6 +63,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
+  const protocolFingerprintValue = await protocolFingerprint(protocolText)
+  const { data: snapshotRow, error: snapshotLookupError } = await supabase
+    .from('gpc_canonical_scoring_snapshots')
+    .select('snapshot')
+    .eq('user_id', user.id)
+    .eq('protocol_fingerprint', protocolFingerprintValue)
+    .maybeSingle()
+  if (snapshotLookupError) {
+    console.error('[analyze] canonical scoring snapshot lookup failed:', snapshotLookupError.message)
+  }
+  const candidateSnapshot = snapshotRow?.snapshot as CanonicalScoringSnapshot | undefined
+  const canonicalScoringSnapshot = await shouldReuseCanonicalScoring(protocolText, candidateSnapshot)
+    ? candidateSnapshot
+    : undefined
+
   const { data: analysisRun, error: analysisRunError } = await supabase
     .from('gpc_analysis_runs')
     .insert({
@@ -115,6 +131,7 @@ export async function POST(request: Request) {
         userId: user.id,
         analysisRunId: analysisRun.id,
         supabase,
+        canonicalScoringSnapshot,
       })
       console.log(`[pipeline ${elapsed()}s] analyzeProtocol complete`)
 
@@ -138,6 +155,23 @@ export async function POST(request: Request) {
 
       // Stamp version metadata
       analysisResult.analysisMetadata = getAnalysisMetadata()
+
+      // Store only complete scores. Incomplete chemistry data remains visible as
+      // unavailable and is never promoted into a canonical repeatable snapshot.
+      const canonicalSnapshot = await buildCanonicalScoringSnapshot(protocolText, analysisResult)
+      if (canonicalSnapshot) {
+        const { error: snapshotUpsertError } = await supabase
+          .from('gpc_canonical_scoring_snapshots')
+          .upsert({
+            user_id: user.id,
+            protocol_fingerprint: protocolFingerprintValue,
+            snapshot: canonicalSnapshot,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id,protocol_fingerprint' })
+        if (snapshotUpsertError) {
+          console.error('[analyze] canonical scoring snapshot persistence failed:', snapshotUpsertError.message)
+        }
+      }
 
       // Save to database
       const { data: insertedRow, error: insertError } = await supabase.from('gpc_analyses').insert({
