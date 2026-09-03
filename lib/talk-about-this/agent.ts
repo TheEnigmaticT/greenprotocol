@@ -430,6 +430,11 @@ export async function runScopedToolChat({
   const conversation = [...messages]
   const canonicalSmilesByChemical = new Map<string, string>()
   const toolLoopDeadline = performance.now() + TOOL_LOOP_TIMEOUT_MS
+  // The request budget applies to provider passes as well as tool calls. Without
+  // this signal, a stalled streamed model response can outlive the tool budget
+  // and wait for an infrastructure timeout measured in minutes.
+  const deadlineSignal = AbortSignal.timeout(TOOL_LOOP_TIMEOUT_MS)
+  const requestSignal = signal ? AbortSignal.any([signal, deadlineSignal]) : deadlineSignal
   const citationsById = new Map<string, Citation>()
   const evidenceById = new Map<string, LiteratureEvidenceMatch>()
   const answerParts: string[] = []
@@ -519,7 +524,7 @@ export async function runScopedToolChat({
     for await (const event of provider.stream({
       system: buildTalkAboutSystemPrompt(context, citationsById.keys()),
       messages: conversation,
-      signal,
+      signal: requestSignal,
       tools: buildChatTools(context),
     })) {
       if (event.text) {
@@ -610,7 +615,7 @@ export async function runScopedToolChat({
         primaryByFingerprint.set(key, id)
         const remainingMs = Math.max(0, toolLoopDeadline - performance.now())
         const timeoutSignal = AbortSignal.timeout(Math.min(TOOL_CALL_TIMEOUT_MS, remainingMs))
-        const toolSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+        const toolSignal = AbortSignal.any([requestSignal, timeoutSignal])
         const startedAt = new Date().toISOString()
         const startedMs = performance.now()
         telemetry.scheduling!.dispatchedCount += 1

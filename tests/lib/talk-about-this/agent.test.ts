@@ -438,6 +438,30 @@ describe('runScopedToolChat', () => {
     expect(executed[1]).not.toHaveProperty('soluteSmiles')
   })
 
+  it('aborts a provider pass that outlives the chat deadline instead of waiting for the host timeout', async () => {
+    let providerSawAbort = false
+    const provider: ChatProvider = {
+      async *stream({ signal }) {
+        await new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            providerSawAbort = true
+            reject(new DOMException('provider deadline reached', 'AbortError'))
+          }, { once: true })
+        })
+        yield { text: 'unreachable' }
+      },
+    }
+
+    await expect(runScopedToolChat({
+      provider,
+      context,
+      messages: [{ role: 'user', content: 'Check DMF.' }],
+      executeTool: async () => chem21Result,
+      onEvent: () => undefined,
+    })).rejects.toThrow('provider deadline reached')
+    expect(providerSawAbort).toBe(true)
+  }, 13_500)
+
   it('allows an approved chat tool call to exceed five seconds while staying within the chat budget', async () => {
     let requests = 0
     const provider: ChatProvider = {
