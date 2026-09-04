@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AnalysisResult } from '@/lib/types'
-import { buildCitationString, buildBibtexCitation } from '@/lib/citation'
+import { useSearchParams } from 'next/navigation'
+import { AnalysisResult, Recommendation } from '@/lib/types'
+import { buildCitationString, buildBibtexCitation, formatCitationACS } from '@/lib/citation'
 import PrincipleSection, { humanSource } from './PrincipleSection'
 import AppShell from './AppShell'
 import { buildQuietGradeLine } from '@/lib/quiet-grade'
@@ -39,6 +40,106 @@ const PN_COLORS: Record<number, { bg: string; text: string }> = {
   12: { bg: '#EDE9FE', text: '#7e22ce' },
 }
 
+
+function chemMatches(rec: Recommendation, chemical: string): boolean {
+  const target = chemical.trim().toLowerCase()
+  if (!target) return false
+  return (
+    rec.original.chemical.toLowerCase() === target
+    || rec.alternative.chemical.toLowerCase() === target
+  )
+}
+
+function RelatedPrescriptions({ analysis, chemical }: { analysis: AnalysisResult; chemical: string }) {
+  const related = analysis.recommendations.filter(rec => chemMatches(rec, chemical))
+
+  return (
+    <div>
+      <p className="m-0 mb-2 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: '#57534E' }}>
+        Related prescriptions
+      </p>
+      {related.length === 0 ? (
+        <p className="m-0 text-sm font-[family-name:var(--font-sans)]" style={{ color: '#A8A29E' }}>
+          No related prescriptions for this chemical.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {related.map((rec, i) => {
+            const tier = rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')
+            return (
+              <article
+                key={rec.id ?? `${rec.stepNumber}-${rec.original.chemical}-${i}`}
+                className="rounded-lg border p-3 space-y-2"
+                style={{ background: '#FFFFFF', borderColor: '#E7E5E4' }}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold font-[family-name:var(--font-mono)]" style={{ color: '#1C1917' }}>
+                    Step {rec.stepNumber}
+                  </span>
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold uppercase"
+                    style={{
+                      background: rec.severity === 'high' ? '#FEE2E2' : rec.severity === 'medium' ? '#FEF3C7' : '#DCFCE7',
+                      color: rec.severity === 'high' ? '#DC2626' : rec.severity === 'medium' ? '#D97706' : '#16a34a',
+                    }}
+                  >
+                    {rec.severity}
+                  </span>
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                    style={{
+                      background: tier === 'sourced' ? '#DCFCE7' : '#FEF3C7',
+                      color: tier === 'sourced' ? '#166534' : '#92400E',
+                    }}
+                  >
+                    {tier === 'sourced' ? 'Literature-backed' : 'Model-inferred'}
+                  </span>
+                </div>
+                <p className="m-0 text-sm font-[family-name:var(--font-sans)]" style={{ color: '#1C1917' }}>
+                  Replace{' '}
+                  <strong className="font-[family-name:var(--font-mono)]">{rec.original.chemical}</strong>
+                  {' '}with{' '}
+                  <strong className="font-[family-name:var(--font-mono)]" style={{ color: '#166534' }}>{rec.alternative.chemical}</strong>.
+                </p>
+                {rec.original.issue && (
+                  <p className="m-0 text-xs font-[family-name:var(--font-sans)]" style={{ color: '#57534E' }}>
+                    {rec.original.issue}
+                  </p>
+                )}
+                {rec.alternative.rationale && (
+                  <p className="m-0 text-sm font-[family-name:var(--font-sans)] leading-relaxed" style={{ color: '#1C1917' }}>
+                    {rec.alternative.rationale}
+                  </p>
+                )}
+                {rec.evidence?.citations && rec.evidence.citations.length > 0 && (
+                  <div className="pt-2 border-t space-y-1" style={{ borderColor: '#E7E5E4' }}>
+                    <p className="m-0 text-[9px] font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)' }}>
+                      Citations
+                    </p>
+                    {rec.evidence.citations.map((cite, ci) => (
+                      <p key={ci} className="m-0 text-[10px] font-[family-name:var(--font-mono)] leading-relaxed" style={{ color: '#57534E' }}>
+                        {formatCitationACS(cite)}
+                        {cite.url && (
+                          <>
+                            {' '}
+                            <a href={cite.url} target="_blank" rel="noopener noreferrer" className="text-[#16a34a] hover:underline font-semibold">
+                              ↗
+                            </a>
+                          </>
+                        )}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function getActivePrinciples(analysis: AnalysisResult): number[] {
   const active = new Set<number>()
   if (analysis.deterministicScores) {
@@ -66,6 +167,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
   const metadata = analysis.analysisMetadata
   const quietGrade = buildQuietGradeLine(analysis)
 
+  const searchParams = useSearchParams()
   const [mode, setMode] = useState<Mode>('principles')
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -74,6 +176,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
   const [citeOpen, setCiteOpen] = useState(false)
   const citeDropdownRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const deepLinkApplied = useRef(false)
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -84,6 +187,26 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  useEffect(() => {
+    if (deepLinkApplied.current) return
+    const chem = searchParams.get('chem')?.trim()
+    const pRaw = searchParams.get('p')?.trim()
+    if (chem) {
+      setMode('chemicals')
+      setSelectedChemical(chem)
+      deepLinkApplied.current = true
+      return
+    }
+    if (pRaw) {
+      const pn = Number(pRaw)
+      if (Number.isFinite(pn) && pn >= 1 && pn <= 12) {
+        setMode('principles')
+        setSelectedPrinciple(pn)
+        deepLinkApplied.current = true
+      }
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus()
@@ -510,6 +633,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                     ))}
                   </div>
                 </div>
+                <RelatedPrescriptions analysis={analysis} chemical={selectedChemEntry[0]} />
                 {selectedEnriched?.data_source && !INTERNAL_SOURCE_VALUES.has(selectedEnriched.data_source) && (
                   <p className="text-xs font-[family-name:var(--font-mono)]" style={{ color: '#A8A29E' }}>
                     Source: {humanSource(selectedEnriched.data_source)}

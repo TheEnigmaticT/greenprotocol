@@ -27,6 +27,15 @@ function evidenceLabel(rec: Recommendation): 'Sourced' | 'Inferred' {
   return (rec.evidence?.citations.length ?? 0) > 0 ? 'Sourced' : 'Inferred'
 }
 
+function skimWhyLine(rec: Recommendation): string | null {
+  const issue = rec.original.issue?.trim()
+  if (issue) return issue
+  const rationale = rec.alternative.rationale?.trim()
+  if (!rationale) return null
+  const firstSentence = rationale.split(/(?<=[.!?])\s+/)[0]?.trim() || rationale
+  return firstSentence
+}
+
 function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analysisId, recommendationIndex }: {
   rec: Recommendation
   onAccept: () => void
@@ -37,6 +46,7 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
 }) {
   const tier = evidenceLabel(rec)
   const evidenceState = tier === 'Sourced' ? 'sourced' : 'inferred'
+  const whyLine = skimWhyLine(rec)
 
   return (
     <article
@@ -51,6 +61,12 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
           Step {rec.stepNumber}
         </span>
         <SeverityBadge severity={rec.severity} />
+        <span
+          className="px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase font-[family-name:var(--font-mono)]"
+          style={{ background: '#F0EBE1', color: '#78716C', letterSpacing: '0.08em' }}
+        >
+          {tier}
+        </span>
       </div>
 
       <p
@@ -76,25 +92,21 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
         <span style={{ color: '#006D15' }}>{rec.alternative.chemical}</span>
       </p>
 
-      <p
-        className="m-0 mb-4 font-[family-name:var(--font-sans)] text-base leading-relaxed"
-        style={{ color: '#1C1917', maxWidth: '62em' }}
-      >
-        {rec.alternative.rationale}
-      </p>
-
-      <p
-        className="m-0 mb-3 font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.12em]"
-        style={{ color: '#A8A29E' }}
-      >
-        {tier}
-      </p>
+      {whyLine && (
+        <p
+          className="m-0 mb-4 font-[family-name:var(--font-sans)] text-sm leading-snug line-clamp-1"
+          style={{ color: '#57534E' }}
+          title={whyLine}
+        >
+          {whyLine}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-auto">
         <button
           type="button"
           onClick={onAccept}
-          className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.14em] cursor-pointer"
+          className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em] cursor-pointer"
           style={{ background: '#1C3822', color: '#F6F3EB', border: '1px solid #1C3822' }}
         >
           Accept
@@ -102,7 +114,7 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
         <button
           type="button"
           onClick={onDecline}
-          className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.14em] cursor-pointer"
+          className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em] cursor-pointer"
           style={{ background: '#FAFAF8', color: '#78716C', border: '1px solid #D6D0C4' }}
         >
           Reject
@@ -116,7 +128,7 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
           evidenceState={evidenceState}
           onRecommendationApproved={onRecommendationApproved}
           buttonLabel="Ask"
-          className="inline-flex items-center justify-center min-h-11 w-full px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.14em]"
+          className="inline-flex items-center justify-center min-h-11 w-full px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em]"
           buttonStyle={{ background: '#F6F3EB', color: '#1C3822', border: '1px solid #ECB815', borderRadius: 0 }}
         />
       </div>
@@ -239,7 +251,7 @@ export default function FinalizedProtocol({
                             title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
                             evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
                             onRecommendationApproved={onRecommendationApproved}
-                            buttonLabel="Talk about this"
+                            buttonLabel="Ask"
                           />
                         </div>
                       )}

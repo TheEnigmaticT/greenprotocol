@@ -200,6 +200,7 @@ export default function PrincipleSection({
           scope={{ kind: 'principle', principleNumber }}
           title={`P${principleNumber}: ${principleName}`}
           evidenceState={recommendations.some(recommendation => (recommendation.evidence?.citations.length ?? 0) > 0) ? 'sourced' : 'inferred'}
+          buttonLabel="Ask"
         />
       </div>
 
@@ -410,9 +411,13 @@ export default function PrincipleSection({
                 <p className="text-xs mb-1" style={{ color: '#1C1917' }}>
                   <strong>{rec.original.chemical}</strong> → <strong style={{ color: '#166534' }}>{rec.alternative.chemical}</strong>
                 </p>
-                <p className="text-xs" style={{ color: '#57534E' }}>{rec.original.issue}</p>
-                {(rec.evidenceTier ?? 'inferred') === 'sourced' && (
-                  <p className="text-xs mt-1" style={{ color: '#2D6A4F' }}>{rec.alternative.rationale}</p>
+                {rec.original.issue && (
+                  <p className="text-xs mb-1" style={{ color: '#57534E' }}>{rec.original.issue}</p>
+                )}
+                {rec.alternative.rationale && (
+                  <p className="text-sm mt-1 font-[family-name:var(--font-sans)] leading-relaxed" style={{ color: '#1C1917' }}>
+                    {rec.alternative.rationale}
+                  </p>
                 )}
 
                 {/* Evidence */}
@@ -461,13 +466,12 @@ export default function PrincipleSection({
                     )}
                   </div>
                 )}
-                {/* Model reasoning — shown when no literature citations */}
-                {(rec.evidenceTier ?? 'inferred') === 'inferred' && rec.alternative.rationale && (
+                {/* Model-inferred caution — rationale already shown above */}
+                {(rec.evidenceTier ?? 'inferred') === 'inferred' && (
                   <div className="mt-3 p-3 rounded" style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
                     <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#92400E', fontFamily: 'var(--font-mono)' }}>
                       Model-inferred (no literature citation)
                     </p>
-                    <p className="text-xs mb-1" style={{ color: '#78350F' }}>{rec.alternative.rationale}</p>
                     <p className="text-[9px] italic" style={{ color: '#92400E' }}>
                       Treat as a starting hypothesis; verify against primary literature before adoption.
                     </p>

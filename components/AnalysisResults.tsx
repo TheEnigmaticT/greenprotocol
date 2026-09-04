@@ -124,7 +124,7 @@ export function EvidenceAtlasTalkControl({ analysisId, analysis }: { analysisId:
       scope={{ kind: 'principle', principleNumber }}
       title="P1 Evidence Atlas"
       evidenceState={hasScopedCitations ? 'sourced' : 'inferred'}
-      buttonLabel="Chat about P1 Evidence Atlas"
+      buttonLabel="Ask"
     />
   )
 }

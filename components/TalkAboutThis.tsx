@@ -442,7 +442,7 @@ function parseSseEvent(block: string): { event: string; data: Record<string, unk
     return null
   }
 }
-export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecommendationApproved, buttonLabel = 'Chat about this', className, buttonStyle }: TalkAboutThisProps) {
+export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecommendationApproved, buttonLabel = 'Ask', className, buttonStyle }: TalkAboutThisProps) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
