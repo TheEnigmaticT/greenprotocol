@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { IBM_Plex_Mono, Libre_Baskerville } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Libre_Baskerville } from "next/font/google";
 import "./globals.css";
 
 const ibmPlexMono = IBM_Plex_Mono({
   variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const ibmPlexSans = IBM_Plex_Sans({
+  variable: "--font-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600"],
 });
@@ -41,7 +47,7 @@ export default function RootLayout({
         <meta name="build-version" content="20260901-023800" />
       </head>
       <body
-        className={`${ibmPlexMono.variable} ${libreBaskerville.variable} antialiased`}
+        className={`${ibmPlexMono.variable} ${ibmPlexSans.variable} ${libreBaskerville.variable} antialiased`}
       >
         <Script
           src="https://umami.crowdtamers.com/script.js"

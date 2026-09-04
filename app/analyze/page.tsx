@@ -1,7 +1,6 @@
 'use client'
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
 import { calculateOriginalTotals } from '@/lib/calculations'
@@ -10,12 +9,13 @@ import ImpactScoreboard from '@/components/ImpactScoreboard'
 import ScaleUpProjection from '@/components/ScaleUpProjection'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import ScoreCard from '@/components/ScoreCard'
-import UserMenu from '@/components/UserMenu'
 import ChemistryDataNotice from '@/components/ChemistryDataNotice'
 import DeterministicScoreRecovery from '@/components/DeterministicScoreRecovery'
 import ProtocolInput from '@/components/ProtocolInput'
+import AppShell from '@/components/AppShell'
 import { NEW_ANALYSIS_HREF, clearAnalysisSession, resolveAnalysisSession } from '@/lib/analysis-session'
 import { applyDeterministicScores, rescoreAnalysis } from '@/lib/rescore'
+import { buildQuietGradeLine } from '@/lib/quiet-grade'
 
 interface StoredData {
   id?: string
@@ -166,79 +166,51 @@ function AnalyzePageContent() {
 
   if (!data || !originalTotals) {
     return (
-      <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
-        <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-          <Link
-            href="/"
-            className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
-            style={{ color: '#1C3822' }}
-          >
-            greenchemistry.ai
-          </Link>
-          <UserMenu />
-        </header>
-
-        <main className="max-w-5xl mx-auto px-6 py-10">
+      <AppShell historyLabel="Dashboard">
+        <main id="main-content" className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
           <div className="mb-8">
             <h1 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C1917' }}>
               Analyze a Protocol
             </h1>
-            <p className="text-sm mt-2 max-w-2xl" style={{ color: '#78716C' }}>
+            <p className="text-sm mt-2 max-w-2xl font-[family-name:var(--font-sans)]" style={{ color: '#78716C' }}>
               Paste a chemistry protocol to generate deterministic green chemistry scores and recommended substitutions.
             </p>
           </div>
           <ProtocolInput />
         </main>
-      </div>
+      </AppShell>
     )
   }
 
-  return (
-    <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
-      <header className="print:hidden flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-        <Link
-          href="/"
-          className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
-          style={{ color: '#1C3822' }}
-        >
-          greenchemistry.ai
-        </Link>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <button
-            onClick={handleNewAnalysis}
-            className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)] hover:border-[#1C3822] cursor-pointer"
-            style={{ color: '#1C3822', borderColor: '#D6D0C4', background: 'transparent' }}
-          >
-            New Analysis
-          </button>
-          <UserMenu />
-        </div>
-      </header>
+  const quietGrade = buildQuietGradeLine(data.analysis)
 
-      <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-serif)] break-words" style={{ color: '#1C1917' }}>
+  return (
+    <AppShell analysisId={data.id} activeTab="decisions" onNewAnalysis={handleNewAnalysis}>
+      <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-10">
+        <header>
+          <p className="m-0 mb-2 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>
+            Protocol under review
+          </p>
+          <h1 className="text-[22px] sm:text-[26px] font-bold font-[family-name:var(--font-serif)] break-words leading-snug m-0" style={{ color: '#1C1917' }}>
             {data.analysis.protocolTitle}
           </h1>
-          <p className="text-sm mt-1" style={{ color: '#78716C' }}>{data.analysis.chemistrySubdomain}</p>
+          <p
+            className="mt-2.5 mb-0 font-[family-name:var(--font-mono)] text-[13px] font-medium tabular-nums"
+            style={{ color: '#44403C' }}
+            role="status"
+          >
+            {quietGrade}
+          </p>
           {persistError && (
             <p className="text-sm mt-2" style={{ color: '#B45309' }}>
               {persistError}
             </p>
           )}
-        </div>
+        </header>
 
         <ChemistryDataNotice status={data.analysis.chemistryDataStatus} />
 
-        {data.analysis.deterministicScores ? (
-          <section className="p-6 rounded-xl print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
-            <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} analysisId={data.id} />
-          </section>
-        ) : data.analysis.chemistryDataStatus?.deterministicScoringAvailable === false ? (
-          <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} />
-        ) : null}
-
-        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
+        <section>
           <FinalizedProtocol
             analysis={data.analysis}
             originalProtocol={data.protocolText}
@@ -247,25 +219,24 @@ function AnalyzePageContent() {
           />
         </section>
 
-        <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
-          <ImpactScoreboard
-            analysis={data.analysis}
-            originalTotals={originalTotals}
-          />
-        </section>
+        {data.analysis.deterministicScores ? (
+          <section className="p-5 sm:p-6 rounded-lg print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
+            <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} analysisId={data.id} />
+          </section>
+        ) : data.analysis.chemistryDataStatus?.deterministicScoringAvailable === false ? (
+          <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} />
+        ) : null}
 
-        <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
-          <ScaleUpProjection analysis={data.analysis} />
-        </section>
+        <details className="print:hidden border-t pt-6" style={{ borderColor: '#D6D0C4' }}>
+          <summary className="cursor-pointer list-none font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>
+            Impact &amp; scale-up
+          </summary>
+          <div className="mt-6 space-y-10">
+            <ImpactScoreboard analysis={data.analysis} originalTotals={originalTotals} />
+            <ScaleUpProjection analysis={data.analysis} />
+          </div>
+        </details>
       </main>
-
-      <footer className="print:hidden border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
-        <p className="text-sm" style={{ color: '#78716C' }}>
-          Built for{' '}
-          <span className="font-semibold" style={{ color: '#1C3822' }}>LabreNew.org</span>
-          {' '}&mdash; Green chemistry recommendations require experimental validation before adoption.
-        </p>
-      </footer>
-    </div>
+    </AppShell>
   )
 }

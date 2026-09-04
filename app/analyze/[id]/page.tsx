@@ -11,11 +11,11 @@ import ImpactScoreboard from '@/components/ImpactScoreboard'
 import ScaleUpProjection from '@/components/ScaleUpProjection'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import ScoreCard from '@/components/ScoreCard'
-import UserMenu from '@/components/UserMenu'
 import ChemistryDataNotice from '@/components/ChemistryDataNotice'
 import DeterministicScoreRecovery from '@/components/DeterministicScoreRecovery'
-import { NEW_ANALYSIS_HREF } from '@/lib/analysis-session'
+import AppShell from '@/components/AppShell'
 import { applyDeterministicScores, rescoreAnalysis } from '@/lib/rescore'
+import { buildQuietGradeLine } from '@/lib/quiet-grade'
 
 export interface AnalysisData {
   id: string
@@ -116,7 +116,7 @@ export default function AnalysisByIdPage() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
           <p className="text-lg" style={{ color: '#EF4444' }}>{error}</p>
-          <Link href="/dashboard" className="text-sm underline" style={{ color: '#7C2D36' }}>
+          <Link href="/dashboard" className="text-sm underline" style={{ color: '#1C3822' }}>
             Back to Dashboard
           </Link>
         </div>
@@ -164,74 +164,35 @@ export default function AnalysisByIdPage() {
     }
   }
 
-  return (
-    <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
-      <header className="print:hidden flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-        <Link
-          href="/"
-          className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
-          style={{ color: '#1C3822' }}
-        >
-          greenchemistry.ai
-        </Link>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <Link
-            href={NEW_ANALYSIS_HREF}
-            className="hidden sm:inline-block text-sm px-3 py-1.5 rounded border transition-colors font-[family-name:var(--font-mono)]"
-            style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
-          >
-            New Analysis
-          </Link>
-          <UserMenu />
-        </div>
-      </header>
+  const quietGrade = buildQuietGradeLine(data.analysis)
 
-      <main className="max-w-6xl mx-auto px-6 py-8 space-y-12">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-serif)] break-words" style={{ color: '#1C1917' }}>
+  return (
+    <AppShell analysisId={id} activeTab="decisions">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-10">
+        <header>
+          <p className="m-0 mb-2 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>
+            Protocol under review
+          </p>
+          <h1 className="text-[22px] sm:text-[26px] font-bold font-[family-name:var(--font-serif)] break-words leading-snug m-0" style={{ color: '#1C1917' }}>
             {data.analysis.protocolTitle}
           </h1>
-          <p className="text-sm mt-1" style={{ color: '#78716C' }}>{data.analysis.chemistrySubdomain}</p>
+          <p
+            className="mt-2.5 mb-0 font-[family-name:var(--font-mono)] text-[13px] font-medium tabular-nums"
+            style={{ color: '#44403C' }}
+            role="status"
+          >
+            {quietGrade}
+          </p>
           {persistError && (
             <p className="text-sm mt-2" style={{ color: '#B45309' }}>
               {persistError}
             </p>
           )}
-        </div>
+        </header>
 
         <ChemistryDataNotice status={data.analysis.chemistryDataStatus} />
 
-        {data.analysis.deterministicScores ? (
-          <section className="p-6 rounded-lg print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
-            <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} analysisId={id} />
-          </section>
-        ) : data.analysis.chemistryDataStatus?.deterministicScoringAvailable === false ? (
-          <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} />
-        ) : null}
-
-        {data.analysis.analysisMetadata && (
-          <div
-            className="print:hidden rounded-lg p-4 flex items-start gap-3"
-            style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}
-          >
-            <div className="flex-1">
-              <p className="text-sm font-medium" style={{ color: '#1C3822' }}>Evidence Atlas</p>
-              <p className="text-xs mt-0.5" style={{ color: '#57534E' }}>
-                Full citations, calculation trails, and confidence tiers for every recommendation.
-                Share this URL to cite this analysis in publications or methods sections.
-              </p>
-            </div>
-            <a
-              href={`/analyze/${id}/evidence`}
-              className="shrink-0 px-3 py-1.5 rounded text-sm font-medium transition-colors"
-              style={{ background: '#F5F0E8', color: '#1C3822', border: '1px solid #D6D0C4' }}
-            >
-              View →
-            </a>
-          </div>
-        )}
-
-        <section className="border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
+        <section>
           <FinalizedProtocol
             analysis={data.analysis}
             originalProtocol={data.protocolText}
@@ -241,25 +202,24 @@ export default function AnalysisByIdPage() {
           />
         </section>
 
-        <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
-          <ImpactScoreboard
-            analysis={data.analysis}
-            originalTotals={originalTotals}
-          />
-        </section>
+        {data.analysis.deterministicScores ? (
+          <section className="p-5 sm:p-6 rounded-lg print:hidden" style={{ background: '#FAFAF8', border: '1px solid #D6D0C4' }}>
+            <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} analysisId={id} />
+          </section>
+        ) : data.analysis.chemistryDataStatus?.deterministicScoringAvailable === false ? (
+          <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} />
+        ) : null}
 
-        <section className="print:hidden border-t pt-8" style={{ borderColor: '#D6D0C4' }}>
-          <ScaleUpProjection analysis={data.analysis} />
-        </section>
+        <details className="print:hidden border-t pt-6 group" style={{ borderColor: '#D6D0C4' }}>
+          <summary className="cursor-pointer list-none font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>
+            Impact &amp; scale-up
+          </summary>
+          <div className="mt-6 space-y-10">
+            <ImpactScoreboard analysis={data.analysis} originalTotals={originalTotals} />
+            <ScaleUpProjection analysis={data.analysis} />
+          </div>
+        </details>
       </main>
-
-      <footer className="print:hidden border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
-        <p className="text-sm" style={{ color: '#78716C' }}>
-          Built for{' '}
-          <span className="font-semibold" style={{ color: '#1C3822' }}>LabreNew.org</span>
-          {' '}&mdash; Green chemistry recommendations require experimental validation before adoption.
-        </p>
-      </footer>
-    </div>
+    </AppShell>
   )
 }
