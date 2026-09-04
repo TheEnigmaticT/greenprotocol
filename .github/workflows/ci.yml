@@ -59,7 +59,11 @@ jobs:
       run:
         working-directory: services/chemistry
     steps:
+      # Chemistry source datasets are Git LFS assets. Without this, a clean CI
+      # checkout sees pointer files and manifest integrity validation must fail.
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -87,6 +91,7 @@ jobs:
             grep -q "^  ${gate}:" .github/workflows/ci.yml || { echo "Missing required CI gate: ${gate}"; exit 1; }
           done
           test -f .github/workflows/release-production.yml
+          grep -q 'lfs: true' .github/workflows/ci.yml
           grep -q 'environment: production' .github/workflows/release-production.yml
           grep -q 'verify-chemistry-release.sh' .github/workflows/release-production.yml
           test -x scripts/deploy-chemistry-cloud-run.sh
