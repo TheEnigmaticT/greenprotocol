@@ -794,11 +794,16 @@ export async function analyzeProtocol(
       for (const chemical of allChemicals) unresolvedChemicals.add(chemical.name)
     }
 
-    // Score only when every parsed material resolved to a definite chemistry
-    // record. Missing/indefinite data must remain explicitly unavailable.
-    if (unresolvedChemicals.size === 0 && indefiniteChemicals.size === 0) {
-      // Score: deterministic scoring against all 12 principles
-    onProgress?.({ type: 'phase', phase: 2, message: 'Scoring against 12 principles...' })
+    // A missing or indefinite material limits only principles that require that
+    // material's reference data. It must not suppress protocol-level scoring
+    // (including LLM-assisted P1/P2/P8/P11) for the whole analysis.
+    if (batchResult) {
+      console.info('[chemistry] scoring after batch', {
+        batchResults: batchResult.results.length,
+        unresolvedChemicals: unresolvedChemicals.size,
+        indefiniteChemicals: indefiniteChemicals.size,
+      })
+      onProgress?.({ type: 'phase', phase: 2, message: 'Scoring against 12 principles...' })
     const scoreChemicals = parsed.steps.flatMap(step =>
       step.chemicals.map(c => {
         // Find the enriched version
@@ -1049,11 +1054,11 @@ export async function analyzeProtocol(
       unresolvedChemicals: Array.from(unresolvedChemicals).sort((a, b) => a.localeCompare(b)),
       indefiniteChemicals: Array.from(indefiniteChemicals).sort((a, b) => a.localeCompare(b)),
       message: deterministicScores === undefined
-        ? 'Deterministic chemistry scoring was unavailable for this analysis — the chemistry reference service could not be reached. The recommendations below are LLM-assisted only; reference-grounded scores were not applied. Re-run when the service is available.'
+        ? 'Deterministic chemistry scoring was unavailable because the chemistry service did not return a score. Re-run when the service is available.'
         : unresolvedChemicals.size > 0
-          ? 'We could not retrieve every chemical reference record live. This analysis used the best data available, and queued the missing items so the analysis can be re-run when updated reference data is available.'
+          ? 'Partial deterministic scoring completed. Some material-level calculations are unavailable because chemical reference records could not be retrieved for the listed materials.'
           : indefiniteChemicals.size > 0
-            ? 'Some protocol materials have indefinite composition and cannot be analyzed as single chemicals. They are excluded from PubChem recovery and chemistry scoring.'
+            ? 'Partial deterministic scoring completed. Materials with indefinite composition cannot be analyzed as single chemicals, so only dependent calculations may be unavailable.'
             : 'All requested chemical reference data was available from cache or bundled sources.',
     },
     // v0.7: Re-evaluation statistics
