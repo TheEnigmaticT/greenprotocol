@@ -121,7 +121,7 @@ function LoginForm() {
             type="submit"
             disabled={loading}
             className="w-full px-4 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-            style={{ background: '#7C2D36', color: '#FAF8F3' }}
+            style={{ background: '#1C3822', color: '#F6F3EB', border: '1px solid #ECB815' }}
           >
             {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
           </button>
@@ -132,7 +132,7 @@ function LoginForm() {
           <button
             onClick={() => { setIsSignUp(!isSignUp); setError(null) }}
             className="underline cursor-pointer font-semibold"
-            style={{ color: '#7C2D36' }}
+            style={{ color: '#1C3822', textDecorationColor: '#ECB815' }}
           >
             {isSignUp ? 'Sign In' : 'Sign Up'}
           </button>

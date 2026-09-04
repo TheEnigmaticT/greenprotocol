@@ -67,3 +67,6 @@ services/chemistry/data/solvent-evidence/*.sqlite*
 # Local operational metadata and agent execution ledgers.
 /supabase/.temp/
 /.superpowers/
+
+# visual-pass credentials (local only)
+.env.visual-pass

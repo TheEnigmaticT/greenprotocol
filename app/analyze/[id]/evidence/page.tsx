@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { AnalysisResult } from '@/lib/types'
@@ -49,7 +49,7 @@ export default function EvidencePage() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
           <p className="text-lg" style={{ color: '#EF4444' }}>{error}</p>
-          <Link href="/dashboard" className="text-sm underline" style={{ color: '#7C2D36' }}>
+          <Link href="/dashboard" className="text-sm underline" style={{ color: '#1C3822' }}>
             Back to Dashboard
           </Link>
         </div>
@@ -68,5 +68,13 @@ export default function EvidencePage() {
     )
   }
 
-  return <EvidenceAtlas analysisId={id} analysis={data.analysis} />
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
+        <p style={{ color: '#78716C' }}>Loading evidence...</p>
+      </div>
+    }>
+      <EvidenceAtlas analysisId={id} analysis={data.analysis} />
+    </Suspense>
+  )
 }

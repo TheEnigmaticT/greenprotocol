@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { GpcProfile, AnalysisSummary } from '@/lib/types'
-import UserMenu from '@/components/UserMenu'
 import UsernameSetup from '@/components/UsernameSetup'
 import AnalysisCard from '@/components/AnalysisCard'
+import AppShell from '@/components/AppShell'
 import { NEW_ANALYSIS_HREF } from '@/lib/analysis-session'
 
 export default function DashboardPage() {
@@ -60,28 +60,8 @@ export default function DashboardPage() {
   })
 
   return (
-    <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
-      <header className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-        <Link
-          href="/"
-          className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
-          style={{ color: '#1C3822' }}
-        >
-          greenchemistry.ai
-        </Link>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <Link
-            href={NEW_ANALYSIS_HREF}
-            className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
-            style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
-          >
-            New Analysis
-          </Link>
-          <UserMenu />
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+    <AppShell historyHref="/dashboard" historyLabel="Dashboard">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="flex items-center justify-between">
           <h1 className="font-[family-name:var(--font-serif)] text-2xl font-bold" style={{ color: '#1C1917' }}>
             Dashboard
@@ -90,7 +70,7 @@ export default function DashboardPage() {
             <Link
               href={`/u/${profile.username}`}
               className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
-              style={{ color: '#7C2D36', borderColor: '#D6D0C4' }}
+              style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
             >
               Public Profile &rarr;
             </Link>
@@ -130,21 +110,13 @@ export default function DashboardPage() {
             <Link
               href={NEW_ANALYSIS_HREF}
               className="inline-block px-6 py-3 rounded-lg font-semibold text-sm"
-              style={{ background: '#7C2D36', color: '#FAF8F3' }}
+              style={{ background: '#1C3822', color: '#F6F3EB' }}
             >
               Analyze Your First Protocol
             </Link>
           </div>
         )}
       </main>
-
-      <footer className="border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
-        <p className="text-sm" style={{ color: '#78716C' }}>
-          Built for{' '}
-          <span className="font-semibold" style={{ color: '#1C3822' }}>LabreNew.org</span>
-          {' '}&mdash; Green chemistry recommendations require experimental validation before adoption.
-        </p>
-      </footer>
-    </div>
+    </AppShell>
   )
 }

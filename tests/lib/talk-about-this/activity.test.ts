@@ -245,7 +245,8 @@ describe('scope instructions and Evidence Atlas controls', () => {
     } as AnalysisResult
     const markup = renderToStaticMarkup(createElement(EvidenceAtlasTalkControl, { analysisId: 'analysis-1', analysis }))
 
-    expect(markup).toContain('P1 Evidence Atlas')
+    expect(markup).toContain('Ask')
+    expect(markup).toContain('aria-label="Ask. Direct evidence is included in this discussion."')
     expect(markup).toContain('Direct evidence is included')
   })
 
@@ -308,9 +309,9 @@ describe('accepted recommendation receipt access', () => {
       analysisId: 'analysis-1',
     }))
 
-    expect(markup).toContain('Accepted Changes (1)')
-    expect(markup).toContain('aria-label="Talk about this. Direct evidence is included in this discussion."')
-    expect(missingIdMarkup).not.toContain('aria-label="Talk about this.')
+    expect(markup).toContain('Accepted · 1')
+    expect(markup).toContain('aria-label="Ask. Direct evidence is included in this discussion."')
+    expect(missingIdMarkup).not.toContain('aria-label="Ask.')
   })
 })
 

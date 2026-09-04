@@ -2,8 +2,8 @@
 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from 'react'
-import { parseTalkAboutScope, type TalkAboutScope } from '@/lib/talk-about-this/context'
+import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { parseTalkAboutScope, type TalkAboutScope } from '@/lib/talk-about-this/scope'
 import type { LiteratureEvidenceMatch } from '@/lib/types'
 import { isPersistedEvidence, type PersistedEvidenceReceipt } from '@/lib/talk-about-this/evidence'
 import type { PersistedChatMessage } from '@/lib/talk-about-this/repository'
@@ -423,6 +423,8 @@ interface TalkAboutThisProps {
   title: string
   evidenceState: 'sourced' | 'inferred'
   buttonLabel?: string
+  className?: string
+  buttonStyle?: CSSProperties
   onRecommendationApproved?: (receipt: RecommendationApprovalReceipt) => void
 }
 
@@ -440,7 +442,7 @@ function parseSseEvent(block: string): { event: string; data: Record<string, unk
     return null
   }
 }
-export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecommendationApproved, buttonLabel = 'Chat about this' }: TalkAboutThisProps) {
+export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecommendationApproved, buttonLabel = 'Ask', className, buttonStyle }: TalkAboutThisProps) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
@@ -668,8 +670,8 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
         type="button"
         onClick={() => void openConversation()}
         disabled={!analysisId || isStarting}
-        className="text-xs px-3 py-1.5 rounded border font-bold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ color: '#1C3822', borderColor: '#2D4A3A', background: '#F6F3EB' }}
+        className={className ?? 'text-xs px-3 py-1.5 rounded border font-bold uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-50'}
+        style={buttonStyle ?? { color: '#1C3822', borderColor: '#2D4A3A', background: '#F6F3EB' }}
         aria-label={`${buttonLabel}. ${evidenceState === 'sourced' ? 'Direct evidence is included in this discussion.' : 'Model-inferred — no direct evidence located.'}`}
       >
         {isStarting ? 'Opening…' : buttonLabel}
