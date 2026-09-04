@@ -15,20 +15,61 @@ async def call_llm(prompt: str, system: str = "") -> str | None:
     """Make a single LLM call and return the text response.
     
     Checks for providers in order:
-    1. ANTHROPIC_API_KEY -> Claude API
-    2. LOCAL_LLM_URL -> OpenAI-compatible endpoint (Qwen, etc.)
-    
+    1. OPENROUTER_API_KEY -> OpenRouter's OpenAI-compatible API
+    2. ANTHROPIC_API_KEY -> Anthropic Claude API
+    3. LOCAL_LLM_URL -> OpenAI-compatible endpoint (Qwen, etc.)
+
     Returns None if no provider is configured or call fails.
     """
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     local_url = os.environ.get("LOCAL_LLM_URL")
     model = os.environ.get("LLM_MODEL", "claude-sonnet-4-5-20250929")
 
+    if openrouter_key:
+        return await _call_openrouter(
+            prompt,
+            system,
+            openrouter_key,
+            os.environ.get("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5"),
+        )
     if anthropic_key:
         return await _call_anthropic(prompt, system, anthropic_key, model)
     elif local_url:
         return await _call_openai_compatible(prompt, system, local_url, model)
     else:
+        return None
+
+
+async def _call_openrouter(
+    prompt: str, system: str, api_key: str, model: str
+) -> str | None:
+    """Call a hosted model through OpenRouter's OpenAI-compatible API."""
+    base_url = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            resp = await client.post(
+                f"{base_url.rstrip('/')}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": 1024,
+                    "temperature": 0.0,
+                },
+            )
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+    except Exception:
         return None
 
 
