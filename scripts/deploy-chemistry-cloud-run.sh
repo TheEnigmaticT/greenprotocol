@@ -32,12 +32,14 @@ case "$DEPLOY_ENV" in
   staging)
     PROJECT_ID="${STAGING_GCP_PROJECT_ID:-greenchemistry-ai}"
     SERVICE_NAME="${STAGING_CHEMISTRY_SERVICE:-gcai-chemistry}"
-    REPOSITORY="${STAGING_ARTIFACT_REPOSITORY:-greenchemistry-staging}"
-    TOKEN_SECRET="${STAGING_CHEMISTRY_TOKEN_SECRET:-}"
-    SUPABASE_URL_SECRET="${STAGING_SUPABASE_URL_SECRET:-}"
-    SUPABASE_SERVICE_ROLE_SECRET="${STAGING_SUPABASE_SERVICE_ROLE_SECRET:-}"
-    PROVIDER_KEY_SECRET="${STAGING_OPENROUTER_API_KEY_SECRET:-}"
-    PROVIDER_MODEL="${STAGING_OPENROUTER_MODEL:-}"
+    # The image registry is shared solely to preserve a single immutable digest
+    # between staging verification and production promotion.
+    REPOSITORY="${STAGING_ARTIFACT_REPOSITORY:-cloud-run-source-deploy}"
+    TOKEN_SECRET="${STAGING_CHEMISTRY_TOKEN_SECRET:-staging-chemistry-service-token}"
+    SUPABASE_URL_SECRET="${STAGING_SUPABASE_URL_SECRET:-staging-supabase-url}"
+    SUPABASE_SERVICE_ROLE_SECRET="${STAGING_SUPABASE_SERVICE_ROLE_SECRET:-staging-supabase-service-role-key}"
+    PROVIDER_KEY_SECRET="${STAGING_OPENROUTER_API_KEY_SECRET:-staging-greenchemistry-openrouter-api-key}"
+    PROVIDER_MODEL="${STAGING_OPENROUTER_MODEL:-anthropic/claude-sonnet-4.5}"
     ;;
   production)
     PROJECT_ID="${PRODUCTION_GCP_PROJECT_ID:-greenchemistry-ai}"
@@ -55,11 +57,15 @@ for required in TOKEN_SECRET SUPABASE_URL_SECRET SUPABASE_SERVICE_ROLE_SECRET PR
   [[ -n "${!required}" ]] || fail "$required must be configured for $DEPLOY_ENV; refusing to infer credentials or routing."
 done
 
-IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}:${GIT_SHA}"
-"$GCLOUD" artifacts repositories describe "$REPOSITORY" --location "$REGION" --project "$PROJECT_ID" >/dev/null
-"$GCLOUD" builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE"
-IMAGE_DIGEST="$("$GCLOUD" artifacts docker images describe "$IMAGE" --project "$PROJECT_ID" --format='value(image_summary.digest)')"
-[[ -n "$IMAGE_DIGEST" ]] || fail "Could not resolve immutable image digest after build."
+# Deployment never builds an image. Staging must establish an immutable candidate
+# first; production may only promote that exact digest after a reviewed release PR.
+IMAGE_DIGEST="${IMAGE_DIGEST:-}"
+[[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || \
+  fail "IMAGE_DIGEST is required and must be an immutable sha256 digest."
+# The image name is intentionally independent from the runtime service name so
+# staging and production deploy the same immutable artifact digest.
+CHEMISTRY_IMAGE_NAME="${CHEMISTRY_IMAGE_NAME:-greenchemistry-chemistry}"
+IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NAME}:${GIT_SHA}"
 
 "$GCLOUD" run deploy "$SERVICE_NAME" \
   --project "$PROJECT_ID" --region "$REGION" --image "${IMAGE}@${IMAGE_DIGEST}" \

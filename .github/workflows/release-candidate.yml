@@ -1,0 +1,110 @@
+name: Validate release candidate
+
+on:
+  pull_request:
+    branches: [production]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-staging-image:
+    name: build-staging-image
+    runs-on: ubuntu-24.04
+    environment: staging
+    outputs:
+      image_digest: ${{ steps.image.outputs.image_digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          lfs: true
+          fetch-depth: 0
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_STAGING_RELEASE_CREDENTIALS }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - id: image
+        name: Build or resolve the staging candidate image
+        env:
+          DEPLOY_ENV: staging
+          GIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bash scripts/build-chemistry-image.sh | tee image.txt
+          echo "image_digest=$(awk -F= '/^image_digest=/{print $2}' image.txt)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staging-candidate-image
+          path: image.txt
+
+  staging-sentinel:
+    name: staging-sentinel
+    needs: build-staging-image
+    runs-on: ubuntu-24.04
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          lfs: true
+          fetch-depth: 0
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_STAGING_RELEASE_CREDENTIALS }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy the exact staging-validated digest
+        env:
+          DEPLOY_ENV: staging
+          GIT_SHA: ${{ github.event.pull_request.head.sha }}
+          IMAGE_DIGEST: ${{ needs.build-staging-image.outputs.image_digest }}
+        run: bash scripts/deploy-chemistry-cloud-run.sh
+      - name: Verify health and authenticated chemistry sentinel
+        env:
+          DEPLOY_ENV: staging
+          GIT_SHA: ${{ github.event.pull_request.head.sha }}
+          STAGING_CHEMISTRY_SERVICE_TOKEN: ${{ secrets.STAGING_CHEMISTRY_SERVICE_TOKEN }}
+        run: bash scripts/verify-chemistry-release.sh
+
+  staging-e2e:
+    name: staging-e2e
+    needs: staging-sentinel
+    runs-on: ubuntu-24.04
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise the deployed staging web smoke
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_WEB_URL }}
+        run: |
+          test -n "$PLAYWRIGHT_BASE_URL" || { echo "Staging environment variable STAGING_WEB_URL is required."; exit 1; }
+          npx playwright test tests/release-smoke.spec.ts
+
+  release-candidate-evidence:
+    name: release-candidate-evidence
+    needs: [build-staging-image, staging-sentinel, staging-e2e]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Record sanitized candidate identifiers
+        run: |
+          {
+            echo "candidate_sha=${{ github.event.pull_request.head.sha }}"
+            echo "image_digest=${{ needs.build-staging-image.outputs.image_digest }}"
+            echo "candidate_workflow=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } | tee release-candidate-evidence.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-evidence
+          path: release-candidate-evidence.txt

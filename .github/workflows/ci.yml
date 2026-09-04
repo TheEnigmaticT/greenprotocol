@@ -91,8 +91,15 @@ jobs:
             grep -q "^  ${gate}:" .github/workflows/ci.yml || { echo "Missing required CI gate: ${gate}"; exit 1; }
           done
           test -f .github/workflows/release-production.yml
+          test -f .github/workflows/release-candidate.yml
           grep -q 'lfs: true' .github/workflows/ci.yml
+          grep -q 'lfs: true' .github/workflows/release-production.yml
           grep -q 'environment: production' .github/workflows/release-production.yml
+          grep -q 'environment: staging' .github/workflows/release-candidate.yml
+          grep -q 'staging-sentinel' .github/workflows/release-candidate.yml
+          grep -q 'staging-e2e' .github/workflows/release-candidate.yml
           grep -q 'verify-chemistry-release.sh' .github/workflows/release-production.yml
+          test -x scripts/build-chemistry-image.sh
+          test -x scripts/resolve-chemistry-image.sh
           test -x scripts/deploy-chemistry-cloud-run.sh
           test -x scripts/verify-chemistry-release.sh

@@ -15,12 +15,13 @@ Do not use a staging service that shares production service tokens, provider key
 
 Only the GitHub `release-production.yml` workflow calls the deploy script for production. It supplies `DEPLOY_ENV=production`, the exact `GITHUB_SHA`, and the approved workflow authority. The script:
 
-1. refuses a missing/ambiguous environment or a SHA that is not the checkout;
-2. never creates GCP projects, enables APIs, or creates Artifact Registry repositories;
-3. builds a SHA-tagged image and resolves its digest;
-4. selects service, project, repository, bindings, and model solely from the declared environment;
-5. deploys only Secret Manager bindings, never literal credential values;
-6. prints the Git SHA, image digest, revision, and URL for release evidence.
+1. `scripts/build-chemistry-image.sh` runs only in staging: it creates or resolves a SHA-tagged candidate exactly once, then records its digest;
+2. staging deploys and verifies that exact digest against staging-only service, secrets, token, and provider routing;
+3. production `scripts/resolve-chemistry-image.sh` resolves the existing candidate digest and refuses to build, retag, or use an unvalidated image;
+4. the production deploy script refuses a missing/ambiguous environment, SHA, or image digest;
+5. neither script creates GCP projects, enables APIs, or creates Artifact Registry repositories;
+6. deploy selects service, project, bindings, and model solely from the declared environment;
+7. deploy uses only Secret Manager bindings, never literal credential values, and prints release identity for evidence.
 
 After deploy, `scripts/verify-chemistry-release.sh` requires the exact revision labels, 100% traffic, required binding names, `/health`, and an authenticated `/batch` sentinel. It is read-only.
 

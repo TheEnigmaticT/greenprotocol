@@ -16,10 +16,13 @@ jobs:
     name: deploy-chemistry
     runs-on: ubuntu-24.04
     environment: production
+    outputs:
+      image_digest: ${{ steps.image.outputs.image_digest }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          lfs: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -27,10 +30,19 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_PRODUCTION_RELEASE_CREDENTIALS }}
       - uses: google-github-actions/setup-gcloud@v2
+      - name: Resolve the immutable staging-validated image
+        id: image
+        env:
+          DEPLOY_ENV: production
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          bash scripts/resolve-chemistry-image.sh | tee image.txt
+          echo "image_digest=$(awk -F= '/^image_digest=/{print $2}' image.txt)" >> "$GITHUB_OUTPUT"
       - name: Deploy the exact production commit
         env:
           DEPLOY_ENV: production
           GIT_SHA: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.image_digest }}
           GITHUB_ACTIONS: 'true'
           RELEASE_AUTHORITY: approved-production-release
         run: bash scripts/deploy-chemistry-cloud-run.sh
@@ -51,6 +63,7 @@ jobs:
         run: |
           {
             echo "git_sha=${{ github.sha }}"
+            echo "image_digest=${{ needs.deploy-chemistry.outputs.image_digest }}"
             echo "release_workflow=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } | tee release-evidence.txt
       - uses: actions/upload-artifact@v4
