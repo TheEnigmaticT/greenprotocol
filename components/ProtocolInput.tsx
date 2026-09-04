@@ -54,6 +54,25 @@ const SCIENCE_QUIPS = [
   'Catalyzing a greener future...',
 ]
 
+function ProgressLabelRow({ color, labelOpacity, quip, completed, total }: {
+  color: string
+  labelOpacity: number
+  quip: string
+  completed: number
+  total: number
+}) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-between gap-3 px-4 pointer-events-none">
+      <span className="text-sm font-[family-name:var(--font-mono)] truncate transition-opacity duration-300 motion-reduce:transition-none" style={{ color, opacity: labelOpacity }}>
+        {quip}
+      </span>
+      <span className="text-xs font-[family-name:var(--font-mono)] tabular-nums shrink-0" style={{ color }}>
+        {completed}/{total}
+      </span>
+    </div>
+  )
+}
+
 function ProgressBar({ completed, total }: { completed: number; total: number }) {
   const [quipIndex, setQuipIndex] = useState(() => Math.floor(Math.random() * SCIENCE_QUIPS.length))
   const [fade, setFade] = useState(true)
@@ -84,23 +103,6 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
   const fillPct = Math.min(100, Math.max(pct, completed > 0 ? 3 : 0))
   const labelOpacity = reduceMotion || fade ? 1 : 0
 
-  const LabelRow = ({ color }: { color: string }) => (
-    <div className="absolute inset-0 flex items-center justify-between gap-3 px-4 pointer-events-none">
-      <span
-        className="text-sm font-[family-name:var(--font-mono)] truncate transition-opacity duration-300 motion-reduce:transition-none"
-        style={{ color, opacity: labelOpacity }}
-      >
-        {SCIENCE_QUIPS[quipIndex]}
-      </span>
-      <span
-        className="text-xs font-[family-name:var(--font-mono)] tabular-nums shrink-0"
-        style={{ color }}
-      >
-        {completed}/{total}
-      </span>
-    </div>
-  )
-
   return (
     <div className="w-full space-y-2">
       <div
@@ -124,14 +126,14 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
           }}
         />
         {/* Forest on cream track */}
-        <LabelRow color="#1C3822" />
+        <ProgressLabelRow color="#1C3822" labelOpacity={labelOpacity} quip={SCIENCE_QUIPS[quipIndex]} completed={completed} total={total} />
         {/* Cream clipped to fill width via clip-path + --pct */}
         <div
           className="absolute inset-0"
           style={{ clipPath: 'inset(0 calc(100% - var(--pct)) 0 0)' }}
           aria-hidden="true"
         >
-          <LabelRow color="#FAF8F3" />
+          <ProgressLabelRow color="#FAF8F3" labelOpacity={labelOpacity} quip={SCIENCE_QUIPS[quipIndex]} completed={completed} total={total} />
         </div>
       </div>
     </div>

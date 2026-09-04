@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, production]
+
+permissions:
+  contents: read
+
+jobs:
+  web-quality:
+    name: web-quality
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+
+  web-test:
+    name: web-test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test
+
+  web-build:
+    name: web-build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # These public build-time placeholders only validate compilation; runtime
+      # Vercel environments provide the actual public configuration.
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-public-key
+
+  chemistry-test:
+    name: chemistry-test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/chemistry
+    steps:
+      # Chemistry source datasets are Git LFS assets. Without this, a clean CI
+      # checkout sees pointer files and manifest integrity validation must fail.
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: services/chemistry/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+      - name: Build the generated local evidence index from committed raw data
+        run: python ../../scripts/chemistry/build_solvent_evidence_index.py --raw data/solvent-evidence/raw --manifests data/solvent-evidence/manifests --output data/solvent-evidence/solvent-evidence.sqlite
+      - run: pytest -q --junitxml=pytest-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chemistry-pytest-results
+          path: services/chemistry/pytest-results.xml
+
+  release-contract:
+    name: release-contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify required release gates are declared
+        run: |
+          for gate in web-quality web-test web-build chemistry-test release-contract; do
+            grep -q "^  ${gate}:" .github/workflows/ci.yml || { echo "Missing required CI gate: ${gate}"; exit 1; }
+          done
+          test -f .github/workflows/release-production.yml
+          grep -q 'lfs: true' .github/workflows/ci.yml
+          grep -q 'environment: production' .github/workflows/release-production.yml
+          grep -q 'verify-chemistry-release.sh' .github/workflows/release-production.yml
+          test -x scripts/deploy-chemistry-cloud-run.sh
+          test -x scripts/verify-chemistry-release.sh

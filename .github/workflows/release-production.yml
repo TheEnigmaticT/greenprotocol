@@ -1,0 +1,59 @@
+name: Release production
+
+on:
+  push:
+    branches: [production]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  deploy-chemistry:
+    name: deploy-chemistry
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_PRODUCTION_RELEASE_CREDENTIALS }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy the exact production commit
+        env:
+          DEPLOY_ENV: production
+          GIT_SHA: ${{ github.sha }}
+          GITHUB_ACTIONS: 'true'
+          RELEASE_AUTHORITY: approved-production-release
+        run: bash scripts/deploy-chemistry-cloud-run.sh
+      - name: Verify the deployed revision and authenticated sentinel
+        env:
+          DEPLOY_ENV: production
+          GIT_SHA: ${{ github.sha }}
+          PRODUCTION_CHEMISTRY_SERVICE_TOKEN: ${{ secrets.PRODUCTION_CHEMISTRY_SERVICE_TOKEN }}
+        run: bash scripts/verify-chemistry-release.sh
+
+  release-evidence:
+    name: release-evidence
+    needs: deploy-chemistry
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: Record immutable release identifiers
+        run: |
+          {
+            echo "git_sha=${{ github.sha }}"
+            echo "release_workflow=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } | tee release-evidence.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-release-evidence
+          path: release-evidence.txt
