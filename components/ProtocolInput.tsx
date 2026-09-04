@@ -57,9 +57,19 @@ const SCIENCE_QUIPS = [
 function ProgressBar({ completed, total }: { completed: number; total: number }) {
   const [quipIndex, setQuipIndex] = useState(() => Math.floor(Math.random() * SCIENCE_QUIPS.length))
   const [fade, setFade] = useState(true)
+  const [reduceMotion, setReduceMotion] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const sync = () => setReduceMotion(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+
+  useEffect(() => {
+    if (reduceMotion) return
     intervalRef.current = setInterval(() => {
       setFade(false)
       setTimeout(() => {
@@ -68,42 +78,60 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
       }, 400)
     }, 6000)
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [])
+  }, [reduceMotion])
 
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+  const fillPct = Math.min(100, Math.max(pct, completed > 0 ? 3 : 0))
+  const labelOpacity = reduceMotion || fade ? 1 : 0
+
+  const LabelRow = ({ color }: { color: string }) => (
+    <div className="absolute inset-0 flex items-center justify-between gap-3 px-4 pointer-events-none">
+      <span
+        className="text-sm font-[family-name:var(--font-mono)] truncate transition-opacity duration-300 motion-reduce:transition-none"
+        style={{ color, opacity: labelOpacity }}
+      >
+        {SCIENCE_QUIPS[quipIndex]}
+      </span>
+      <span
+        className="text-xs font-[family-name:var(--font-mono)] tabular-nums shrink-0"
+        style={{ color }}
+      >
+        {completed}/{total}
+      </span>
+    </div>
+  )
 
   return (
     <div className="w-full space-y-2">
       <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        aria-label={`Analysis progress ${completed} of ${total}`}
         className="relative w-full h-10 rounded-lg overflow-hidden border"
-        style={{ background: '#F5F0E8', borderColor: '#D6D0C4' }}
+        style={{
+          background: '#F5F0E8',
+          borderColor: '#D6D0C4',
+          ['--pct' as string]: `${fillPct}%`,
+        }}
       >
         <div
-          className="absolute inset-y-0 left-0 rounded-lg transition-all duration-700 ease-out"
+          className="absolute inset-y-0 left-0 rounded-lg motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-out"
           style={{
-            width: `${Math.max(pct, 3)}%`,
+            width: 'var(--pct)',
             background: 'linear-gradient(90deg, #1C3822, #2D6A4F)',
           }}
         />
-        <div className="absolute inset-0 flex items-center justify-center px-4">
-          <span
-            className="text-sm font-[family-name:var(--font-mono)] transition-opacity duration-300"
-            style={{
-              color: '#FAF8F3',
-              textShadow: '0 1px 3px rgba(0,0,0,0.4)',
-              opacity: fade ? 1 : 0,
-            }}
-          >
-            {SCIENCE_QUIPS[quipIndex]}
-          </span>
-        </div>
-        <div className="absolute inset-y-0 right-3 flex items-center">
-          <span
-            className="text-xs font-[family-name:var(--font-mono)] tabular-nums"
-            style={{ color: '#FAF8F3', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
-          >
-            {completed}/{total}
-          </span>
+        {/* Forest on cream track */}
+        <LabelRow color="#1C3822" />
+        {/* Cream clipped to fill width via clip-path + --pct */}
+        <div
+          className="absolute inset-0"
+          style={{ clipPath: 'inset(0 calc(100% - var(--pct)) 0 0)' }}
+          aria-hidden="true"
+        >
+          <LabelRow color="#FAF8F3" />
         </div>
       </div>
     </div>
@@ -224,7 +252,7 @@ export default function ProtocolInput() {
             onClick={() => { setText(EXAMPLE_PROTOCOLS[ex.key]); setError(null) }}
             className="px-3 py-1.5 text-sm rounded-lg border transition-colors cursor-pointer font-[family-name:var(--font-mono)]"
             style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C2D36')}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#1C3822')}
             onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
           >
             {ex.label}
@@ -252,7 +280,7 @@ export default function ProtocolInput() {
         onClick={handleSubmit}
         disabled={loading || !text.trim()}
         className="w-full px-6 py-3 rounded-lg font-semibold text-lg transition-all disabled:opacity-50 cursor-pointer"
-        style={{ background: loading ? '#5A2028' : '#7C2D36', color: '#FAF8F3' }}
+        style={{ background: loading ? '#2D4A3A' : '#1C3822', color: '#F6F3EB' }}
       >
         {loading ? (
           <span className="flex items-center justify-center gap-2">
