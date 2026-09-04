@@ -1,3 +1,0 @@
-# Retired 2026-09-04.
-# CI moved to ci.yml. Production releases are only triggered by
-# release-production.yml after a merge to the protected production branch.

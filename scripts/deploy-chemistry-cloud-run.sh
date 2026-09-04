@@ -32,6 +32,8 @@ case "$DEPLOY_ENV" in
   staging)
     PROJECT_ID="${STAGING_GCP_PROJECT_ID:-greenchemistry-ai}"
     SERVICE_NAME="${STAGING_CHEMISTRY_SERVICE:-gcai-chemistry}"
+    RUNTIME_SERVICE_ACCOUNT="${STAGING_CHEMISTRY_RUNTIME_SERVICE_ACCOUNT:-gcai-staging-runtime@${PROJECT_ID}.iam.gserviceaccount.com}"
+    MIN_INSTANCES="${STAGING_MIN_INSTANCES:-0}"
     # The image registry is shared solely to preserve a single immutable digest
     # between staging verification and production promotion.
     REPOSITORY="${STAGING_ARTIFACT_REPOSITORY:-cloud-run-source-deploy}"
@@ -44,6 +46,8 @@ case "$DEPLOY_ENV" in
   production)
     PROJECT_ID="${PRODUCTION_GCP_PROJECT_ID:-greenchemistry-ai}"
     SERVICE_NAME="${PRODUCTION_CHEMISTRY_SERVICE:-greenchemistry-chemistry}"
+    RUNTIME_SERVICE_ACCOUNT="${PRODUCTION_CHEMISTRY_RUNTIME_SERVICE_ACCOUNT:-greenchemistry-chemservice@${PROJECT_ID}.iam.gserviceaccount.com}"
+    MIN_INSTANCES="${PRODUCTION_MIN_INSTANCES:-1}"
     REPOSITORY="${PRODUCTION_ARTIFACT_REPOSITORY:-cloud-run-source-deploy}"
     TOKEN_SECRET="${PRODUCTION_CHEMISTRY_TOKEN_SECRET:-chemistry-service-token}"
     SUPABASE_URL_SECRET="${PRODUCTION_SUPABASE_URL_SECRET:-supabase-url}"
@@ -69,10 +73,11 @@ IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NA
 
 "$GCLOUD" run deploy "$SERVICE_NAME" \
   --project "$PROJECT_ID" --region "$REGION" --image "${IMAGE}@${IMAGE_DIGEST}" \
+  --service-account "$RUNTIME_SERVICE_ACCOUNT" \
   --labels "release-sha=${GIT_SHA},deploy-env=${DEPLOY_ENV}" \
   --set-secrets "CHEMISTRY_SERVICE_TOKEN=${TOKEN_SECRET}:latest,SUPABASE_URL=${SUPABASE_URL_SECRET}:latest,SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_SECRET}:latest,OPENROUTER_API_KEY=${PROVIDER_KEY_SECRET}:latest" \
   --set-env-vars "OPENROUTER_MODEL=${PROVIDER_MODEL}" \
-  --cpu 1 --memory 2Gi --timeout 300 --concurrency 4 --min-instances 1 --max-instances 3
+  --cpu 1 --memory 2Gi --timeout 300 --concurrency 4 --min-instances "$MIN_INSTANCES" --max-instances 3
 
 REVISION="$("$GCLOUD" run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestReadyRevisionName)')"
 SERVICE_URL="$("$GCLOUD" run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"

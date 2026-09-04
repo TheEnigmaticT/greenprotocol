@@ -104,3 +104,23 @@ def test_staging_deploy_uses_the_same_image_name_as_the_production_candidate():
 
     assert 'CHEMISTRY_IMAGE_NAME="${CHEMISTRY_IMAGE_NAME:-greenchemistry-chemistry}"' in deploy
     assert 'CHEMISTRY_IMAGE_NAME="${CHEMISTRY_IMAGE_NAME:-greenchemistry-chemistry}"' in build
+
+
+def test_deploy_uses_an_environment_specific_runtime_service_account():
+    deploy = DEPLOY_SCRIPT.read_text()
+
+    assert 'RUNTIME_SERVICE_ACCOUNT="${STAGING_CHEMISTRY_RUNTIME_SERVICE_ACCOUNT:-gcai-staging-runtime@${PROJECT_ID}.iam.gserviceaccount.com}"' in deploy
+    assert 'RUNTIME_SERVICE_ACCOUNT="${PRODUCTION_CHEMISTRY_RUNTIME_SERVICE_ACCOUNT:-greenchemistry-chemservice@${PROJECT_ID}.iam.gserviceaccount.com}"' in deploy
+    assert '--service-account "$RUNTIME_SERVICE_ACCOUNT"' in deploy
+
+
+def test_staging_defaults_to_zero_min_instances_without_changing_production_default():
+    deploy = DEPLOY_SCRIPT.read_text()
+
+    assert 'MIN_INSTANCES="${STAGING_MIN_INSTANCES:-0}"' in deploy
+    assert 'MIN_INSTANCES="${PRODUCTION_MIN_INSTANCES:-1}"' in deploy
+    assert '--min-instances "$MIN_INSTANCES"' in deploy
+
+
+def test_obsolete_comment_only_ci_workflow_is_not_present():
+    assert not (REPO_ROOT / ".github" / "workflows" / "ci-cd.yml").exists()
