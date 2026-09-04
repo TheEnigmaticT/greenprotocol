@@ -181,7 +181,7 @@ async function callClaude<T>(
     // Log trace if context provided
     if (context?.userId) {
       const phase = label.startsWith('principle-') ? 'principle' : label
-      void logLLMTrace({
+      await logLLMTrace({
         analysis_id: context.analysisId,
         analysis_run_id: context.analysisRunId,
         user_id: context.userId,

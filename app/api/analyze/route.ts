@@ -6,6 +6,8 @@ import { AnalysisResult, ImpactDelta, ProgressEvent } from '@/lib/types'
 import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 import { getAnalysisMetadata } from '@/lib/version'
 import { buildCanonicalScoringSnapshot, protocolFingerprint } from '@/lib/scoring-snapshot'
+import { notifyAnalysis } from '@/lib/operational-alerts'
+import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 300
 
@@ -19,6 +21,24 @@ function hasUnlimitedAnalyses(email?: string): boolean {
   const normalized = email?.trim().toLowerCase()
   if (!normalized) return false
   return UNLIMITED_ANALYSIS_EMAILS.has(normalized) || normalized.endsWith('@greenchemistry.ai')
+}
+
+function isSentinelRequest(request: Request): boolean {
+  const key = process.env.SENTINEL_ANALYSIS_KEY
+  return Boolean(key) && request.headers.get('x-gcai-sentinel-key') === key
+}
+
+async function countProtocolTokens(protocolText: string): Promise<number | null> {
+  try {
+    const result = await new Anthropic().messages.countTokens({
+      model: 'claude-sonnet-4-5-20250929',
+      messages: [{ role: 'user', content: protocolText }],
+    })
+    return result.input_tokens
+  } catch (error) {
+    console.error('[analyze] protocol token count failed:', error)
+    return null
+  }
 }
 
 export async function POST(request: Request) {
@@ -64,12 +84,16 @@ export async function POST(request: Request) {
   }
 
   const protocolFingerprintValue = await protocolFingerprint(protocolText)
+  const protocolInputTokens = await countProtocolTokens(protocolText)
+  const runSource = isSentinelRequest(request) ? 'sentinel' : 'human'
 
   const { data: analysisRun, error: analysisRunError } = await supabase
     .from('gpc_analysis_runs')
     .insert({
       user_id: user.id,
       status: 'running',
+      run_source: runSource,
+      protocol_input_tokens: protocolInputTokens,
     })
     .select('id')
     .single()
@@ -112,6 +136,9 @@ export async function POST(request: Request) {
   // Run pipeline in background, streaming progress
   const pipeline = (async () => {
     let analysisRunCompleted = false
+    let analysisName: string | null = null
+    let analysisId: string | null = null
+    const pipelineErrors: string[] = []
     try {
       console.log(`[pipeline ${elapsed()}s] starting analyzeProtocol`)
       const analysisResult = await analyzeProtocol(protocolText, send, {
@@ -120,6 +147,7 @@ export async function POST(request: Request) {
         supabase,
       })
       console.log(`[pipeline ${elapsed()}s] analyzeProtocol complete`)
+      analysisName = analysisResult.protocolTitle || null
 
       // Enrich chemicals with hardcoded data
       for (const step of analysisResult.steps) {
@@ -170,6 +198,7 @@ export async function POST(request: Request) {
       if (insertError || !insertedRow?.id) {
         throw new Error(insertError?.message || 'Failed to persist analysis')
       }
+      analysisId = insertedRow.id
 
       const { error: analysisRunUpdateError } = await supabase
         .from('gpc_analysis_runs')
@@ -200,6 +229,7 @@ export async function POST(request: Request) {
       console.error(`[pipeline ${elapsed()}s] CAUGHT ERROR:`, err)
 
       if (err instanceof NotChemistryError) {
+        pipelineErrors.push(err.message)
         send({ type: 'error', error: err.message, code: 'not_chemistry' })
         return
       }
@@ -207,6 +237,7 @@ export async function POST(request: Request) {
       const error = err as { status?: number; message?: string; error?: { message?: string } }
 
       if (error.status === 401 || error.message?.includes('authentication') || error.message?.includes('API key')) {
+        pipelineErrors.push('Anthropic API key is missing or invalid.')
         send({ type: 'error', error: 'Anthropic API key is missing or invalid. Check ANTHROPIC_API_KEY environment variable.' })
         return
       }
@@ -217,6 +248,7 @@ export async function POST(request: Request) {
       }
 
       const msg = error.message || error.error?.message || 'Unknown error'
+      pipelineErrors.push(msg)
       send({ type: 'error', error: `Analysis failed: ${msg}` })
     } finally {
       if (!analysisRunCompleted) {
@@ -228,6 +260,27 @@ export async function POST(request: Request) {
           })
           .eq('id', analysisRun.id)
           .eq('user_id', user.id)
+      }
+      if (runSource === 'human') {
+        const { data: traces, error: tracesError } = await supabase
+          .from('gpc_analysis_traces')
+          .select('output_tokens, error_message')
+          .eq('analysis_run_id', analysisRun.id)
+        if (tracesError) pipelineErrors.push(`Trace lookup failed: ${tracesError.message}`)
+        for (const trace of traces || []) {
+          if (trace.error_message) pipelineErrors.push(trace.error_message)
+        }
+        await notifyAnalysis({
+          status: analysisRunCompleted ? 'completed' : 'failed',
+          analysisName,
+          analysisId,
+          analysisRunId: analysisRun.id,
+          userEmail: user.email || null,
+          protocolInputTokens,
+          processingMilliseconds: Date.now() - t0,
+          generatedOutputTokens: (traces || []).reduce((total, trace) => total + (trace.output_tokens || 0), 0),
+          errorMessages: [...new Set(pipelineErrors)],
+        })
       }
       clearInterval(heartbeat)
       console.log(`[pipeline ${elapsed()}s] closing stream`)
