@@ -81,7 +81,7 @@ export default function UsernameSetup({ onComplete }: { onComplete: (profile: Gp
           type="submit"
           disabled={loading || username.length < 3}
           className="w-full px-4 py-2 rounded-lg font-semibold text-sm transition-all disabled:opacity-50 cursor-pointer"
-          style={{ background: '#7C2D36', color: '#FAF8F3' }}
+          style={{ background: '#1C3822', color: '#F6F3EB', border: '1px solid #ECB815' }}
         >
           {loading ? 'Creating...' : 'Create Profile'}
         </button>
