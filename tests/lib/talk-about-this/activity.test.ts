@@ -308,7 +308,7 @@ describe('accepted recommendation receipt access', () => {
       analysisId: 'analysis-1',
     }))
 
-    expect(markup).toContain('Accepted Changes (1)')
+    expect(markup).toContain('Accepted · 1')
     expect(markup).toContain('aria-label="Talk about this. Direct evidence is included in this discussion."')
     expect(missingIdMarkup).not.toContain('aria-label="Talk about this.')
   })

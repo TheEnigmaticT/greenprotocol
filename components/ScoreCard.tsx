@@ -182,29 +182,31 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <h3 className="text-lg font-semibold font-[family-name:var(--font-serif)]"
+        <div>
+          <p className="m-0 mb-1 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>
+            12 principles
+          </p>
+          <h3 className="text-lg font-semibold font-[family-name:var(--font-serif)] m-0"
               style={{ color: '#1C1917' }}>
             Green Chemistry Scorecard
           </h3>
+        </div>
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3">
           {analysisId && (
             <a
               href={`/analyze/${analysisId}/evidence`}
-              aria-label="View Evidence Atlas for this analysis"
-              className="hover:opacity-70 transition-opacity"
+              aria-label="Open Evidence Atlas for this analysis"
+              className="inline-flex items-center justify-center min-h-11 px-4 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.12em] whitespace-nowrap order-last sm:order-first"
               style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                letterSpacing: '0.08em',
-                color: '#ECB815',
+                background: '#1C3822',
+                color: '#F6F3EB',
+                border: '1px solid #1C3822',
                 textDecoration: 'none',
               }}
             >
-              EVIDENCE ATLAS →
+              Open Evidence Atlas
             </a>
           )}
-        </div>
         <div className="flex items-center justify-between sm:justify-end gap-3 bg-white/50 p-2 sm:p-0 rounded-lg sm:bg-transparent">
           {projectedScores && projectedScores.grade !== scores.grade ? (
             <>
@@ -238,6 +240,7 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
               </span>
             </>
           )}
+        </div>
         </div>
       </div>
 
