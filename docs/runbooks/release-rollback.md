@@ -10,12 +10,12 @@ The initial protected baseline is recorded locally in `.hermes/release-evidence/
 
 ## Release
 
-1. Confirm the PR source is `main`, target is `production`, and its SHA is the tested SHA.
-2. Confirm `web-quality`, `web-test`, `web-build`, `chemistry-test`, contract, staging E2E, and staging sentinel gates have all passed; missing/skipped/cancelled counts as failed.
-3. Record the release reviewer approval and production Environment approval.
-4. Merge through GitHub. Do not use a refspec push.
-5. Read back Vercel production SHA/alias plus Cloud Run revision, SHA-tagged image digest, traffic, and secret-binding names.
-6. Run the authenticated chemistry sentinel and the read-only app/browser smoke sentinel; attach evidence to the release.
+1. Open a PR from `main` to `production`. The candidate SHA must be the exact `main` commit intended for release.
+2. The PR runs `build-staging-image`, `staging-sentinel`, and `staging-e2e` in addition to `web-quality`, `web-test`, `web-build`, `chemistry-test`, and `release-contract`. Missing, skipped, cancelled, or failing checks block release.
+3. The staging build creates (or reuses) the SHA-tagged artifact once, records its digest, deploys that digest to the isolated staging service, then verifies chemistry and web smoke behavior.
+4. Record PR review approval and obtain the separate Production Environment approval.
+5. Merge through GitHub. Do not use a refspec push. The production workflow resolves the pre-existing SHA image to its immutable digest and refuses to build or retag an image.
+6. Read back Vercel production SHA/alias plus Cloud Run revision, SHA-tagged image digest, traffic, secret-binding names, and authenticated chemistry sentinel result. Attach the sanitized evidence artifact to the release record.
 
 ## Rollback
 
