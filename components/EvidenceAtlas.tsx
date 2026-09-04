@@ -1,14 +1,12 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import Link from 'next/link'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnalysisResult } from '@/lib/types'
 import { buildCitationString, buildBibtexCitation } from '@/lib/citation'
-import EvidenceSidebar, { SidebarSection } from './EvidenceSidebar'
 import PrincipleSection, { humanSource } from './PrincipleSection'
-import UserMenu from './UserMenu'
+import AppShell from './AppShell'
+import { buildQuietGradeLine } from '@/lib/quiet-grade'
 
-// Internal data_source values that are pipeline artifacts, not citable sources
 const INTERNAL_SOURCE_VALUES = new Set(['cache', 'not_found', 'error', 'unknown', 'none', ''])
 
 const PRINCIPLE_NAMES: Record<number, string> = {
@@ -26,49 +24,56 @@ const PRINCIPLE_NAMES: Record<number, string> = {
   12: 'Inherently Safer Chemistry for Accident Prevention',
 }
 
-interface EvidenceAtlasProps {
-  analysisId: string
-  analysis: AnalysisResult
+const PN_COLORS: Record<number, { bg: string; text: string }> = {
+  1: { bg: '#DCFCE7', text: '#15803d' },
+  2: { bg: '#DCFCE7', text: '#15803d' },
+  3: { bg: '#DCFCE7', text: '#15803d' },
+  4: { bg: '#DCFCE7', text: '#15803d' },
+  5: { bg: '#DBEAFE', text: '#1d4ed8' },
+  6: { bg: '#DBEAFE', text: '#1d4ed8' },
+  7: { bg: '#DBEAFE', text: '#1d4ed8' },
+  8: { bg: '#DBEAFE', text: '#1d4ed8' },
+  9: { bg: '#EDE9FE', text: '#7e22ce' },
+  10: { bg: '#EDE9FE', text: '#7e22ce' },
+  11: { bg: '#EDE9FE', text: '#7e22ce' },
+  12: { bg: '#EDE9FE', text: '#7e22ce' },
 }
 
-/**
- * Determine which principle sections to show.
- * Show a section only if we have: a deterministic score, recommendations, or enriched chemical data.
- */
 function getActivePrinciples(analysis: AnalysisResult): number[] {
   const active = new Set<number>()
-
-  // From deterministic scores
   if (analysis.deterministicScores) {
     for (const s of analysis.deterministicScores.scores) {
       if (s.score >= 0) active.add(s.principle_number)
     }
   }
-
-  // From recommendations
   for (const rec of analysis.recommendations) {
-    for (const pn of rec.principleNumbers) {
-      active.add(pn)
-    }
+    for (const pn of rec.principleNumbers) active.add(pn)
   }
-
-  // If we have waste analysis, make sure P1 is included
   if (analysis.wasteAnalysis) active.add(1)
-
-  // P4 (Designing Safer Chemicals) is product/molecular design scope — out of range
-  // for protocol analysis. We never make recommendations here; exclude always.
   active.delete(4)
-
   return Array.from(active).sort((a, b) => a - b)
+}
+
+type Mode = 'chemicals' | 'principles'
+
+interface EvidenceAtlasProps {
+  analysisId: string
+  analysis: AnalysisResult
 }
 
 export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasProps) {
   const activePrinciples = getActivePrinciples(analysis)
   const metadata = analysis.analysisMetadata
+  const quietGrade = buildQuietGradeLine(analysis)
 
+  const [mode, setMode] = useState<Mode>('principles')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [selectedPrinciple, setSelectedPrinciple] = useState<number | null>(activePrinciples[0] ?? null)
+  const [selectedChemical, setSelectedChemical] = useState<string | null>(null)
   const [citeOpen, setCiteOpen] = useState(false)
-  const [chemicalsOpen, setChemicalsOpen] = useState(false)
   const citeDropdownRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -80,105 +85,105 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Build deduplicated flagged chemicals map: chemical → [principle numbers]
-  const flaggedChemicalsMap = new Map<string, number[]>()
-  if (analysis.deterministicScores) {
-    for (const score of analysis.deterministicScores.scores) {
-      for (const chem of score.chemicals_flagged) {
-        if (!flaggedChemicalsMap.has(chem)) flaggedChemicalsMap.set(chem, [])
-        flaggedChemicalsMap.get(chem)!.push(score.principle_number)
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
+
+  const flaggedChemicalsMap = useMemo(() => {
+    const map = new Map<string, number[]>()
+    if (analysis.deterministicScores) {
+      for (const score of analysis.deterministicScores.scores) {
+        for (const chem of score.chemicals_flagged) {
+          if (!map.has(chem)) map.set(chem, [])
+          map.get(chem)!.push(score.principle_number)
+        }
       }
     }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
+  }, [analysis.deterministicScores])
+
+  useEffect(() => {
+    if (!selectedChemical && flaggedChemicalsMap.length > 0) {
+      setSelectedChemical(flaggedChemicalsMap[0][0])
+    }
+  }, [flaggedChemicalsMap, selectedChemical])
+
+  const q = query.trim().toLowerCase()
+
+  const filteredPrinciples = useMemo(() => {
+    const all = analysis.deterministicScores?.scores
+      ?.slice()
+      .sort((a, b) => a.principle_number - b.principle_number)
+      .map(s => s.principle_number)
+      ?? activePrinciples
+    const unique = Array.from(new Set([...all, ...activePrinciples])).sort((a, b) => a - b)
+    if (!q) return unique
+    return unique.filter(pn => {
+      const name = PRINCIPLE_NAMES[pn] || ''
+      const score = analysis.deterministicScores?.scores.find(s => s.principle_number === pn)
+      const hay = `p${pn} ${name} ${(score?.chemicals_flagged || []).join(' ')}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [analysis, activePrinciples, q])
+
+  const filteredChemicals = useMemo(() => {
+    if (!q) return flaggedChemicalsMap
+    return flaggedChemicalsMap.filter(([chem, principles]) => {
+      const enriched = analysis.enrichedChemicals?.find(e => e.name.toLowerCase() === chem.toLowerCase())
+      const codes = enriched?.ghs_hazards?.map(h => h.code).join(' ') || ''
+      return `${chem} ${principles.map(p => `p${p}`).join(' ')} ${codes}`.toLowerCase().includes(q)
+    })
+  }, [flaggedChemicalsMap, analysis.enrichedChemicals, q])
+
+  const openPrinciple = (pn: number) => {
+    setMode('principles')
+    setSelectedPrinciple(pn)
   }
-  const flaggedChemicals = Array.from(flaggedChemicalsMap.entries()).sort(([a], [b]) => a.localeCompare(b))
 
-  // Build sidebar sections
-  const sidebarSections: SidebarSection[] = []
-
-  if (flaggedChemicals.length > 0) {
-    sidebarSections.push({ id: 'chemicals', label: 'Chemicals of Concern', hasRecommendations: false })
+  const openChemical = (chem: string) => {
+    setMode('chemicals')
+    setSelectedChemical(chem)
   }
 
-  sidebarSections.push(
-    ...activePrinciples.map((pn) => ({
-      id: `p${pn}`,
-      label: `P${pn}: ${PRINCIPLE_NAMES[pn] || `Principle ${pn}`}`,
-      hasRecommendations: analysis.recommendations.some((r) => r.principleNumbers.includes(pn)),
-    }))
-  )
+  const selectedScore = selectedPrinciple != null
+    ? analysis.deterministicScores?.scores.find(s => s.principle_number === selectedPrinciple)
+    : undefined
 
-  if (analysis.overallAssessment.processComplexity) {
-    sidebarSections.push({ id: 'process', label: 'Process Complexity', hasRecommendations: false })
-  }
-
-  sidebarSections.push({ id: 'sources', label: 'Data Sources & Methodology', hasRecommendations: false })
+  const selectedChemEntry = selectedChemical
+    ? flaggedChemicalsMap.find(([c]) => c === selectedChemical)
+    : undefined
+  const selectedEnriched = selectedChemical
+    ? analysis.enrichedChemicals?.find(e => e.name.toLowerCase() === selectedChemical.toLowerCase())
+    : undefined
 
   return (
-    <div className="min-h-screen" style={{ background: '#FAF8F3' }}>
-      <EvidenceSidebar sections={sidebarSections} />
-
-      {/* Header */}
-      <header className="print:hidden flex items-center justify-between px-6 py-4 lg:pl-[240px]">
-        <Link
-          href="/"
-          className="font-[family-name:var(--font-mono)] font-medium text-sm tracking-wide hover:opacity-80 transition-opacity"
-          style={{ color: '#1C3822' }}
-        >
-          greenchemistry.ai
-        </Link>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <Link
-            href={`/analyze/${analysisId}`}
-            className="text-sm px-3 py-1.5 rounded-lg border transition-colors font-[family-name:var(--font-mono)]"
-            style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
-          >
-            ← Back to Analysis
-          </Link>
-          <UserMenu />
-        </div>
-      </header>
-
-      {/* Main content */}
-      <main className="lg:pl-[240px] px-6 py-8 max-w-4xl mx-auto lg:mx-0 lg:max-w-none lg:pr-12">
-        {/* Page title */}
-        <div className="mb-10">
-          <h1 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-serif)] break-words" style={{ color: '#1C1917' }}>
-            GreenChemistry Evidence Atlas
-          </h1>
-          <p className="text-lg mt-1 font-[family-name:var(--font-serif)]" style={{ color: '#57534E' }}>
-            for {analysis.protocolTitle}
-          </p>
-          {metadata && (
-            <div className="flex items-center gap-3 mt-2">
-              <span className="text-xs" style={{ color: '#A8A29E' }}>
-                GC.ai v{metadata.gcaiVersion} · Generated {new Date(metadata.generatedAt).toLocaleDateString()}
-              </span>
-              {/* Citation dropdown */}
-              <div className="relative inline-block print:hidden" ref={citeDropdownRef}>
+    <AppShell analysisId={analysisId} activeTab="atlas">
+      <main id="main-content" className="mx-auto max-w-6xl px-4 sm:px-6 py-7 space-y-5">
+        <div className="atlas-mast">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="m-0 font-[family-name:var(--font-serif)] text-[24px] sm:text-[28px] font-bold leading-snug break-words" style={{ color: '#0D1F16' }}>
+                {analysis.protocolTitle}
+              </h1>
+              <p className="mt-2 mb-0 font-[family-name:var(--font-mono)] text-xs font-medium tabular-nums" style={{ color: '#A8A29E' }} role="status">
+                {quietGrade}
+              </p>
+            </div>
+            {metadata && (
+              <div className="relative print:hidden shrink-0" ref={citeDropdownRef}>
                 <button
+                  type="button"
                   onClick={() => setCiteOpen(v => !v)}
-                  className="flex items-center gap-1.5 transition-opacity hover:opacity-70"
-                  style={{
-                    padding: '0.3rem 0.75rem',
-                    borderRadius: '4px',
-                    fontSize: '0.7rem',
-                    fontFamily: 'var(--font-mono)',
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    background: '#1C3822',
-                    color: '#F6F3EB',
-                    border: 'none',
-                  }}
+                  className="inline-flex items-center gap-1.5 min-h-9 px-3 font-[family-name:var(--font-mono)] text-[11px] font-bold tracking-wider uppercase"
+                  style={{ background: '#1C3822', color: '#F6F3EB' }}
                 >
-                  CITE
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  Cite
                 </button>
                 {citeOpen && (
                   <div className="absolute right-0 mt-1 w-52 rounded shadow-lg z-10" style={{ background: '#F6F3EB', border: '1px solid #D6D0C4' }}>
                     <button
-                      className="w-full text-left px-4 py-2 text-xs hover:opacity-70 transition-opacity rounded-t"
+                      type="button"
+                      className="w-full text-left px-4 py-2 text-xs hover:opacity-70"
                       style={{ color: '#1C1917', fontFamily: 'var(--font-mono)' }}
                       onClick={() => {
                         navigator.clipboard.writeText(buildCitationString(metadata)).catch(() => {})
@@ -188,7 +193,8 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                       Copy citation (plain text)
                     </button>
                     <button
-                      className="w-full text-left px-4 py-2 text-xs hover:opacity-70 transition-opacity rounded-b border-t"
+                      type="button"
+                      className="w-full text-left px-4 py-2 text-xs hover:opacity-70 border-t"
                       style={{ color: '#1C1917', fontFamily: 'var(--font-mono)', borderColor: '#D6D0C4' }}
                       onClick={() => {
                         navigator.clipboard.writeText(buildBibtexCitation(metadata, analysisId)).catch(() => {})
@@ -200,249 +206,371 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                   </div>
                 )}
               </div>
+            )}
+          </div>
+
+          <div className="mt-[18px]">
+            <div className={`flex ${searchOpen ? 'flex-col sm:flex-row' : 'flex-row'} items-stretch sm:items-center gap-0 sm:gap-0 w-full sm:w-fit max-w-full`}>
+              <div
+                className="grid grid-cols-[1fr_1fr_auto] overflow-hidden rounded-lg border w-full sm:w-[420px] max-w-full"
+                style={{ borderColor: '#D6D0C4', background: '#FAFAF8' }}
+                role="tablist"
+                aria-label="Atlas mode"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'chemicals'}
+                  onClick={() => setMode('chemicals')}
+                  className="inline-flex items-center justify-center min-h-11 px-3.5 font-[family-name:var(--font-mono)] text-[11px] font-bold tracking-[0.12em] uppercase border-r"
+                  style={{
+                    borderColor: '#D6D0C4',
+                    background: mode === 'chemicals' ? '#1C3822' : '#FAFAF8',
+                    color: mode === 'chemicals' ? '#F6F3EB' : '#57534E',
+                  }}
+                >
+                  Chemicals
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'principles'}
+                  onClick={() => setMode('principles')}
+                  className="inline-flex items-center justify-center min-h-11 px-3.5 font-[family-name:var(--font-mono)] text-[11px] font-bold tracking-[0.12em] uppercase border-r"
+                  style={{
+                    borderColor: '#D6D0C4',
+                    background: mode === 'principles' ? '#1C3822' : '#FAFAF8',
+                    color: mode === 'principles' ? '#F6F3EB' : '#57534E',
+                  }}
+                >
+                  Principles
+                </button>
+                <button
+                  type="button"
+                  aria-expanded={searchOpen}
+                  aria-label="Toggle search"
+                  onClick={() => setSearchOpen(v => !v)}
+                  className="inline-flex items-center justify-center min-h-11 min-w-12 px-3 text-[15px]"
+                  style={{
+                    background: searchOpen ? '#2D4A3A' : '#FAFAF8',
+                    color: searchOpen ? '#ECB815' : '#57534E',
+                  }}
+                >
+                  🔍
+                </button>
+              </div>
+
+              {searchOpen && (
+                <div className="flex items-center gap-2 mt-2 sm:mt-0 sm:ml-2.5 flex-1 min-w-0 w-full sm:w-[300px]">
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Search chemicals, principles…"
+                    className="w-full min-h-11 px-3.5 rounded border font-[family-name:var(--font-mono)] text-[13px] font-medium"
+                    style={{ borderColor: '#ECB815', background: '#FAFAF8', color: '#1C1917' }}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Close search"
+                    onClick={() => { setSearchOpen(false); setQuery('') }}
+                    className="inline-flex items-center justify-center min-w-11 min-h-11 rounded border"
+                    style={{ borderColor: '#D6D0C4', background: '#FAFAF8', color: '#57534E' }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+            {q && (
+              <p className="mt-2.5 mb-0 font-[family-name:var(--font-mono)] text-[11px] font-medium" style={{ color: '#78716C' }}>
+                Showing matches for “{query.trim()}”
+                <button
+                  type="button"
+                  className="ml-1.5 underline font-bold uppercase tracking-wider"
+                  style={{ color: '#1C3822' }}
+                  onClick={() => setQuery('')}
+                >
+                  Clear
+                </button>
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Chemicals of Concern — collapsed by default, deduplicated across all principles */}
-        {flaggedChemicals.length > 0 && (
-          <section id="chemicals" className="scroll-mt-20 mb-12">
-            <button
-              onClick={() => setChemicalsOpen(v => !v)}
-              className="flex items-center gap-2 w-full text-left group"
-            >
-              <h2 className="text-lg font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C1917' }}>
-                Chemicals of Concern
-              </h2>
-              <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#FEF2F2', color: '#991B1B', fontFamily: 'var(--font-mono)' }}>
-                {flaggedChemicals.length}
-              </span>
-              <svg
-                className="w-4 h-4 ml-auto transition-transform"
-                style={{ color: '#A8A29E', transform: chemicalsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            <p className="text-xs mt-1 mb-3" style={{ color: '#78716C' }}>
-              Each flagged chemical listed once — see which principles flagged it and its GHS hazard codes.
-            </p>
-            {chemicalsOpen && (
-              <div className="rounded-lg overflow-hidden" style={{ border: '1px solid #E7E5E4' }}>
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr style={{ background: '#F0EBE1' }}>
-                      <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>Chemical</th>
-                      <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>Flagged in</th>
-                      <th className="text-left px-3 py-2 font-bold uppercase tracking-wider" style={{ color: '#78716C', fontFamily: 'var(--font-mono)', fontSize: '0.6rem' }}>GHS Hazards</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {flaggedChemicals.map(([chem, principles], i) => {
-                      const enriched = analysis.enrichedChemicals?.find(
-                        (e) => e.name.toLowerCase() === chem.toLowerCase()
-                      )
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Index pane */}
+          <aside className="lg:col-span-5 min-w-0">
+            {mode === 'principles' ? (
+              <>
+                <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+                  <div>
+                    <p className="m-0 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>Index</p>
+                    <h2 className="m-0 mt-1 font-[family-name:var(--font-serif)] text-xl font-bold" style={{ color: '#1C1917' }}>
+                      {filteredPrinciples.length} principles
+                    </h2>
+                  </div>
+                  <span className="font-[family-name:var(--font-mono)] text-xs" style={{ color: '#78716C' }}>Lower = greener</span>
+                </div>
+                <ul className="m-0 p-0 list-none space-y-1">
+                  {filteredPrinciples.map(pn => {
+                    const score = analysis.deterministicScores?.scores.find(s => s.principle_number === pn)
+                    const isActive = selectedPrinciple === pn
+                    const unavailable = !score || score.score < 0 || pn === 4
+                    const colors = PN_COLORS[pn] || PN_COLORS[1]
+                    const flagged = score?.chemicals_flagged?.length ?? 0
+                    return (
+                      <li key={pn}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPrinciple(pn)}
+                          className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded min-h-11 min-w-0"
+                          style={{
+                            background: isActive ? '#F5F0E8' : 'transparent',
+                            boxShadow: isActive ? 'inset 3px 0 0 #ECB815' : undefined,
+                          }}
+                        >
+                          <span
+                            className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full text-[11px] font-bold font-[family-name:var(--font-mono)]"
+                            style={{ background: colors.bg, color: colors.text }}
+                          >
+                            P{pn}
+                          </span>
+                          <span className="flex-1 min-w-0 truncate font-[family-name:var(--font-sans)] text-sm" style={{ color: '#1C1917' }}>
+                            {PRINCIPLE_NAMES[pn] || `Principle ${pn}`}
+                          </span>
+                          <span className="shrink-0 font-[family-name:var(--font-mono)] text-xs tabular-nums" style={{ color: unavailable ? '#A8A29E' : '#DC2626' }}>
+                            {pn === 4 ? 'N/A out of scope' : unavailable ? 'N/A' : `${score!.score.toFixed(1)}${flagged ? ` · ${flagged} flagged` : ''}`}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+                  <div>
+                    <p className="m-0 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>Index</p>
+                    <h2 className="m-0 mt-1 font-[family-name:var(--font-serif)] text-xl font-bold" style={{ color: '#1C1917' }}>
+                      Chemicals of Concern
+                    </h2>
+                  </div>
+                  <span className="font-[family-name:var(--font-mono)] text-xs" style={{ color: '#78716C' }}>
+                    {filteredChemicals.length}
+                  </span>
+                </div>
+                {filteredChemicals.length === 0 ? (
+                  <p className="text-sm font-[family-name:var(--font-sans)]" style={{ color: '#78716C' }}>
+                    No flagged chemicals in this analysis.
+                  </p>
+                ) : (
+                  <ul className="m-0 p-0 list-none space-y-2">
+                    {filteredChemicals.map(([chem, principles]) => {
+                      const enriched = analysis.enrichedChemicals?.find(e => e.name.toLowerCase() === chem.toLowerCase())
+                      const isActive = selectedChemical === chem
                       return (
-                        <tr key={chem} style={{ background: i % 2 === 0 ? '#FAFAF8' : '#F6F3EB', borderTop: '1px solid #E7E5E4' }}>
-                          <td className="px-3 py-2 font-semibold font-[family-name:var(--font-mono)]" style={{ color: '#991B1B' }}>
-                            {chem}
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex flex-wrap gap-1">
+                        <li key={chem}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedChemical(chem)}
+                            className="w-full text-left rounded-lg border p-3 min-w-0"
+                            style={{
+                              background: isActive ? '#FAFAF8' : '#FAFAF8',
+                              borderColor: isActive ? '#ECB815' : '#D6D0C4',
+                              boxShadow: isActive ? 'inset 3px 0 0 #ECB815' : undefined,
+                            }}
+                          >
+                            <div className="font-[family-name:var(--font-mono)] text-sm font-semibold break-words" style={{ color: '#991B1B' }}>
+                              {chem}
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap gap-1">
                               {principles.map(pn => (
-                                <a key={pn} href={`#p${pn}`} className="hover:opacity-70 transition-opacity"
-                                  style={{ background: '#ECB815', color: '#1C3822', padding: '0.05rem 0.4rem', borderRadius: '3px', fontSize: '0.6rem', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                                <span
+                                  key={pn}
+                                  className="text-[10px] font-bold px-1.5 py-0.5 rounded font-[family-name:var(--font-mono)]"
+                                  style={{ background: '#ECB815', color: '#1C3822' }}
+                                >
                                   P{pn}
-                                </a>
+                                </span>
                               ))}
                             </div>
-                          </td>
-                          <td className="px-3 py-2">
-                            {enriched?.ghs_hazards && enriched.ghs_hazards.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
+                            {enriched?.ghs_hazards && enriched.ghs_hazards.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
                                 {enriched.ghs_hazards.slice(0, 4).map(h => (
                                   <span
                                     key={h.code}
                                     title={h.description}
-                                    className="cursor-help"
-                                    style={{
-                                      fontFamily: 'var(--font-mono)',
-                                      fontSize: '0.6rem',
-                                      fontWeight: 700,
-                                      padding: '0.1rem 0.4rem',
-                                      borderRadius: '3px',
-                                      background: '#FEF2F2',
-                                      color: '#991B1B',
-                                      border: '1px solid #FECACA',
-                                    }}
+                                    className="font-[family-name:var(--font-mono)] text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                    style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}
                                   >
                                     {h.code}
                                   </span>
                                 ))}
-                                {enriched.ghs_hazards.length > 4 && (
-                                  <span style={{ color: '#A8A29E', fontSize: '0.6rem' }}>
-                                    +{enriched.ghs_hazards.length - 4}
-                                  </span>
-                                )}
                               </div>
-                            ) : (
-                              <span style={{ color: '#A8A29E' }}>—</span>
                             )}
-                          </td>
-                        </tr>
+                          </button>
+                        </li>
                       )
                     })}
-                  </tbody>
-                </table>
+                  </ul>
+                )}
+              </>
+            )}
+          </aside>
+
+          {/* Dossier pane */}
+          <section className="lg:col-span-7 min-w-0">
+            {mode === 'principles' && selectedPrinciple != null ? (
+              <div className="rounded-lg border p-4 sm:p-5" style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}>
+                {selectedPrinciple === 4 ? (
+                  <p className="text-sm italic font-[family-name:var(--font-sans)]" style={{ color: '#78716C' }}>
+                    Principle 4 (Designing Safer Chemicals) is not scored in this analysis. P4 concerns molecular design — outside the scope of protocol optimization.
+                  </p>
+                ) : (
+                  <>
+                    {selectedScore?.chemicals_flagged?.length ? (
+                      <div className="mb-4">
+                        <p className="m-0 mb-2 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: '#57534E' }}>
+                          Chemicals of concern for this principle
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedScore.chemicals_flagged.map(chem => (
+                            <button
+                              key={chem}
+                              type="button"
+                              onClick={() => openChemical(chem)}
+                              className="text-left rounded border px-3 py-2 min-h-11 font-[family-name:var(--font-mono)] text-xs font-semibold"
+                              style={{ borderColor: '#FECACA', background: '#FEF2F2', color: '#991B1B' }}
+                            >
+                              {chem} →
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <PrincipleSection
+                      principleNumber={selectedPrinciple}
+                      principleName={PRINCIPLE_NAMES[selectedPrinciple] || `Principle ${selectedPrinciple}`}
+                      score={selectedScore}
+                      recommendations={analysis.recommendations.filter(r => r.principleNumbers.includes(selectedPrinciple))}
+                      enrichedChemicals={analysis.enrichedChemicals}
+                      wasteAnalysis={selectedPrinciple === 1 ? analysis.wasteAnalysis : undefined}
+                      analysisId={analysisId}
+                    />
+                  </>
+                )}
+              </div>
+            ) : mode === 'chemicals' && selectedChemEntry ? (
+              <div className="rounded-lg border p-4 sm:p-5 space-y-4" style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}>
+                <div>
+                  <p className="m-0 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>
+                    Chemical dossier
+                  </p>
+                  <h2 className="m-0 mt-1 font-[family-name:var(--font-mono)] text-xl font-bold break-words" style={{ color: '#991B1B' }}>
+                    {selectedChemEntry[0]}
+                  </h2>
+                </div>
+                {selectedEnriched?.ghs_hazards && selectedEnriched.ghs_hazards.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedEnriched.ghs_hazards.map(h => (
+                      <span
+                        key={h.code}
+                        title={h.description}
+                        className="font-[family-name:var(--font-mono)] text-[11px] font-bold px-2 py-1 rounded"
+                        style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}
+                      >
+                        {h.code}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {selectedEnriched?.ghs_hazards?.[0]?.description && (
+                  <p className="m-0 text-sm font-[family-name:var(--font-sans)] leading-relaxed" style={{ color: '#1C1917' }}>
+                    {selectedEnriched.ghs_hazards[0].description}
+                  </p>
+                )}
+                <div>
+                  <p className="m-0 mb-2 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: '#57534E' }}>
+                    Flagged in principles
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedChemEntry[1].map(pn => (
+                      <button
+                        key={pn}
+                        type="button"
+                        onClick={() => openPrinciple(pn)}
+                        className="inline-flex items-center justify-center min-h-11 px-3 rounded border font-[family-name:var(--font-mono)] text-xs font-bold"
+                        style={{ background: '#ECB815', color: '#1C3822', borderColor: '#ECB815' }}
+                      >
+                        P{pn}: {PRINCIPLE_NAMES[pn]?.split(' ').slice(0, 3).join(' ') || pn} →
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {selectedEnriched?.data_source && !INTERNAL_SOURCE_VALUES.has(selectedEnriched.data_source) && (
+                  <p className="text-xs font-[family-name:var(--font-mono)]" style={{ color: '#A8A29E' }}>
+                    Source: {humanSource(selectedEnriched.data_source)}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg border p-5" style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}>
+                <p className="m-0 text-sm font-[family-name:var(--font-sans)]" style={{ color: '#78716C' }}>
+                  Select an item from the index to open its dossier.
+                </p>
               </div>
             )}
-          </section>
-        )}
 
-        {/* P4 scope note */}
-        <div className="mb-8 p-3 rounded" style={{ background: '#F6F3EB', border: '1px solid #D6D0C4' }}>
-          <p className="text-xs italic" style={{ color: '#78716C' }}>
-            <strong>Principle 4 (Designing Safer Chemicals)</strong> is not scored in this analysis.
-            P4 concerns molecular design — synthesizing products that are inherently less toxic — which is outside the scope of protocol optimization. GreenChemistry.ai analyzes how a synthesis is performed, not what it produces.
-          </p>
-        </div>
-
-        {/* Principle sections */}
-        <div className="space-y-12">
-          {activePrinciples.map((pn) => {
-            const score = analysis.deterministicScores?.scores.find((s) => s.principle_number === pn)
-            const recs = analysis.recommendations.filter((r) => r.principleNumbers.includes(pn))
-
-            return (
-              <PrincipleSection
-                key={pn}
-                principleNumber={pn}
-                principleName={PRINCIPLE_NAMES[pn] || `Principle ${pn}`}
-                score={score}
-                recommendations={recs}
-                enrichedChemicals={analysis.enrichedChemicals}
-                wasteAnalysis={pn === 1 ? analysis.wasteAnalysis : undefined}
-                analysisId={analysisId}
-              />
-            )
-          })}
-
-          {/* Process Complexity section */}
-          {analysis.overallAssessment.processComplexity && (
-            <section id="process" className="scroll-mt-20">
-              <h2 className="text-lg font-bold font-[family-name:var(--font-serif)] mb-4" style={{ color: '#1C1917' }}>
-                Process Complexity
-              </h2>
-              <div className="p-4 rounded-lg" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>
-                    Complexity Score: {analysis.overallAssessment.processComplexity.score}/10
-                  </span>
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded font-bold uppercase"
-                    style={{
-                      background: analysis.overallAssessment.processComplexity.level === 'low' ? '#F0FDF4'
-                        : analysis.overallAssessment.processComplexity.level === 'medium' ? '#FEF3C7' : '#FEF2F2',
-                      color: analysis.overallAssessment.processComplexity.level === 'low' ? '#16a34a'
-                        : analysis.overallAssessment.processComplexity.level === 'medium' ? '#D97706' : '#DC2626',
-                    }}
-                  >
-                    {analysis.overallAssessment.processComplexity.level}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
-                  {[
-                    { label: 'Steps', value: analysis.overallAssessment.processComplexity.metrics.step_count },
-                    { label: 'Transfers', value: analysis.overallAssessment.processComplexity.metrics.transfer_count },
-                    { label: 'Vessels', value: analysis.overallAssessment.processComplexity.metrics.vessel_count },
-                    { label: 'Preps', value: analysis.overallAssessment.processComplexity.metrics.prep_count },
-                    { label: 'Purifications', value: analysis.overallAssessment.processComplexity.metrics.purification_count },
-                  ].map((m) => (
-                    <div key={m.label} className="p-2 rounded" style={{ background: 'rgba(255,255,255,0.6)' }}>
-                      <div className="text-lg font-bold" style={{ color: '#1C1917' }}>{m.value}</div>
-                      <div className="text-[9px] uppercase" style={{ color: '#A8A29E', fontFamily: 'var(--font-mono)' }}>{m.label}</div>
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-3 text-[10px] italic" style={{ color: '#A8A29E' }}>
-                  Complexity metrics serve as proxies for waste (transfer loss), failure risk, and operator burden.
-                </p>
-              </div>
-            </section>
-          )}
-
-          {/* Data Sources & Methodology */}
-          <section id="sources" className="scroll-mt-20">
-            <h2 className="text-lg font-bold font-[family-name:var(--font-serif)] mb-4" style={{ color: '#1C1917' }}>
-              Data Sources & Methodology
-            </h2>
-            <div className="p-4 rounded-lg space-y-3" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
-              {/* Evidence sources from waste analysis */}
-              {analysis.wasteAnalysis?.evidenceSources && analysis.wasteAnalysis.evidenceSources.length > 0 && (
-                <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#1C1917' }}>
-                    Waste Analysis Sources
-                  </h4>
-                  <p className="text-xs" style={{ color: '#57534E' }}>
-                    {analysis.wasteAnalysis.evidenceSources.join(' · ')}
-                  </p>
-                </div>
-              )}
-
-              {/* Scoring data sources */}
-              {analysis.deterministicScores && (
-                <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#1C1917' }}>
-                    Deterministic Scoring
-                  </h4>
-                  <p className="text-xs" style={{ color: '#57534E' }}>
-                    {analysis.deterministicScores.scores.length} principles scored · Grade: {analysis.deterministicScores.grade} · Score: {analysis.deterministicScores.total_score}/{analysis.deterministicScores.max_possible}
-                  </p>
-                </div>
-              )}
-
-              {/* Enriched chemicals summary */}
-              {analysis.enrichedChemicals && analysis.enrichedChemicals.length > 0 && (
-                <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#1C1917' }}>
-                    Chemical Data
-                  </h4>
-                  <p className="text-xs" style={{ color: '#57534E' }}>
-                    {analysis.enrichedChemicals.length} chemicals resolved.
-                    {(() => {
-                      const sources = [...new Set(
-                        analysis.enrichedChemicals
-                          .map((c) => c.data_source)
-                          .filter((s): s is string => !!s && !INTERNAL_SOURCE_VALUES.has(s))
-                      )].map(humanSource)
-                      return sources.length > 0 ? ` Data from: ${sources.join(', ')}.` : ''
-                    })()}
-                  </p>
-                </div>
-              )}
-
-              {/* Methodology version */}
-              {metadata && (
-                <div className="pt-2 border-t border-[#E7E5E4]">
-                  <p className="text-[10px]" style={{ color: '#A8A29E' }}>
+            {/* Methodology footer kept reachable */}
+            <details className="mt-6 print:hidden">
+              <summary className="cursor-pointer font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>
+                Data sources &amp; methodology
+              </summary>
+              <div className="mt-3 p-4 rounded-lg space-y-3" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
+                {analysis.wasteAnalysis?.evidenceSources && analysis.wasteAnalysis.evidenceSources.length > 0 && (
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#1C1917' }}>Waste Analysis Sources</h4>
+                    <p className="text-xs m-0" style={{ color: '#57534E' }}>{analysis.wasteAnalysis.evidenceSources.join(' · ')}</p>
+                  </div>
+                )}
+                {analysis.deterministicScores && (
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#1C1917' }}>Deterministic Scoring</h4>
+                    <p className="text-xs m-0" style={{ color: '#57534E' }}>
+                      {analysis.deterministicScores.scores.length} principles scored · Grade: {analysis.deterministicScores.grade} · Score: {analysis.deterministicScores.total_score}/{analysis.deterministicScores.max_possible}
+                    </p>
+                  </div>
+                )}
+                {analysis.enrichedChemicals && analysis.enrichedChemicals.length > 0 && (
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#1C1917' }}>Chemical Data</h4>
+                    <p className="text-xs m-0" style={{ color: '#57534E' }}>
+                      {analysis.enrichedChemicals.length} chemicals resolved.
+                      {(() => {
+                        const sources = [...new Set(
+                          analysis.enrichedChemicals
+                            .map(c => c.data_source)
+                            .filter((s): s is string => !!s && !INTERNAL_SOURCE_VALUES.has(s)),
+                        )].map(humanSource)
+                        return sources.length > 0 ? ` Data from: ${sources.join(', ')}.` : ''
+                      })()}
+                    </p>
+                  </div>
+                )}
+                {metadata && (
+                  <p className="text-[10px] m-0 pt-2 border-t" style={{ color: '#A8A29E', borderColor: '#E7E5E4' }}>
                     Methodology: {metadata.methodologyVersion} · Software: GC.ai v{metadata.gcaiVersion}
                   </p>
-                </div>
-              )}
-
-              {/* Source hierarchy note */}
-              <div className="pt-2 border-t border-[#E7E5E4]">
-                <p className="text-[10px] italic" style={{ color: '#A8A29E' }}>
-                  Scoring uses structured hazard data (GHS H-codes via PubChem PUG-View) and curated datasets (CHEM21 solvent guide, ACS GCI). SDS references, when available, provide supporting context but are not used as primary scoring inputs.
-                </p>
+                )}
               </div>
-            </div>
+            </details>
           </section>
         </div>
       </main>
 
-      {/* Print footer */}
       <footer className="hidden print:block border-t px-6 py-4 text-center" style={{ borderColor: '#D6D0C4' }}>
         {metadata && (
           <p className="text-xs" style={{ color: '#78716C' }}>
@@ -450,6 +578,6 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
           </p>
         )}
       </footer>
-    </div>
+    </AppShell>
   )
 }
