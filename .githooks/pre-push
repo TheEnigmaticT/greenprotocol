@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Local belt-and-suspenders protection. GitHub branch protection is the lock.
+set -euo pipefail
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" == "refs/heads/production" && "${BREAK_GLASS_PRODUCTION_PUSH:-}" != "1" ]]; then
+    printf '%s\n' 'Blocked: production changes require an approved main -> production release PR.' >&2
+    printf '%s\n' 'For a documented incident only, use BREAK_GLASS_PRODUCTION_PUSH=1 and follow docs/runbooks/release-rollback.md.' >&2
+    exit 1
+  fi
+done
