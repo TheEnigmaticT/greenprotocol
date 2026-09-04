@@ -3,7 +3,7 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { parseTalkAboutScope, type TalkAboutScope } from '@/lib/talk-about-this/context'
+import { parseTalkAboutScope, type TalkAboutScope } from '@/lib/talk-about-this/scope'
 import type { LiteratureEvidenceMatch } from '@/lib/types'
 import { isPersistedEvidence, type PersistedEvidenceReceipt } from '@/lib/talk-about-this/evidence'
 import type { PersistedChatMessage } from '@/lib/talk-about-this/repository'
