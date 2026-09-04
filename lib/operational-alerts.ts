@@ -29,6 +29,39 @@ function duration(milliseconds: number): string {
   return `${(milliseconds / 1000).toFixed(1)}s`
 }
 
+export type SignupAlert = {
+  name: string | null
+  email: string
+  timestamp: string
+  ipLocation: string | null
+}
+
+export type SentinelError = {
+  runId: string
+  errorMessage: string
+}
+
+export function formatSignupAlert(alert: SignupAlert): string {
+  return [
+    '*New user signup*',
+    `• Name: ${display(alert.name)}`,
+    `• Email: ${alert.email}`,
+    `• Timestamp: ${alert.timestamp}`,
+    `• IP location: ${display(alert.ipLocation)}`,
+  ].join('\n')
+}
+
+export function formatSentinelErrorDigest(date: string, errors: SentinelError[]): string {
+  const details = errors.length > 0
+    ? errors.map(error => `• Run ${error.runId}: ${error.errorMessage}`).join('\n')
+    : 'None'
+  return [
+    '*Daily Sentinel errors*',
+    `• Window ending: ${date}`,
+    `• Errors:\n${details}`,
+  ].join('\n')
+}
+
 /** Formats only operational metadata. Protocol text and LLM payloads never leave GC.ai. */
 export function formatAnalysisAlert(alert: AnalysisAlert): string {
   const title = alert.status === 'completed' ? 'Analysis complete' : 'Analysis failed'
@@ -105,4 +138,19 @@ export async function notifyAnalysis(alert: AnalysisAlert): Promise<void> {
   if (!result.ok) {
     console.error('[operational-alert] analysis alert failed:', result.error)
   }
+}
+
+export async function notifySignup(alert: SignupAlert): Promise<void> {
+  const result = await postOperationalAlert(formatSignupAlert(alert))
+  if (!result.ok) {
+    console.error('[operational-alert] signup alert failed:', result.error)
+  }
+}
+
+export async function notifySentinelErrors(date: string, errors: SentinelError[]): Promise<boolean> {
+  const result = await postOperationalAlert(formatSentinelErrorDigest(date, errors))
+  if (!result.ok) {
+    console.error('[operational-alert] Sentinel error digest failed:', result.error)
+  }
+  return result.ok
 }

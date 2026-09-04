@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   GREEN_CHEM_BOTS_CHANNEL,
   formatAnalysisAlert,
+  formatSignupAlert,
+  formatSentinelErrorDigest,
   postOperationalAlert,
 } from '@/lib/operational-alerts'
 
@@ -46,6 +48,37 @@ describe('formatAnalysisAlert', () => {
     expect(message).toContain('*Analysis failed*')
     expect(message).toContain('Model timed out')
     expect(message).toContain('Unavailable')
+  })
+})
+
+describe('signup and sentinel alert formatting', () => {
+  it('includes the requested signup identity, timestamp, and location metadata', () => {
+    const message = formatSignupAlert({
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+      timestamp: '2026-09-04T12:00:00.000Z',
+      ipLocation: 'Boston, Massachusetts, US',
+    })
+
+    expect(message).toContain('*New user signup*')
+    expect(message).toContain('Ada Lovelace')
+    expect(message).toContain('ada@example.com')
+    expect(message).toContain('2026-09-04T12:00:00.000Z')
+    expect(message).toContain('Boston, Massachusetts, US')
+  })
+
+  it('groups sentinel errors in one daily alert without exposing protocol content', () => {
+    const message = formatSentinelErrorDigest('2026-09-04', [
+      { runId: 'run-1', errorMessage: 'Model timed out' },
+      { runId: 'run-2', errorMessage: 'Chemistry service returned 503' },
+    ])
+
+    expect(message).toContain('*Daily Sentinel errors*')
+    expect(message).toContain('2026-09-04')
+    expect(message).toContain('run-1')
+    expect(message).toContain('Model timed out')
+    expect(message).toContain('run-2')
+    expect(message).not.toContain('protocol text')
   })
 })
 

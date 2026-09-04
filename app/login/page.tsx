@@ -8,6 +8,7 @@ import { NEW_ANALYSIS_HREF } from '@/lib/analysis-session'
 function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -34,19 +35,24 @@ function LoginForm() {
     setError(null)
 
     try {
-      const authFn = isSignUp
-        ? supabase.auth.signUp({ email, password })
-        : supabase.auth.signInWithPassword({ email, password })
-
-      const { error } = await authFn
-
-      if (error) {
-        setError(error.message)
+      if (isSignUp) {
+        const response = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name }),
+        })
+        const payload = await response.json() as { error?: string }
+        if (!response.ok) {
+          setError(payload.error || 'Unable to create your account.')
+          return
+        }
+        setError('Check your email for a confirmation link.')
         return
       }
 
-      if (isSignUp) {
-        setError('Check your email for a confirmation link.')
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        setError(error.message)
         return
       }
 
@@ -74,6 +80,18 @@ function LoginForm() {
         </div>
 
         <form onSubmit={handleEmailAuth} className="space-y-4">
+          {isSignUp && (
+            <input
+              type="text"
+              placeholder="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg border focus:outline-none transition-colors"
+              style={{ background: '#F5F0E8', color: '#1C1917', borderColor: '#D6D0C4' }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = '#1C3822')}
+              onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
+            />
+          )}
           <input
             type="email"
             placeholder="Email"

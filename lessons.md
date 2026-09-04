@@ -5,3 +5,7 @@
 ### 2026-05-19 Mixed `c*` span classes and `cs*` start classes need explicit mobile full-span rules
 **Rule:** When collapsing desktop grid columns on mobile, use `grid-column: 1 / -1` for mixed span/start helper classes instead of `span 12`.
 **Why:** Elements that also carry `grid-column-start` helper classes can compute to start-only placement on mobile, collapsing into a narrow sliver even though the intent is full-width.
+
+### 2026-09-04 Alert work must start from a synchronized GreenChemistry.ai checkout
+**Rule:** Fetch and reconcile `main` with `origin/main` before inspecting, editing, or deploying alert code; stage only alert paths in the shared dirty checkout.
+**Why:** GreenChemistry.ai receives parallel external pushes. Building from a stale local branch delayed the production alert rollout and made the source-of-truth boundary unclear.
