@@ -88,8 +88,10 @@ jobs:
       - name: Exercise the deployed staging web smoke
         env:
           PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_WEB_URL }}
+          VERCEL_PROTECTION_BYPASS_SECRET: ${{ secrets.STAGING_VERCEL_PROTECTION_BYPASS_SECRET }}
         run: |
           test -n "$PLAYWRIGHT_BASE_URL" || { echo "Staging environment variable STAGING_WEB_URL is required."; exit 1; }
+          test -n "$VERCEL_PROTECTION_BYPASS_SECRET" || { echo "Staging Vercel protection bypass secret is required."; exit 1; }
           npx playwright test tests/release-smoke.spec.ts
 
   release-candidate-evidence:
