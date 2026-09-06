@@ -49,6 +49,7 @@ class PrincipleScore(BaseModel):
             mapping = {
                 'calculated': ScoreProvenance.CALCULATED,
                 'estimated': ScoreProvenance.MODEL_INFERRED,
+                'model-inferred': ScoreProvenance.MODEL_INFERRED,
                 'partial': ScoreProvenance.BENCHMARK,  # Fold partial into benchmark
                 'benchmark': ScoreProvenance.BENCHMARK,
                 'unavailable': ScoreProvenance.UNAVAILABLE,
@@ -96,3 +97,4 @@ class ScoringResponse(BaseModel):
     sds_references: dict[str, list[SdsReference]] | None = None
     smiles_extraction: dict = Field(default_factory=dict)
     yield_extraction: dict = Field(default_factory=dict)
+    local_helpers: dict | None = None

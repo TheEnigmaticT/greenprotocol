@@ -7,6 +7,7 @@ If validation fails, we return None rather than bad data.
 
 import re
 from llm_client import call_llm
+from isolated_llm_policy import helper_protocol_context
 
 try:
     from rdkit import Chem
@@ -116,7 +117,7 @@ async def extract_reaction_smiles(
 
     base_prompt = (
         f"Write the balanced reaction SMILES for this protocol.\n\n"
-        f"Protocol:\n{protocol_text[:3000]}\n"
+        f"Protocol:\n{helper_protocol_context(protocol_text, 3000)}\n"
         f"{chem_context}\n\n"
         f"Reply with ONLY the reaction SMILES string. Nothing else."
     )
@@ -135,7 +136,7 @@ async def extract_reaction_smiles(
                 f"Try again. {base_prompt}"
             )
 
-        response = await call_llm(prompt, system=SYSTEM_PROMPT)
+        response = await call_llm(prompt, system=SYSTEM_PROMPT, stage="smiles")
         if not response:
             metadata["validation_errors"].append("LLM returned no response")
             continue

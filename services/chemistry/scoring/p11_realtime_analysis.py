@@ -29,6 +29,7 @@ Score: 0 (comprehensive real-time monitoring) to 10 (no monitoring at all)
 
 from scoring.models import PrincipleScore, ScoreProvenance
 from llm_client import call_llm
+from isolated_llm_policy import helper_protocol_context
 import json
 import re
 
@@ -91,14 +92,14 @@ async def score_p11(
 
     prompt = (
         f"Assess the real-time monitoring capabilities of this protocol.\n\n"
-        f"Protocol text:\n{protocol_text[:3000]}\n\n"
+        f"Protocol text:\n{helper_protocol_context(protocol_text, 3000)}\n\n"
         f"Parsed steps:\n" + "\n".join(step_descriptions) + "\n\n"
         f"Respond with ONLY the JSON object."
     )
 
     response = None
     for attempt in range(2):
-        response = await call_llm(prompt, system=SYSTEM_PROMPT)
+        response = await call_llm(prompt, system=SYSTEM_PROMPT, stage="p11")
         if response:
             break
         if attempt == 0:

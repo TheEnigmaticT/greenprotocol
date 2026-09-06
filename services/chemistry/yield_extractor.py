@@ -3,6 +3,7 @@
 import re
 import json
 from llm_client import call_llm
+from isolated_llm_policy import helper_protocol_context
 from reaction_types import get_all_reaction_types, lookup_benchmark
 
 YIELD_SYSTEM = """You are a chemistry expert. Extract yield information from 
@@ -38,7 +39,7 @@ async def extract_yield_and_type(
 
     prompt = (
         f"Extract yield and classify the reaction type.\n\n"
-        f"Protocol:\n{protocol_text[:3000]}\n"
+        f"Protocol:\n{helper_protocol_context(protocol_text, 3000)}\n"
         f"{chem_context}\n\n"
         f"Known reaction types: {type_list}\n\n"
         f"If the reaction type doesn't match any known type exactly, "
@@ -46,7 +47,7 @@ async def extract_yield_and_type(
         f"Respond with ONLY the JSON object."
     )
 
-    response = await call_llm(prompt, system=YIELD_SYSTEM)
+    response = await call_llm(prompt, system=YIELD_SYSTEM, stage="yield")
     if not response:
         return {"error": "LLM returned no response", "llm_called": True}
 

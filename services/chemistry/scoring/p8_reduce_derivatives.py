@@ -39,6 +39,7 @@ Score: 0 (100% ideal, no concessions) to 10 (0% ideal, all concessions)
 
 from scoring.models import PrincipleScore, ScoreProvenance
 from llm_client import call_llm
+from isolated_llm_policy import helper_protocol_context
 import json
 import re
 
@@ -62,7 +63,13 @@ For each step, assign ONE classification:
 - "concession_other": anything else non-productive
 
 Respond with ONLY a JSON array. Each element:
-{"step": <number>, "classification": "<type>", "reason": "<brief>"}"""
+{"step": <number>, "classification": "<type>", "reason": "<brief>"}
+
+Never return []. You must include exactly one object for every numbered step,
+using each step number exactly once.
+
+Example for a 1-step protocol:
+[{"step": 1, "classification": "concession_workup", "reason": "TLC monitoring / isolation"}]"""
 
 
 IDEAL_TYPES = {"construction", "strategic_redox"}
@@ -85,15 +92,19 @@ async def _classify_steps(
         chems = ", ".join(c.get("name", "") for c in s.get("chemicals", []))
         step_descriptions.append(f"Step {num}: {desc} [chemicals: {chems}]")
 
+    step_nums = sorted(
+        {int(s.get("stepNumber")) for s in steps if s.get("stepNumber") is not None}
+    )
     prompt = (
         f"Classify each step of this synthesis:\n\n"
-        f"Protocol:\n{protocol_text[:2000]}\n\n"
+        f"Protocol:\n{helper_protocol_context(protocol_text, 2000)}\n\n"
         f"Steps:\n" + "\n".join(step_descriptions) + "\n\n"
-        f"Respond with ONLY the JSON array."
+        f"Required step numbers (include each exactly once): {step_nums}\n"
+        f"Respond with ONLY the JSON array. Never return []."
     )
 
     metadata["llm_called"] = True
-    response = await call_llm(prompt, system=SYSTEM_PROMPT)
+    response = await call_llm(prompt, system=SYSTEM_PROMPT, stage="p8")
 
     if not response:
         metadata["error"] = "LLM returned no response"
@@ -109,6 +120,7 @@ async def _classify_steps(
     except json.JSONDecodeError:
         metadata["error"] = f"Failed to parse: {response[:200]}"
         return [], metadata
+
 
 
 async def score_p8(

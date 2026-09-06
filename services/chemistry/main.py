@@ -24,6 +24,7 @@ from assistant_tools import AssistantToolPayload, AssistantToolResponse, execute
 from converter import convert
 from yield_extractor import extract_yield_and_type
 from smiles_extractor import extract_reaction_smiles
+from local_helpers import run_local_helpers, helper_score
 import cache as chem_cache
 from synonyms import resolve_synonym
 from cas_lookup import get_cas
@@ -131,6 +132,8 @@ async def score_protocol(request: ScoringRequest):
     if not request.chemicals:
         raise HTTPException(status_code=400, detail="No chemicals provided")
 
+    local_result = await run_local_helpers(request) if os.getenv("GCAI_LOCAL_HELPERS") else None
+
     # Read GHS H-codes from the converter cache (populated by /batch).
     # Falls back to [] for chemicals not yet converted, so P3 degrades gracefully.
     hcodes_map: dict[str, list[str]] = {}
@@ -139,7 +142,10 @@ async def score_protocol(request: ScoringRequest):
 
     # Extract yield and reaction type for P1 PMI calculation.
     yield_info: dict = {}
-    if request.protocol_text:
+    if local_result is not None:
+        row = local_result["helpers"]["yield"]
+        yield_info = row["value"] if row["status"] == "complete" else {"error": row["error"], "llm_called": bool(row["attempted_callbacks"])}
+    elif request.protocol_text:
         try:
             chem_dicts = [
                 {"name": c.name, "role": c.role, "quantity": c.quantity}
@@ -154,7 +160,14 @@ async def score_protocol(request: ScoringRequest):
     # when necessary.
     smiles_metadata: dict = {"provided": bool(request.reaction_smiles), "llm_called": False}
     reaction_smiles = request.reaction_smiles
-    if not reaction_smiles and request.protocol_text:
+    if local_result is not None and not reaction_smiles:
+        row = local_result["helpers"]["smiles"]
+        if row["status"] == "complete":
+            reaction_smiles = row["value"]["reaction_smiles"]
+            smiles_metadata = row["value"]["metadata"]
+        else:
+            smiles_metadata = {"error": row["error"], "llm_called": bool(row["attempted_callbacks"]), "validated": False}
+    elif local_result is None and not reaction_smiles and request.protocol_text:
         try:
             reaction_smiles, smiles_metadata = await extract_reaction_smiles(
                 request.protocol_text,
@@ -183,10 +196,12 @@ async def score_protocol(request: ScoringRequest):
     p5 = score_p5(chemicals=request.chemicals)
     p6 = score_p6(steps=request.steps)
     p7 = score_p7(chemicals=request.chemicals)
-    p8 = await score_p8(steps=request.steps, protocol_text=request.protocol_text)
+    p8 = (helper_score(local_result, "p8", 8, "Reduce Derivatives (Baran Ideality)")
+          if local_result is not None else await score_p8(steps=request.steps, protocol_text=request.protocol_text))
     p9 = score_p9(chemicals=request.chemicals)
     p10 = score_p10(chemicals=request.chemicals, hcodes_map=hcodes_map)
-    p11 = await score_p11(steps=request.steps, protocol_text=request.protocol_text)
+    p11 = (helper_score(local_result, "p11", 11, "Real-Time Analysis for Pollution Prevention")
+           if local_result is not None else await score_p11(steps=request.steps, protocol_text=request.protocol_text))
     p12 = score_p12(chemicals=request.chemicals, hcodes_map=hcodes_map)
 
     # Process complexity for waste analysis
@@ -238,4 +253,8 @@ async def score_protocol(request: ScoringRequest):
         waste_analysis=waste,
         smiles_extraction=smiles_metadata,
         yield_extraction=yield_extraction,
+        local_helpers=({**local_result, "helpers": {
+            stage: {k: v for k, v in row.items() if k != "value"}
+            for stage, row in local_result["helpers"].items()
+        }} if local_result is not None else None),
     )
