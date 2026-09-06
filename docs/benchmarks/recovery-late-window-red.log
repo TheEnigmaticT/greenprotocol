@@ -1,0 +1,30 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/analysis.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/analysis.test.ts (8 tests | 1 failed) 2625ms
+     × cannot launch another extraction window after a stage deadline and late uncancelled response 259ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/analysis.test.ts > isolated analysis integration with synthetic transport, not scientific qualification > cannot launch another extraction window after a stage deadline and late uncancelled response
+AssertionError: expected "vi.fn()" to be called 1 times, but got 6 times
+ ❯ tests/lib/local-qualification/analysis.test.ts:102:21
+    100|     release()
+    101|     await new Promise(resolve => setTimeout(resolve, 20))
+    102|     expect(execute).toHaveBeenCalledTimes(1)
+       |                     ^
+    103|   })
+    104|   it('blocks principle inference when worker and independent source in…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  23:50:21
+   Duration  2.78s (transform 71ms, setup 0ms, import 88ms, tests 2.63s, environment 0ms)
+

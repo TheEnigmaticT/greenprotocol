@@ -1,0 +1,82 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/stages.test.ts tests/lib/local-qualification/provider-manifests.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/stages.test.ts (11 tests | 1 failed) 27ms
+     × does not settle or bypass an uncertain job rejection at a sibling stage or changed run 5ms
+ ❯ tests/lib/local-qualification/provider-manifests.test.ts (52 tests | 3 failed) 1997ms
+     × retains unknown in-sprint cost and stops all future reservations after COST_UNKNOWN 65ms
+     × retains unknown in-sprint cost and stops all future reservations after HTTP_ERROR 47ms
+     × retains unknown in-sprint cost and stops all future reservations after OUTPUT_INVALID 46ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/provider-manifests.test.ts > R1 unresolved settlement fails closed without another write > retains unknown in-sprint cost and stops all future reservations after COST_UNKNOWN
+ FAIL  tests/lib/local-qualification/provider-manifests.test.ts > R1 unresolved settlement fails closed without another write > retains unknown in-sprint cost and stops all future reservations after HTTP_ERROR
+ FAIL  tests/lib/local-qualification/provider-manifests.test.ts > R1 unresolved settlement fails closed without another write > retains unknown in-sprint cost and stops all future reservations after OUTPUT_INVALID
+AssertionError: expected { committedMicroUsd: 1012, …(3) } to match object { stopped: true, …(2) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "attempts": 1,
+    "committedMicroUsd": 1012,
+-   "stopped": true,
++   "stopped": false,
+  }
+
+ ❯ tests/lib/local-qualification/provider-manifests.test.ts:104:33
+    102|     const before = readdirSync(p).sort()
+    103|     const reopened = manifests.createTestLedger({ root: p, historicalM…
+    104|     expect(reopened.snapshot()).toMatchObject({ stopped: true, committ…
+       |                                 ^
+    105|     expect(() => reopened.withLock(() => reopened.reserve({ ...tuple, …
+    106|     expect(() => reopened.withLock(() => reopened.reserve({ ...tuple, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/lib/local-qualification/stages.test.ts > isolated serial durable stage substrate > does not settle or bypass an uncertain job rejection at a sibling stage or changed run
+AssertionError: expected [ 'extraction', 'coverage', …(13) ] to deeply equal [ 'extraction', 'coverage', …(2) ]
+
+- Expected
++ Received
+
+  [
+    "extraction",
+    "coverage",
+    "claim-audit",
+    "P1",
++   "P2",
++   "P3",
++   "P4",
++   "P5",
++   "P6",
++   "P7",
++   "P8",
++   "P9",
++   "P10",
++   "P11",
++   "P12",
+  ]
+
+ ❯ tests/lib/local-qualification/stages.test.ts:35:19
+     33|     } } satisfies StageJob]))
+     34|     const first = await runStages(options)
+     35|     expect(calls).toEqual(['extraction', 'coverage', 'claim-audit', 'P…
+       |                   ^
+     36|     expect(first.stages.find(s => s.stage === 'P1')).toMatchObject({ c…
+     37|     expect(first.stages.find(s => s.stage === 'P2')).toMatchObject({ c…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  4 failed | 59 passed (63)
+   Start at  23:33:34
+   Duration  2.13s (transform 108ms, setup 0ms, import 133ms, tests 2.02s, environment 0ms)
+

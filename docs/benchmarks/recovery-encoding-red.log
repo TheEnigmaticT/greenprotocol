@@ -1,0 +1,59 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/provider-manifests.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/provider-manifests.test.ts (53 tests | 1 failed) 2189ms
+     × rejects malformed UTF-8 without repairing raw model output into valid JSON 65ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/provider-manifests.test.ts > additional fail-closed regression gates > rejects malformed UTF-8 without repairing raw model output into valid JSON
+AssertionError: promise resolved "{ value: { ok: true }, …(6) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "attempt": 1,
++   "costMicroUsd": 100,
++   "model": "google/gemma-4-31b-it",
++   "requestHash": "c4d2f181dc812d9c51f082f9c509122d988fcb018193b1c830f7cf3b3649e284",
++   "telemetry": {
++     "completionTokens": null,
++     "costMicroUsd": 100,
++     "errorCode": null,
++     "httpStatus": 200,
++     "latencyMs": 26,
++     "promptTokens": null,
++     "provider": null,
++     "requestedModel": "google/gemma-4-31b-it",
++     "returnedModel": "google/gemma-4-31b-it",
++     "totalTokens": null,
++   },
++   "tupleHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++   "value": {
++     "ok": true,
++   },
+  }
+
+ ❯ tests/lib/local-qualification/provider-manifests.test.ts:154:46
+    152|     encoded[encoded.indexOf('X')] = 255
+    153|     const { p, transport } = setup(vi.fn(async () => new Response(enco…
+    154|     await expect(transport.execute(request())).rejects.toThrow('OUTPUT…
+       |                                              ^
+    155|     expect(readFileSync(join(p, readdirSync(p).find(f => f.endsWith('.…
+    156|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 52 passed (53)
+   Start at  23:36:14
+   Duration  2.32s (transform 50ms, setup 0ms, import 63ms, tests 2.19s, environment 0ms)
+

@@ -1,0 +1,94 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/analysis.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/analysis.test.ts (6 tests | 6 failed) 7ms
+     × exports an actual isolated orchestrator and approval-gated native entrypoint 3ms
+     × wires extraction, independent inventory, all twelve jobs, assembly and private reload without network or false safety 1ms
+     × retains a private stage failure and halts before sibling principles or retries 0ms
+     × blocks principle inference when worker and independent source inventory disagree 0ms
+     × rejects mismatched trusted policy source before any principle inference 0ms
+     × native entrypoint remains OFF before source access, storage or credential consumption 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/analysis.test.ts > isolated analysis integration with synthetic transport, not scientific qualification > exports an actual isolated orchestrator and approval-gated native entrypoint
+AssertionError: expected undefined to be type of 'function'
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ tests/lib/local-qualification/analysis.test.ts:50:37
+     48| describe('isolated analysis integration with synthetic transport, not …
+     49|   it('exports an actual isolated orchestrator and approval-gated nativ…
+     50|     expect(api.runIsolatedAnalysis).toBeTypeOf('function')
+       |                                     ^
+     51|     expect(api.runApprovedIsolatedAnalysis).toBeTypeOf('function')
+     52|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/lib/local-qualification/analysis.test.ts > isolated analysis integration with synthetic transport, not scientific qualification > wires extraction, independent inventory, all twelve jobs, assembly and private reload without network or false safety
+TypeError: api.runIsolatedAnalysis is not a function
+ ❯ tests/lib/local-qualification/analysis.test.ts:56:29
+     54|     const network = vi.spyOn(globalThis, 'fetch').mockRejectedValue(ne…
+     55|     const { options, calls, artifacts } = fixture()
+     56|     const first = await api.runIsolatedAnalysis(options)
+       |                             ^
+     57|     expect(calls).toHaveLength(2 + PRINCIPLE_IDS.length)
+     58|     expect(calls.every(r => r.model === model && r.providerSlug === 'd…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/lib/local-qualification/analysis.test.ts > isolated analysis integration with synthetic transport, not scientific qualification > retains a private stage failure and halts before sibling principles or retries
+TypeError: api.runIsolatedAnalysis is not a function
+ ❯ tests/lib/local-qualification/analysis.test.ts:79:30
+     77|     const original = execute.getMockImplementation()!
+     78|     execute.mockImplementation(async r => { if (r.output.name.includes…
+     79|     const result = await api.runIsolatedAnalysis(options)
+       |                              ^
+     80|     expect(result.stages.find(s => s.stage === 'P1')?.code).toBe('JOB_…
+     81|     expect(result.stages.find(s => s.stage === 'P2')?.code).toBe('RUN_…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/lib/local-qualification/analysis.test.ts > isolated analysis integration with synthetic transport, not scientific qualification > blocks principle inference when worker and independent source inventory disagree
+TypeError: api.runIsolatedAnalysis is not a function
+ ❯ tests/lib/local-qualification/analysis.test.ts:100:30
+     98|       return response
+     99|     })
+    100|     const result = await api.runIsolatedAnalysis(options)
+       |                              ^
+    101|     expect(calls).toHaveLength(2)
+    102|     expect(result.stages.find(s => s.stage === 'P1')?.status).toBe('un…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/lib/local-qualification/analysis.test.ts > isolated analysis integration with synthetic transport, not scientific qualification > rejects mismatched trusted policy source before any principle inference
+TypeError: api.runIsolatedAnalysis is not a function
+ ❯ tests/lib/local-qualification/analysis.test.ts:109:30
+    107|     const policy = options.principlePolicy
+    108|     options.principlePolicy = (p, s, g) => ({ ...policy(p, s, g), sour…
+    109|     const result = await api.runIsolatedAnalysis(options)
+       |                              ^
+    110|     expect(calls).toHaveLength(2)
+    111|     expect(result.stages.find(s => s.stage === 'P1')?.code).toBe('JOB_…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/lib/local-qualification/analysis.test.ts > isolated analysis integration with synthetic transport, not scientific qualification > native entrypoint remains OFF before source access, storage or credential consumption
+TypeError: api.runApprovedIsolatedAnalysis is not a function
+ ❯ tests/lib/local-qualification/analysis.test.ts:115:22
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  23:39:17
+   Duration  119ms (transform 33ms, setup 0ms, import 46ms, tests 7ms, environment 0ms)
+

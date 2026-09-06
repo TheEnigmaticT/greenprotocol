@@ -1,0 +1,11 @@
+{
+  "source": "https://openrouter.ai/api/v1/models",
+  "evidence_class": "live public vendor catalog, unauthenticated browser fetch",
+  "mission": "local-model-e2e-20260905",
+  "id": "google/gemma-4-31b-it",
+  "context_length": 262144,
+  "pricing_per_token_usd": {"prompt": "0.00000009", "completion": "0.00000034", "input_cache_read": "0.00000005"},
+  "supported_parameters": ["frequency_penalty", "include_reasoning", "logit_bias", "logprobs", "max_tokens", "min_p", "presence_penalty", "reasoning", "repetition_penalty", "response_format", "seed", "stop", "structured_outputs", "temperature", "tool_choice", "tools", "top_k", "top_logprobs", "top_p"],
+  "top_provider": {"context_length": 262144, "max_completion_tokens": 16384, "is_moderated": false},
+  "notes": ["Current catalog supports tools and structured_outputs; earlier search snippet saying tools unavailable is superseded.", "Listed minimum pricing is not a frozen selected backend price. No live inference or role qualification is established."]
+}

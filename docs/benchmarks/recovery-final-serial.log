@@ -1,0 +1,13 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification tests/lib/decomposed-benchmark --no-file-parallelism
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+
+ Test Files  22 passed (22)
+      Tests  518 passed (518)
+   Start at  23:55:48
+   Duration  8.30s (transform 192ms, setup 0ms, import 358ms, tests 6.65s, environment 1ms)
+

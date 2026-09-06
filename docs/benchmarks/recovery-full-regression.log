@@ -1,0 +1,31 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification tests/lib/decomposed-benchmark
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/discovery.test.ts (46 tests | 1 failed) 6953ms
+     × bounds the file count 6572ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > private discovery: synthetic fixtures only > bounds the file count
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/lib/local-qualification/discovery.test.ts:75:3
+     73|     expect(result.stderr).toBe('DISCOVERY_REVIEW_REQUIRED\n')
+     74|   })
+     75|   it('bounds the file count', async () => {
+       |   ^
+     76|     const { root, api } = await fixture()
+     77|     for (let i = 0; i < 2049; i++) fs.writeFileSync(join(root, String(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 21 passed (22)
+      Tests  1 failed | 516 passed (517)
+   Start at  23:52:27
+   Duration  7.13s (transform 1.46s, setup 0ms, import 1.82s, tests 22.22s, environment 1ms)
+

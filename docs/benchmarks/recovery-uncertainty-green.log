@@ -1,0 +1,13 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/stages.test.ts tests/lib/local-qualification/provider-manifests.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+
+ Test Files  2 passed (2)
+      Tests  63 passed (63)
+   Start at  23:34:39
+   Duration  1.93s (transform 104ms, setup 0ms, import 130ms, tests 1.82s, environment 0ms)
+

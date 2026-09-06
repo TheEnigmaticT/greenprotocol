@@ -1,0 +1,34 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/analysis.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/analysis.test.ts (13 tests | 2 failed) 6092ms
+     × runs and privately persists a resolvable approve applicability audit for a synthetic supported P5 candidate 726ms
+     × runs and privately persists a resolvable reject applicability audit for a synthetic supported P5 candidate 728ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/analysis.test.ts > isolated analysis integration with synthetic transport, not scientific qualification > runs and privately persists a resolvable approve applicability audit for a synthetic supported P5 candidate
+ FAIL  tests/lib/local-qualification/analysis.test.ts > isolated analysis integration with synthetic transport, not scientific qualification > runs and privately persists a resolvable reject applicability audit for a synthetic supported P5 candidate
+StageStoreError: STAGE_INVALID
+ ❯ safe lib/local-qualification/stage-store.ts:13:41
+     11| function fail(code: string): never { throw new StoreError(code) }
+     12| function safe<T>(fn: () => T): T {
+     13|   try { return fn() } catch (e) { throw new StoreError(e instanceof St…
+       |                                         ^
+     14| }
+     15| function same(a: Stats, b: Stats): boolean { return a.dev === b.dev &&…
+ ❯ DiskArtifactStore.read lib/local-qualification/stage-store.ts:195:12
+ ❯ tests/lib/local-qualification/analysis.test.ts:216:55
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 11 passed (13)
+   Start at  00:09:57
+   Duration  6.25s (transform 74ms, setup 0ms, import 92ms, tests 6.09s, environment 0ms)
+

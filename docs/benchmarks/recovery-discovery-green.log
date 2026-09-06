@@ -1,0 +1,30 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/discovery-checks.test.ts tests/lib/local-qualification/discovery.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts (10 tests | 1 failed) 23ms
+     × directory-mutation preserves rejection and reports only DIRECTORY_CHANGED 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > directory-mutation preserves rejection and reports only DIRECTORY_CHANGED
+AssertionError: expected undefined to be an instance of Error
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:60:20
+     58|     let caught: unknown
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+       |                    ^
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 41 passed (42)
+   Start at  23:29:25
+   Duration  663ms (transform 61ms, setup 0ms, import 67ms, tests 588ms, environment 0ms)
+

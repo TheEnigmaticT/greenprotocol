@@ -1,0 +1,314 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/discovery-checks.test.ts tests/lib/local-qualification/discovery.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/discovery.test.ts (46 tests | 11 failed) 561ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:SYMLINK_COMPONE…' (case 0) 10ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:NON_DIRECTORY_C…' (case 1) 2ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:NON_REGULAR_OR_…' (case 2) 2ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:OPEN_IDENTITY_C…' (case 3) 1ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:FILE_CHANGED' (case 4) 1ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:READ_LENGTH_CHA…' (case 5) 1ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:EXPECTED_DIRECT…' (case 6) 1ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:DIRECTORY_CHANG…' (case 7) 1ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:PATH_MISSING' (case 8) 2ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:ACCESS_DENIED' (case 9) 3ms
+     × emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:FILESYSTEM_ERROR' (case 10) 1ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:SYMLINK_COMPONE…' (case 0)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:SYMLINK_COMPONENT
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:NON_DIRECTORY_C…' (case 1)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:NON_DIRECTORY_COMPONENT
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:NON_REGULAR_OR_…' (case 2)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:NON_REGULAR_OR_MULTILINK
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:OPEN_IDENTITY_C…' (case 3)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:OPEN_IDENTITY_CHANGED
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:FILE_CHANGED' (case 4)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:FILE_CHANGED
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:READ_LENGTH_CHA…' (case 5)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:READ_LENGTH_CHANGED
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:EXPECTED_DIRECT…' (case 6)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:EXPECTED_DIRECTORY
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:DIRECTORY_CHANG…' (case 7)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:DIRECTORY_CHANGED
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:PATH_MISSING' (case 8)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:PATH_MISSING
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:ACCESS_DENIED' (case 9)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:ACCESS_DENIED
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  tests/lib/local-qualification/discovery.test.ts > discovery CLI diagnostics: mocked utility only > emits only the exact fixed diagnostic 'DISCOVERY_UNSAFE_PATH:FILESYSTEM_ERROR' (case 10)
+AssertionError: expected "Mock" to be called once with arguments: [ Array(1) ]
+
+Received:
+
+  1st Mock call:
+
+  [
+-   "DISCOVERY_UNSAFE_PATH:FILESYSTEM_ERROR
++   "DISCOVERY_UNSAFE_PATH
+  ",
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/lib/local-qualification/discovery.test.ts:56:22
+     54|       expect(process.exitCode).toBe(1)
+     55|       expect(stdout).not.toHaveBeenCalled()
+     56|       expect(stderr).toHaveBeenCalledExactlyOnceWith(expected + '\n')
+       |                      ^
+     57|     } finally {
+     58|       process.argv = argv
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  11 failed | 45 passed (56)
+   Start at  23:30:44
+   Duration  659ms (transform 58ms, setup 0ms, import 66ms, tests 583ms, environment 0ms)
+

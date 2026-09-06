@@ -1,0 +1,237 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/discovery-checks.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts (10 tests | 10 failed) 32ms
+     × symlink preserves rejection and reports only SYMLINK_COMPONENT 16ms
+     × ancestor-file preserves rejection and reports only NON_DIRECTORY_COMPONENT 3ms
+     × missing preserves rejection and reports only PATH_MISSING 1ms
+     × permission preserves rejection and reports only ACCESS_DENIED 1ms
+     × unknown preserves rejection and reports only FILESYSTEM_ERROR 2ms
+     × hardlink preserves rejection and reports only NON_REGULAR_OR_MULTILINK 1ms
+     × descriptor preserves rejection and reports only OPEN_IDENTITY_CHANGED 1ms
+     × mutation preserves rejection and reports only FILE_CHANGED 1ms
+     × short-read preserves rejection and reports only READ_LENGTH_CHANGED 2ms
+     × directory-mutation preserves rejection and reports only DIRECTORY_CHANGED 2ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > symlink preserves rejection and reports only SYMLINK_COMPONENT
+AssertionError: expected Error: DISCOVERY_UNSAFE_PATH to match object { …(2) }
+
+- Expected
++ Received
+
+- {
+-   "check": "SYMLINK_COMPONENT",
++ Error {
+    "message": "DISCOVERY_UNSAFE_PATH",
+  }
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:61:20
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+       |                    ^
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+     63|     expect(JSON.stringify(caught)).not.toContain('credential')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > ancestor-file preserves rejection and reports only NON_DIRECTORY_COMPONENT
+AssertionError: expected Error: DISCOVERY_UNSAFE_PATH to match object { …(2) }
+
+- Expected
++ Received
+
+- {
+-   "check": "NON_DIRECTORY_COMPONENT",
++ Error {
+    "message": "DISCOVERY_UNSAFE_PATH",
+  }
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:61:20
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+       |                    ^
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+     63|     expect(JSON.stringify(caught)).not.toContain('credential')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > missing preserves rejection and reports only PATH_MISSING
+AssertionError: expected Error: DISCOVERY_UNSAFE_PATH to match object { …(2) }
+
+- Expected
++ Received
+
+- {
+-   "check": "PATH_MISSING",
++ Error {
+    "message": "DISCOVERY_UNSAFE_PATH",
+  }
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:61:20
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+       |                    ^
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+     63|     expect(JSON.stringify(caught)).not.toContain('credential')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > permission preserves rejection and reports only ACCESS_DENIED
+AssertionError: expected Error: DISCOVERY_UNSAFE_PATH to match object { …(2) }
+
+- Expected
++ Received
+
+- {
+-   "check": "ACCESS_DENIED",
++ Error {
+    "message": "DISCOVERY_UNSAFE_PATH",
+  }
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:61:20
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+       |                    ^
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+     63|     expect(JSON.stringify(caught)).not.toContain('credential')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > unknown preserves rejection and reports only FILESYSTEM_ERROR
+AssertionError: expected Error: DISCOVERY_UNSAFE_PATH to match object { …(2) }
+
+- Expected
++ Received
+
+- {
+-   "check": "FILESYSTEM_ERROR",
++ Error {
+    "message": "DISCOVERY_UNSAFE_PATH",
+  }
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:61:20
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+       |                    ^
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+     63|     expect(JSON.stringify(caught)).not.toContain('credential')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > hardlink preserves rejection and reports only NON_REGULAR_OR_MULTILINK
+AssertionError: expected Error: DISCOVERY_UNSAFE_PATH to match object { …(2) }
+
+- Expected
++ Received
+
+- {
+-   "check": "NON_REGULAR_OR_MULTILINK",
++ Error {
+    "message": "DISCOVERY_UNSAFE_PATH",
+  }
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:61:20
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+       |                    ^
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+     63|     expect(JSON.stringify(caught)).not.toContain('credential')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > descriptor preserves rejection and reports only OPEN_IDENTITY_CHANGED
+AssertionError: expected Error: DISCOVERY_UNSAFE_PATH to match object { …(2) }
+
+- Expected
++ Received
+
+- {
+-   "check": "OPEN_IDENTITY_CHANGED",
++ Error {
+    "message": "DISCOVERY_UNSAFE_PATH",
+  }
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:61:20
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+       |                    ^
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+     63|     expect(JSON.stringify(caught)).not.toContain('credential')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > mutation preserves rejection and reports only FILE_CHANGED
+AssertionError: expected Error: DISCOVERY_UNSAFE_PATH to match object { …(2) }
+
+- Expected
++ Received
+
+- {
+-   "check": "FILE_CHANGED",
++ Error {
+    "message": "DISCOVERY_UNSAFE_PATH",
+  }
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:61:20
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+       |                    ^
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+     63|     expect(JSON.stringify(caught)).not.toContain('credential')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > short-read preserves rejection and reports only READ_LENGTH_CHANGED
+AssertionError: expected Error: DISCOVERY_UNSAFE_PATH to match object { …(2) }
+
+- Expected
++ Received
+
+- {
+-   "check": "READ_LENGTH_CHANGED",
++ Error {
+    "message": "DISCOVERY_UNSAFE_PATH",
+  }
+
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:61:20
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+       |                    ^
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+     63|     expect(JSON.stringify(caught)).not.toContain('credential')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  tests/lib/local-qualification/discovery-checks.test.ts > discovery check attribution without private I/O > directory-mutation preserves rejection and reports only DIRECTORY_CHANGED
+AssertionError: expected undefined to be an instance of Error
+ ❯ tests/lib/local-qualification/discovery-checks.test.ts:60:20
+     58|     let caught: unknown
+     59|     try { api.discoverLocalCorpus(true) } catch (error) { caught = err…
+     60|     expect(caught).toBeInstanceOf(Error)
+       |                    ^
+     61|     expect(caught).toMatchObject({ message: 'DISCOVERY_UNSAFE_PATH', c…
+     62|     expect(JSON.stringify(caught)).not.toContain('PRIVATE-SENTINEL')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  10 failed (10)
+   Start at  23:28:18
+   Duration  125ms (transform 22ms, setup 0ms, import 20ms, tests 32ms, environment 0ms)
+

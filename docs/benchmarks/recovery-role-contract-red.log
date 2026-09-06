@@ -1,0 +1,85 @@
+
+> greenchemistry-ai@0.7.1 test
+> vitest run tests/lib/local-qualification/live-provider.test.ts
+
+
+ RUN  v4.1.7 /Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e
+
+ ❯ tests/lib/local-qualification/live-provider.test.ts (13 tests | 2 failed) 193ms
+   × binds distinct frozen role contracts within the same sprint instead of requiring one prompt hash for all roles 10ms
+   × requires review fingerprints for the actual integrated dependency closure 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lib/local-qualification/live-provider.test.ts > binds distinct frozen role contracts within the same sprint instead of requiring one prompt hash for all roles
+AssertionError: promise rejected "QualificationError: MISSION_MISMATCH { code: '…' }" instead of resolving
+ ❯ tests/lib/local-qualification/live-provider.test.ts:97:130
+     95|   const network = vi.fn(async () => response())
+     96|   const runtime = provider.createTestProvider({ root, historicalMicroU…
+     97|   await expect(runtime.execute({ ...request(), evidence: { sourceHash:…
+       |                                                                                                                                  ^
+     98|   await expect(runtime.execute({ ...request(), tupleHash: 'c'.repeat(6…
+     99|   expect(network).toHaveBeenCalledTimes(1)
+
+Caused by: QualificationError: MISSION_MISMATCH
+ ❯ fail lib/local-qualification/manifests.ts:11:51
+ ❯ Object.execute lib/local-qualification/provider.ts:158:229
+ ❯ tests/lib/local-qualification/live-provider.test.ts:97:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'MISSION_MISMATCH' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/lib/local-qualification/live-provider.test.ts > requires review fingerprints for the actual integrated dependency closure
+AssertionError: expected [ …(12) ] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   "lib/local-qualification/analysis.ts",
+-   "lib/local-qualification/stage-store.ts",
+-   "lib/local-qualification/extraction-jobs.ts",
+-   "lib/local-qualification/principle-jobs.ts",
+-   "lib/local-qualification/source.ts",
+-   "lib/local-qualification/graph.ts",
+-   "lib/local-qualification/coverage-audit.ts",
+-   "lib/local-qualification/claim-audit.ts",
+-   "lib/local-qualification/evidence.ts",
+-   "lib/local-qualification/decisions.ts",
+-   "lib/local-qualification/principles.ts",
+-   "lib/local-qualification/corpus.ts",
+-   "lib/local-qualification/reporting.ts",
+-   "lib/local-qualification/patch.ts",
+-   "docs/benchmarks/live-provider-spec-rereview.md",
++ [
++   "lib/local-qualification/provider.ts",
++   "lib/local-qualification/manifests.ts",
++   "lib/local-qualification/stages.ts",
++   "lib/local-qualification/discovery.ts",
++   "docs/benchmarks/live-provider-spec-review.md",
++   "docs/benchmarks/live-provider-quality-review.md",
++   "docs/benchmarks/stages-spec-review.md",
++   "docs/benchmarks/stages-quality-review.md",
++   "docs/benchmarks/discovery-spec-review.md",
++   "docs/benchmarks/discovery-quality-review.md",
++   "docs/benchmarks/reporting-spec-review.md",
++   "docs/benchmarks/reporting-quality-review.md",
+  ]
+
+ ❯ tests/lib/local-qualification/live-provider.test.ts:104:34
+    102| })
+    103| it('requires review fingerprints for the actual integrated dependency …
+    104|   expect(provider.REVIEW_INPUTS).toEqual(expect.arrayContaining([
+       |                                  ^
+    105|     'lib/local-qualification/analysis.ts', 'lib/local-qualification/st…
+    106|     'lib/local-qualification/extraction-jobs.ts', 'lib/local-qualifica…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 11 passed (13)
+   Start at  23:44:30
+   Duration  301ms (transform 33ms, setup 0ms, import 43ms, tests 193ms, environment 0ms)
+

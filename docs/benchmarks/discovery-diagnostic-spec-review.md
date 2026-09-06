@@ -1,0 +1,5 @@
+# Independent lead SPEC review: discovery diagnostic delta
+
+PASS for the diagnostic-only delta, after implementation by a separate worker. Lead reviewed CLI catch and all 13 added injected-error cases. It emits one of four exact allowlisted literals only for an Error with an exactly matching message; all other inputs produce DISCOVERY_FAILED. No paths, nested causes, protocol fragments, unknown errors or partial summary print. Normal exit remains 1. Original invocation gate is unchanged.
+
+Independently executed npm test -- tests/lib/local-qualification/discovery.test.ts: 32 passed. Scoped ESLint passed. Discovery utility SHA-256 remains 26579f4c9611afe93b0931fe802d1e1dd704b9d789d1865fcd71be3050d283b6, identical to prior spec/quality reviewed implementation. No source selection, traversal, limits or access checks changed. No live retry was performed by this review. Separate QUALITY review is required before the diagnostic retry. The previous actual command executed but only returned DISCOVERY_FAILED; its specific cause remains unknown and must not be labeled a permission denial.
