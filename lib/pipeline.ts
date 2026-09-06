@@ -4,6 +4,18 @@ import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, Determinis
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
 import { getAnalysisMetadata } from '@/lib/version'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
+import {
+  adaptStepsForLocalHelpers,
+  flattenChemicalsForScore,
+  isLocalParseEnabled,
+  parseProtocolLocal,
+  requireLocalParseModel,
+} from '@/lib/local-parse'
+import {
+  completeLocalJson,
+  isLocalPipelineEnabled,
+  requireLocalPipelineModel,
+} from '@/lib/local-llm'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
 import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
@@ -151,6 +163,74 @@ async function callClaude<T>(
 ): Promise<T> {
   const startTime = new Date()
   const start = Date.now()
+
+  // Fail-closed local pipeline: never fall through to Anthropic when enabled.
+  if (isLocalPipelineEnabled()) {
+    const localModel = requireLocalPipelineModel()
+    console.log(`[callClaude] ${label}: local Ollama model=${localModel}`)
+    try {
+      const result = await completeLocalJson<T>({
+        system,
+        user: userContent,
+        schema: schema as unknown as Record<string, unknown>,
+        model: localModel,
+        label,
+        numPredict: label.startsWith('principle-') || label === 'assemble' ? 6144 : 4096,
+      })
+      if (context?.userId) {
+        const endTime = new Date()
+        const phase = label.startsWith('principle-') ? 'principle' : label
+        await logLLMTrace({
+          analysis_id: context.analysisId,
+          analysis_run_id: context.analysisRunId,
+          user_id: context.userId,
+          call_label: label,
+          model: localModel,
+          phase,
+          started_at: startTime.toISOString(),
+          completed_at: endTime.toISOString(),
+          latency_ms: Date.now() - start,
+          input_tokens: 0,
+          output_tokens: 0,
+          total_tokens: 0,
+          request_payload: {
+            system: system.substring(0, 500) + '...',
+            userContent: userContent.substring(0, 500) + '...',
+            schema,
+            provider: 'ollama-local',
+          },
+          response_payload: { provider: 'ollama-local', resultPreview: JSON.stringify(result).slice(0, 500) },
+          stop_reason: 'local_json',
+          success: true,
+        }, context.supabase)
+      }
+      return result
+    } catch (err) {
+      if (context?.userId) {
+        await logLLMTrace({
+          analysis_id: context.analysisId,
+          analysis_run_id: context.analysisRunId,
+          user_id: context.userId,
+          call_label: label,
+          model: localModel,
+          phase: label.startsWith('principle-') ? 'principle' : label,
+          started_at: startTime.toISOString(),
+          completed_at: new Date().toISOString(),
+          latency_ms: Date.now() - start,
+          input_tokens: 0,
+          output_tokens: 0,
+          total_tokens: 0,
+          request_payload: { provider: 'ollama-local' },
+          response_payload: {},
+          stop_reason: 'error',
+          success: false,
+          error_message: err instanceof Error ? err.message : String(err),
+        }, context.supabase)
+      }
+      throw err
+    }
+  }
+
   console.log(`[callClaude] ${label}: starting (model=${model})`)
 
   let message: Anthropic.Messages.Message | undefined
@@ -238,7 +318,21 @@ interface ParseResult {
 
 async function parseProtocol(protocolText: string, context?: CallContext): Promise<ParseResult> {
   console.log('Phase 1: Parsing protocol...')
-  const result = await callClaude<ParseResult>(PARSE_SYSTEM_PROMPT, protocolText, PARSE_SCHEMA, 'parse', SONNET, context)
+  let result: ParseResult
+  if (isLocalParseEnabled()) {
+    const model = requireLocalParseModel()
+    console.log(`[parse] local Ollama model=${model}`)
+    const local = await parseProtocolLocal({ protocolText, model })
+    result = {
+      protocolTitle: local.protocolTitle,
+      chemistrySubdomain: local.chemistrySubdomain,
+      steps: local.steps,
+      error: local.error,
+      message: local.message,
+    }
+  } else {
+    result = await callClaude<ParseResult>(PARSE_SYSTEM_PROMPT, protocolText, PARSE_SCHEMA, 'parse', SONNET, context)
+  }
 
   if (result.error === 'not_chemistry') {
     throw new NotChemistryError(result.message || 'Not a chemistry protocol')
@@ -291,9 +385,22 @@ async function evaluateAllPrinciples(
     }
 
     const batchStart = Date.now()
-    const batchResults = await Promise.allSettled(
-      batch.map(p => evaluatePrinciple(p.number, steps, context))
-    )
+    let batchResults: PromiseSettledResult<PrincipleResult>[]
+    if (isLocalPipelineEnabled()) {
+      // Serial local inference: one Ollama call at a time.
+      batchResults = []
+      for (const p of batch) {
+        try {
+          batchResults.push({ status: 'fulfilled', value: await evaluatePrinciple(p.number, steps, context) })
+        } catch (reason) {
+          batchResults.push({ status: 'rejected', reason })
+        }
+      }
+    } else {
+      batchResults = await Promise.allSettled(
+        batch.map(p => evaluatePrinciple(p.number, steps, context))
+      )
+    }
     console.log(`Phase 2: batch ${batchIdx + 1} completed in ${((Date.now() - batchStart) / 1000).toFixed(1)}s`)
 
     for (let j = 0; j < batchResults.length; j++) {
@@ -804,17 +911,21 @@ export async function analyzeProtocol(
         indefiniteChemicals: indefiniteChemicals.size,
       })
       onProgress?.({ type: 'phase', phase: 2, message: 'Scoring against 12 principles...' })
-    const scoreChemicals = parsed.steps.flatMap(step =>
+    const localSteps = adaptStepsForLocalHelpers(protocolText, parsed.steps)
+    const scoreChemicals = localSteps.flatMap(step =>
       step.chemicals.map(c => {
-        // Find the enriched version
         const enriched = enrichedChemicals?.find(e => e.name === c.name)
+        const parsedChem = parsed.steps
+          .flatMap(s => s.chemicals)
+          .find(pc => pc.name === c.name)
         return {
           name: c.name,
           role: c.role,
-          quantity_g: c.quantityKg ? c.quantityKg * 1000 : null,
-          quantity_kg: c.quantityKg,
-          quantity_mol: enriched?.molecular_weight && c.quantityKg
-            ? (c.quantityKg * 1000) / enriched.molecular_weight : null,
+          quantity: c.quantity,
+          quantity_g: parsedChem?.quantityKg ? parsedChem.quantityKg * 1000 : null,
+          quantity_kg: parsedChem?.quantityKg ?? null,
+          quantity_mol: enriched?.molecular_weight && parsedChem?.quantityKg
+            ? (parsedChem.quantityKg * 1000) / enriched.molecular_weight : null,
           molecular_weight: enriched?.molecular_weight ?? null,
           step_number: step.stepNumber,
         }
@@ -822,13 +933,8 @@ export async function analyzeProtocol(
     )
 
     const scoreResult = await scoreProtocol({
-      chemicals: scoreChemicals,
-      steps: parsed.steps.map(s => ({
-        stepNumber: s.stepNumber,
-        description: s.description,
-        chemicals: s.chemicals.map(c => ({ name: c.name, role: c.role })),
-        conditions: s.conditions,
-      })),
+      chemicals: scoreChemicals.length ? scoreChemicals : flattenChemicalsForScore(localSteps),
+      steps: localSteps,
       protocol_text: protocolText,
     })
 

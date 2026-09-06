@@ -1,4 +1,6 @@
 import OpenAI from 'openai'
+import { isLocalPipelineEnabled } from '@/lib/local-llm'
+import { localEvidenceIndexPath, searchLocalLiteratureEvidence } from '@/lib/local-literature'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type {
   Citation,
@@ -149,6 +151,18 @@ export async function searchLiteratureEvidence(
 ): Promise<LiteratureEvidenceMatch[]> {
   const query = validateInput(input)
   throwIfAborted(input.signal)
+
+  // Fully local pipeline: dense nomic index over loopback Ollama. No OpenAI.
+  if (isLocalPipelineEnabled()) {
+    if (!localEvidenceIndexPath()) {
+      throw new Error('local_evidence_index_required')
+    }
+    return searchLocalLiteratureEvidence({
+      query,
+      limit: input.limit,
+      threshold: input.threshold,
+    })
+  }
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const timing: LiteratureEvidenceTiming = { embeddingStartedAt: performance.now() }

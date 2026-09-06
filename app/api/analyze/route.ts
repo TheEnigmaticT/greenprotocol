@@ -7,7 +7,6 @@ import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 import { getAnalysisMetadata } from '@/lib/version'
 import { buildCanonicalScoringSnapshot, protocolFingerprint } from '@/lib/scoring-snapshot'
 import { notifyAnalysis } from '@/lib/operational-alerts'
-import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 300
 
@@ -26,19 +25,6 @@ function hasUnlimitedAnalyses(email?: string): boolean {
 function isSentinelRequest(request: Request): boolean {
   const key = process.env.SENTINEL_ANALYSIS_KEY
   return Boolean(key) && request.headers.get('x-gcai-sentinel-key') === key
-}
-
-async function countProtocolTokens(protocolText: string): Promise<number | null> {
-  try {
-    const result = await new Anthropic().messages.countTokens({
-      model: 'claude-sonnet-4-5-20250929',
-      messages: [{ role: 'user', content: protocolText }],
-    })
-    return result.input_tokens
-  } catch (error) {
-    console.error('[analyze] protocol token count failed:', error)
-    return null
-  }
 }
 
 export async function POST(request: Request) {
@@ -84,7 +70,10 @@ export async function POST(request: Request) {
   }
 
   const protocolFingerprintValue = await protocolFingerprint(protocolText)
-  const protocolInputTokens = await countProtocolTokens(protocolText)
+  // No provider-independent tokenizer is configured. Keep this optional metric
+  // unavailable rather than sending private source to a second model provider or
+  // presenting a character-based estimate as a measured token count.
+  const protocolInputTokens: number | null = null
   const runSource = isSentinelRequest(request) ? 'sentinel' : 'human'
 
   const { data: analysisRun, error: analysisRunError } = await supabase
@@ -237,13 +226,13 @@ export async function POST(request: Request) {
       const error = err as { status?: number; message?: string; error?: { message?: string } }
 
       if (error.status === 401 || error.message?.includes('authentication') || error.message?.includes('API key')) {
-        pipelineErrors.push('Anthropic API key is missing or invalid.')
-        send({ type: 'error', error: 'Anthropic API key is missing or invalid. Check ANTHROPIC_API_KEY environment variable.' })
+        pipelineErrors.push('Analysis provider authentication failed.')
+        send({ type: 'error', error: 'Analysis provider authentication failed.' })
         return
       }
 
       if (error.status === 429) {
-        send({ type: 'error', error: 'Rate limited by Claude API. Please wait a moment and try again.' })
+        send({ type: 'error', error: 'Rate limited by the analysis provider. Please wait a moment and try again.' })
         return
       }
 
