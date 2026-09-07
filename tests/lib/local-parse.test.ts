@@ -7,6 +7,7 @@ import {
   mapParseRole,
   parseProtocolLocal,
   requireLocalParseModel,
+  isAbsentConditionValue,
   validateLocalParseResult,
 } from '@/lib/local-parse'
 
@@ -76,10 +77,55 @@ describe('validateLocalParseResult', () => {
     expect(good.ok).toBe(true)
     if (good.ok) expect(good.result.steps[0].chemicals[0].role).toBe('solvent')
   })
+
+  it('drops string-null and unanchored conditions instead of failing the parse', () => {
+    const protocol = 'Add ethanol (5 mL). Heat at 70 C for 15 minutes.'
+    const payload = {
+      protocolTitle: 'Ethanol heat',
+      chemistrySubdomain: 'Organic Synthesis',
+      steps: [
+        {
+          stepNumber: 1,
+          description: 'Add ethanol (5 mL).',
+          chemicals: [{ name: 'ethanol', role: 'solvent', quantity: '5 mL' }],
+          // Model copied heating conditions onto the wrong step + emitted string nulls.
+          conditions: {
+            temperature: '70 C',
+            duration: '15 minutes',
+            atmosphere: 'null',
+          },
+        },
+        {
+          stepNumber: 2,
+          description: 'Heat at 70 C for 15 minutes.',
+          chemicals: [],
+          conditions: {
+            temperature: '70 C',
+            duration: '15 minutes',
+            atmosphere: 'null',
+          },
+        },
+      ],
+    }
+    const validated = validateLocalParseResult(protocol, payload)
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    expect(validated.result.steps[0].conditions).toEqual({
+      temperature: null,
+      duration: null,
+      atmosphere: null,
+    })
+    expect(validated.result.steps[1].conditions).toEqual({
+      temperature: '70 C',
+      duration: '15 minutes',
+      atmosphere: null,
+    })
+  })
 })
 
 describe('parseProtocolLocal', () => {
   it('calls loopback Ollama with structured format and never Anthropic', async () => {
+    vi.stubEnv('GCAI_LOCAL_PROVIDER', 'ollama')
     const fetchImpl = mockOllama(okPayload())
     const result = await parseProtocolLocal({
       protocolText: TEXT,
@@ -98,6 +144,7 @@ describe('parseProtocolLocal', () => {
   })
 
   it('repairs once when the first answer is not source-anchored', async () => {
+    vi.stubEnv('GCAI_LOCAL_PROVIDER', 'ollama')
     const bad = okPayload({
       steps: [{
         stepNumber: 1,
@@ -127,6 +174,7 @@ describe('parseProtocolLocal', () => {
   })
 
   it('fails closed after a failed repair with no Anthropic fallback', async () => {
+    vi.stubEnv('GCAI_LOCAL_PROVIDER', 'ollama')
     const bad = okPayload({
       steps: [{
         stepNumber: 1,
@@ -157,5 +205,16 @@ describe('score adapters', () => {
     expect(flattenChemicalsForScore(steps)).toEqual([
       { name: 'ethanol', role: 'unknown', quantity: '5 mL' },
     ])
+  })
+})
+
+
+describe('isAbsentConditionValue', () => {
+  it('treats null sentinels as absent', () => {
+    expect(isAbsentConditionValue(null)).toBe(true)
+    expect(isAbsentConditionValue('')).toBe(true)
+    expect(isAbsentConditionValue('null')).toBe(true)
+    expect(isAbsentConditionValue('N/A')).toBe(true)
+    expect(isAbsentConditionValue('70 C')).toBe(false)
   })
 })

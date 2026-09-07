@@ -155,6 +155,7 @@ INSTRUCTIONS:
 - Use chemical names from our database when referring to alternatives listed above.
 - For EACH recommendation, set "kind" to one of: "chemical_swap" (replace one chemical with another), "process_change" (dose/energy/condition tip with no chemical replacement), or "analytical" (monitoring/analysis tip such as TLC, IR, HPLC, inline/real-time).
 - Do NOT encode process or analytical tips as chemical substitutions. If the alternative is not a different chemical, use process_change or analytical.
+- When the protocol uses a hazardous, corrosive, toxic, or highly flammable reagent or solvent (or another clear green-chemistry opportunity to use a different substance), prefer at least one true chemical_swap among recommendations for the relevant principles — a different base chemical name, not only dose/energy/monitoring tips. Keep kind segregation: process tips stay process_change, monitoring stays analytical, true substitutions stay chemical_swap. Do not invent unsafe swaps; do not require a swap when no hazardous chemical or clear substance-level opportunity exists; do not hardcode protocol-specific brand or trademark alternatives. Evidence quality conservatism still applies.
 - For EACH recommendation, include a "primaryBenefit" field: a short (under 15 words) workflow-relevant reason such as "reduces toxic waste", "cuts liquid cleanup burden", "lowers direct chemical waste", or "reduces purification steps". This must be a concrete benefit, not a restatement of the principle.
 
 Return ONLY valid JSON (no markdown fences, no extra text):

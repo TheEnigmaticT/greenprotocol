@@ -45,7 +45,8 @@ LOCAL / FAIL-CLOSED RULES (override soft guidance above when they conflict):
 - Each chemicals[].quantity MUST be "" or an exact contiguous substring of the protocol text.
 - chemicals[].role MUST be one of: solvent, reagent, reactant, catalyst, product, byproduct, unknown.
   Map workup/drying_agent/other (and anything else) to "unknown".
-- conditions values, when present, MUST be exact substrings of that step description (or omit the key).
+- conditions keys are optional. When present, each value MUST be an exact contiguous substring of THAT SAME step's description.
+  Never copy temperature/duration/atmosphere from a different step. Prefer omitting a key over inventing values or writing the string "null".
 - Return ONLY the JSON object. No markdown fences.
 `
 
@@ -124,6 +125,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+
+/** Treat common LLM null-sentinels as absent condition values. */
+export function isAbsentConditionValue(value: unknown): boolean {
+  if (value == null) return true
+  if (typeof value !== 'string') return false
+  const trimmed = value.trim()
+  if (!trimmed) return true
+  return /^(null|none|n\/a|na|undefined|-)$/i.test(trimmed)
+}
+
 /** Structural + source-anchoring validation for chemistry local-helper compatibility. */
 export function validateLocalParseResult(
   protocolText: string,
@@ -195,10 +206,11 @@ export function validateLocalParseResult(
     const conditions: Record<string, string> = {}
     for (const key of ['temperature', 'duration', 'atmosphere', 'pressure'] as const) {
       const v = raw.conditions[key]
-      if (v == null || v === '') continue
-      if (typeof v !== 'string' || !raw.description.includes(v)) {
-        return { ok: false, reason: `step_${i}_condition_${key}` }
-      }
+      // Schema often forces string fields; models emit "null" or copy conditions across steps.
+      // Drop absent/unanchored values instead of failing the whole parse (descriptions/chems stay strict).
+      if (isAbsentConditionValue(v)) continue
+      if (typeof v !== 'string') continue
+      if (!raw.description.includes(v)) continue
       conditions[key] = v
     }
 
@@ -309,9 +321,13 @@ export async function parseProtocolLocal(options: {
   let repaired = false
   if (!validated.ok) {
     repaired = true
+    console.warn(
+      `[local-parse] first pass failed validation (${validated.reason}); repairing once`,
+    )
     const repairSystem = `${system}\n\nPrevious JSON failed validation (${validated.reason}). `
       + 'Copy each step.description verbatim from the protocol. '
-      + 'Use only roles solvent|reagent|reactant|catalyst|product|byproduct|unknown.'
+      + 'Use only roles solvent|reagent|reactant|catalyst|product|byproduct|unknown. '
+      + 'Omit condition keys unless the exact substring appears in that same step description; never write the string "null".'
     parsed = await localParseOnce({
       protocolText: text,
       model,

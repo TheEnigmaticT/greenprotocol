@@ -12,11 +12,11 @@ import {
   requireLocalParseModel,
 } from '@/lib/local-parse'
 import {
-  completeLocalJson,
   isLocalPipelineEnabled,
   requireLocalPipelineModel,
   resolveLocalProvider,
 } from '@/lib/local-llm'
+import { completeLocalJsonValidated } from '@/lib/local-result-validate'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
 import {
@@ -24,10 +24,18 @@ import {
   recommendationsForLiteratureReevaluation,
   stampRecommendationKinds,
 } from '@/lib/recommendation-kind'
+import {
+  collectHazardousInventory,
+  countChemicalSwaps,
+  inventoryRefsFromSteps,
+  shouldRepairChemicalSwaps,
+} from '@/lib/hazardous-inventory'
+import { runChemicalSwapRepair } from '@/lib/chemical-swap-repair'
 import { buildLiteratureQuery, citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
 import { buildSdsReferences } from '@/lib/sds'
 import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
 import { logLLMTrace, logDedupTrace } from '@/lib/trace'
+import { mapSettledWithConcurrency } from '@/lib/concurrency'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
@@ -176,9 +184,10 @@ async function callClaude<T>(
   // Fail-closed local pipeline: never fall through to Anthropic when enabled.
   if (isLocalPipelineEnabled()) {
     const localModel = requireLocalPipelineModel()
-    console.log(`[callClaude] ${label}: local provider=${resolveLocalProvider()} model=${localModel}`)
+    const localProvider = resolveLocalProvider()
+    console.log(`[callClaude] ${label}: local provider=${localProvider} model=${localModel}`)
     try {
-      const result = await completeLocalJson<T>({
+      const local = await completeLocalJsonValidated<T>({
         system,
         user: userContent,
         schema: schema as unknown as Record<string, unknown>,
@@ -186,6 +195,10 @@ async function callClaude<T>(
         label,
         numPredict: label === 'assemble' ? 16384 : (label.startsWith('principle-') || label.startsWith('reevaluate') ? 12288 : 8192),
       })
+      const usage = local.usage ?? { input_tokens: 0, output_tokens: 0, total_tokens: 0 }
+      if (local.degraded) {
+        console.warn(`[callClaude] ${label}: degraded=true (OpenRouter hollow-retry)`)
+      }
       if (context?.userId) {
         const endTime = new Date()
         const phase = label.startsWith('principle-') ? 'principle' : label
@@ -199,21 +212,32 @@ async function callClaude<T>(
           started_at: startTime.toISOString(),
           completed_at: endTime.toISOString(),
           latency_ms: Date.now() - start,
-          input_tokens: 0,
-          output_tokens: 0,
-          total_tokens: 0,
+          input_tokens: usage.input_tokens,
+          output_tokens: usage.output_tokens,
+          total_tokens: usage.total_tokens,
           request_payload: {
             system: system.substring(0, 500) + '...',
             userContent: userContent.substring(0, 500) + '...',
             schema,
-            provider: 'ollama-local',
+            provider: localProvider,
+            degraded: Boolean(local.degraded),
           },
-          response_payload: { provider: 'ollama-local', resultPreview: JSON.stringify(result).slice(0, 500) },
-          stop_reason: 'local_json',
+          response_payload: {
+            provider: localProvider,
+            degraded: Boolean(local.degraded),
+            usage: {
+              input_tokens: usage.input_tokens,
+              output_tokens: usage.output_tokens,
+              total_tokens: usage.total_tokens,
+              ...(usage.reasoning_tokens != null ? { reasoning_tokens: usage.reasoning_tokens } : {}),
+            },
+            resultPreview: JSON.stringify(local.data).slice(0, 500),
+          },
+          stop_reason: local.degraded ? 'local_json_degraded' : 'local_json',
           success: true,
         }, context.supabase)
       }
-      return result
+      return local.data
     } catch (err) {
       if (context?.userId) {
         await logLLMTrace({
@@ -229,7 +253,7 @@ async function callClaude<T>(
           input_tokens: 0,
           output_tokens: 0,
           total_tokens: 0,
-          request_payload: { provider: 'ollama-local' },
+          request_payload: { provider: localProvider },
           response_payload: {},
           stop_reason: 'error',
           success: false,
@@ -367,7 +391,7 @@ async function evaluatePrinciple(
   const systemPrompt = buildPrinciplePrompt(principle, steps)
   const stepsJson = JSON.stringify(steps, null, 2)
 
-  return callClaude<PrincipleResult>(systemPrompt, `Analyze these protocol steps against Principle ${principleNumber}:\n\n${stepsJson}`, PRINCIPLE_SCHEMA, `principle-${principleNumber}`)
+  return callClaude<PrincipleResult>(systemPrompt, `Analyze these protocol steps against Principle ${principleNumber}:\n\n${stepsJson}`, PRINCIPLE_SCHEMA, `principle-${principleNumber}`, SONNET, context)
 }
 
 async function evaluateAllPrinciples(
@@ -395,8 +419,12 @@ async function evaluateAllPrinciples(
 
     const batchStart = Date.now()
     let batchResults: PromiseSettledResult<PrincipleResult>[]
-    if (isLocalPipelineEnabled()) {
-      // Serial local inference: one Ollama call at a time.
+    // Ollama must stay serial (single local inference slot). OpenRouter (and Anthropic)
+    // can evaluate all principles concurrently — wall time ≈ slowest principle.
+    const serializePrinciples =
+      isLocalPipelineEnabled() && resolveLocalProvider() === 'ollama'
+    if (serializePrinciples) {
+      console.log('Phase 2: serializing principles (ollama provider)')
       batchResults = []
       for (const p of batch) {
         try {
@@ -406,6 +434,9 @@ async function evaluateAllPrinciples(
         }
       }
     } else {
+      if (isLocalPipelineEnabled()) {
+        console.log('Phase 2: parallel principles (openrouter provider)')
+      }
       batchResults = await Promise.allSettled(
         batch.map(p => evaluatePrinciple(p.number, steps, context))
       )
@@ -418,6 +449,8 @@ async function evaluateAllPrinciples(
 
       if (result.status === 'fulfilled') {
         succeeded++
+        // Local Path B: callClaude validates recommendations as an array (or throws →
+        // rejected). Anthropic keeps historical soft coerce for missing recommendations.
         const rawRecs = result.value.recommendations || []
         // Guard against malformed recs (strings instead of objects)
         const recs = rawRecs.filter((r: unknown): r is Record<string, unknown> => typeof r === 'object' && r !== null)
@@ -652,6 +685,94 @@ export function enforceCandidateOnlyReevaluation(
   }
 }
 
+/** OpenRouter / remote reeval concurrency (Ollama stays serial). */
+const REEVAL_OPENROUTER_CONCURRENCY = 6
+
+type ReevalItemOutcome =
+  | { status: 'failed'; chemName: string; recommendation: Recommendation }
+  | { status: 'suppress'; chemName: string; suppressionReason?: string }
+  | {
+      status: 'keep'
+      chemName: string
+      recommendation: Recommendation
+      action: 'confirm' | 'downgrade'
+      revisedConfidence: 'high' | 'medium' | 'low'
+    }
+
+async function reevaluateOneRecommendationItem(
+  rec: Recommendation,
+  index: number,
+  total: number,
+): Promise<ReevalItemOutcome> {
+  const chemName = rec.original.chemical
+  console.log(`Phase 2.7: [${index + 1}/${total}] Re-evaluating ${chemName}...`)
+
+  const query = buildLiteratureQuery(rec.original.chemical, rec.alternative.chemical, rec.alternative.rationale)
+  let literatureEvidence: LiteratureEvidenceMatch[] = []
+
+  try {
+    literatureEvidence = await searchLiteratureEvidence({
+      query,
+      limit: 5,
+      threshold: 0.25,
+    })
+    console.log(`Phase 2.7: Found ${literatureEvidence.length} literature matches for ${chemName}`)
+  } catch (err) {
+    console.warn(`Phase 2.7: Literature retrieval failed for ${chemName}:`, err)
+  }
+
+  const reevaluationResult = await reevaluateRecommendation(rec, literatureEvidence)
+  const reevaluation = reevaluationResult
+    ? enforceCandidateOnlyReevaluation(reevaluationResult, literatureEvidence)
+    : null
+
+  if (!reevaluation) {
+    return { status: 'failed', chemName, recommendation: rec }
+  }
+
+  if (reevaluation.action === 'suppress') {
+    console.log(`Phase 2.7: SUPPRESSED ${chemName} — ${reevaluation.suppressionReason}`)
+    return { status: 'suppress', chemName, suppressionReason: reevaluation.suppressionReason }
+  }
+
+  const updatedRec = { ...rec }
+  updatedRec.confidenceLevel = reevaluation.revisedConfidence
+
+  if (reevaluation.revisedSeverity) {
+    updatedRec.severity = reevaluation.revisedSeverity
+  }
+
+  if (reevaluation.concerns.length > 0) {
+    const concernsText = reevaluation.concerns.join('; ')
+    updatedRec.alternative.caveats = updatedRec.alternative.caveats
+      ? `${updatedRec.alternative.caveats}; ${concernsText}`
+      : concernsText
+  }
+
+  updatedRec.alternative.rationale = reevaluation.revisedRationale
+
+  if (!updatedRec.evidence) {
+    updatedRec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
+  }
+  // @ts-expect-error — adding non-standard field for evidence assessment metadata
+  updatedRec.evidence.reevaluationMeta = reevaluation.evidenceAssessment
+
+  const action = reevaluation.action === 'confirm' ? 'confirm' : 'downgrade'
+  if (action === 'confirm') {
+    console.log(`Phase 2.7: CONFIRMED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
+  } else {
+    console.log(`Phase 2.7: DOWNGRADED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
+  }
+
+  return {
+    status: 'keep',
+    chemName,
+    recommendation: updatedRec,
+    action,
+    revisedConfidence: reevaluation.revisedConfidence,
+  }
+}
+
 async function reevaluateAllRecommendations(
   recommendations: Recommendation[],
   onProgress?: (event: ProgressEvent) => void
@@ -661,85 +782,58 @@ async function reevaluateAllRecommendations(
 
   const stats = { confirmed: 0, downgraded: 0, suppressed: 0, failed: 0 }
   const keepRecommendations: Recommendation[] = []
+  const total = recommendations.length
 
-  // Re-evaluate each recommendation sequentially (to avoid rate limits)
-  for (let i = 0; i < recommendations.length; i++) {
-    const rec = recommendations[i]
-    const chemName = rec.original.chemical
-    
-    console.log(`Phase 2.7: [${i + 1}/${recommendations.length}] Re-evaluating ${chemName}...`)
+  // Ollama: serial (single local inference slot). OpenRouter / non-ollama: bounded parallel.
+  // Phase 2.5 literature grounding already uses Promise.allSettled nearby.
+  const serializeReeval =
+    isLocalPipelineEnabled() && resolveLocalProvider() === 'ollama'
 
-    // Retrieve literature for this specific recommendation
-    const query = buildLiteratureQuery(rec.original.chemical, rec.alternative.chemical, rec.alternative.rationale)
-    let literatureEvidence: LiteratureEvidenceMatch[] = []
-    
-    try {
-      literatureEvidence = await searchLiteratureEvidence({
-        query,
-        limit: 5,
-        threshold: 0.25,
-      })
-      console.log(`Phase 2.7: Found ${literatureEvidence.length} literature matches for ${chemName}`)
-    } catch (err) {
-      console.warn(`Phase 2.7: Literature retrieval failed for ${chemName}:`, err)
+  const outcomes: ReevalItemOutcome[] = []
+  if (serializeReeval) {
+    console.log('Phase 2.7: serializing reevaluation (ollama provider)')
+    for (let i = 0; i < total; i++) {
+      outcomes.push(await reevaluateOneRecommendationItem(recommendations[i], i, total))
     }
+  } else {
+    if (isLocalPipelineEnabled()) {
+      console.log(
+        `Phase 2.7: parallel reevaluation (openrouter provider, concurrency=${REEVAL_OPENROUTER_CONCURRENCY})`,
+      )
+    }
+    const settled = await mapSettledWithConcurrency(
+      recommendations,
+      REEVAL_OPENROUTER_CONCURRENCY,
+      (rec, i) => reevaluateOneRecommendationItem(rec, i, total),
+    )
+    for (let i = 0; i < settled.length; i++) {
+      const result = settled[i]
+      if (result.status === 'fulfilled') {
+        outcomes.push(result.value)
+      } else {
+        console.warn(`Phase 2.7: unexpected reevaluation worker failure:`, result.reason)
+        outcomes.push({
+          status: 'failed',
+          chemName: recommendations[i].original.chemical,
+          recommendation: recommendations[i],
+        })
+      }
+    }
+  }
 
-    // Re-evaluate with LLM
-    const reevaluationResult = await reevaluateRecommendation(rec, literatureEvidence)
-    const reevaluation = reevaluationResult
-      ? enforceCandidateOnlyReevaluation(reevaluationResult, literatureEvidence)
-      : null
-
-    if (!reevaluation) {
+  for (const outcome of outcomes) {
+    if (outcome.status === 'failed') {
       stats.failed++
-      // Keep the original recommendation if re-evaluation fails
-      keepRecommendations.push(rec)
+      keepRecommendations.push(outcome.recommendation)
       continue
     }
-
-    // Apply re-evaluation results
-    if (reevaluation.action === 'suppress') {
+    if (outcome.status === 'suppress') {
       stats.suppressed++
-      console.log(`Phase 2.7: SUPPRESSED ${chemName} — ${reevaluation.suppressionReason}`)
-      // Don't add to keepRecommendations
       continue
     }
-
-    // Update recommendation based on re-evaluation
-    const updatedRec = { ...rec }
-    updatedRec.confidenceLevel = reevaluation.revisedConfidence
-    
-    if (reevaluation.revisedSeverity) {
-      updatedRec.severity = reevaluation.revisedSeverity
-    }
-
-    // Append concerns to caveats if they exist
-    if (reevaluation.concerns.length > 0) {
-      const concernsText = reevaluation.concerns.join('; ')
-      updatedRec.alternative.caveats = updatedRec.alternative.caveats
-        ? `${updatedRec.alternative.caveats}; ${concernsText}`
-        : concernsText
-    }
-
-    // Update rationale with revised version
-    updatedRec.alternative.rationale = reevaluation.revisedRationale
-
-    // Store evidence assessment metadata
-    if (!updatedRec.evidence) {
-      updatedRec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
-    }
-    // @ts-expect-error — adding non-standard field for evidence assessment metadata
-    updatedRec.evidence.reevaluationMeta = reevaluation.evidenceAssessment
-
-    if (reevaluation.action === 'confirm') {
-      stats.confirmed++
-      console.log(`Phase 2.7: CONFIRMED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
-    } else if (reevaluation.action === 'downgrade') {
-      stats.downgraded++
-      console.log(`Phase 2.7: DOWNGRADED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
-    }
-
-    keepRecommendations.push(updatedRec)
+    if (outcome.action === 'confirm') stats.confirmed++
+    else stats.downgraded++
+    keepRecommendations.push(outcome.recommendation)
   }
 
   console.log(`Phase 2.7 complete: ${stats.confirmed} confirmed, ${stats.downgraded} downgraded, ${stats.suppressed} suppressed, ${stats.failed} failed`)
@@ -1027,9 +1121,55 @@ export async function analyzeProtocol(
 
   // Phase 2: Evaluate all 12 principles in parallel (LLM qualitative recommendations)
   onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
-  const rawRecommendations = stampRecommendationKinds(
+  let rawRecommendations = stampRecommendationKinds(
     await evaluateAllPrinciples(parsed.steps, onProgress, context)
   )
+
+  // Local-only: if hazardous inventory remains and Phase 2 emitted zero chemical_swap,
+  // one repair LLM call must produce ≥1 true swap. Fail-closed on repair failure.
+  if (isLocalPipelineEnabled()) {
+    const hazardousInventory = collectHazardousInventory(
+      inventoryRefsFromSteps(parsed.steps),
+      enrichedChemicals,
+    )
+    const swapCountBefore = countChemicalSwaps(rawRecommendations)
+    if (
+      !shouldRepairChemicalSwaps({
+        recommendations: rawRecommendations,
+        hazardousInventory,
+      })
+    ) {
+      console.log(
+        `[swap-repair] skipped swaps=${swapCountBefore} hazardous=${hazardousInventory.length}`,
+      )
+    } else {
+      console.log(
+        `[swap-repair] triggered swaps=${swapCountBefore} hazardous=${hazardousInventory.length}` +
+          ` names=${hazardousInventory.map((h) => h.name).join('|')}`,
+      )
+      onProgress?.({
+        type: 'phase',
+        phase: 2,
+        message: 'Repairing missing chemical substitutions...',
+      })
+      const repaired = await runChemicalSwapRepair({
+        recommendations: rawRecommendations,
+        hazardousInventory,
+        steps: parsed.steps,
+      })
+      if (repaired.status === 'succeeded') {
+        rawRecommendations = repaired.recommendations
+        console.log(
+          `[swap-repair] succeeded added=${repaired.addedSwaps}` +
+            ` total_swaps=${countChemicalSwaps(rawRecommendations)}`,
+        )
+      } else {
+        console.warn(
+          `[swap-repair] failed reason=${repaired.reason ?? 'unknown'}; keeping original tip set`,
+        )
+      }
+    }
+  }
 
   // Phase 2.5: Ground chemical_swap recommendations in literature via Vector Search
   // Process/analytical tips skip literature grounding (fail-closed: no tip→lit poisoning).

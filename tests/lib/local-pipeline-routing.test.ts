@@ -45,6 +45,10 @@ vi.mock('@/lib/local-llm', async () => {
     isLocalPipelineEnabled: mocks.isLocalPipeline,
     requireLocalPipelineModel: mocks.requirePipelineModel,
     completeLocalJson: mocks.completeLocal,
+    completeLocalJsonResult: async (opts: unknown) => ({
+      data: await mocks.completeLocal(opts),
+      usage: { input_tokens: 11, output_tokens: 7, total_tokens: 18 },
+    }),
   }
 })
 
@@ -112,7 +116,61 @@ describe('full local pipeline routing', () => {
     expect(mocks.create).not.toHaveBeenCalled()
     const principleLabels = mocks.completeLocal.mock.calls
       .map((c) => c[0]?.label)
-      .filter((l: string) => typeof l === 'string' && l.startsWith('principle-'))
+      .filter(
+        (l: string) =>
+          typeof l === 'string' && /^principle-\d+$/.test(l),
+      )
     expect(principleLabels.length).toBe(12)
+  })
+
+  it('keeps a principle rejected when local validation fails closed (no empty success)', async () => {
+    const events: { type: string; status?: string; number?: number }[] = []
+    mocks.completeLocal.mockImplementation(async ({ label }: { label?: string }) => {
+      if (label === 'principle-1') {
+        return { principleNumber: 1 } // recommendations missing → invalid
+      }
+      if (label?.startsWith('principle-')) {
+        const n = Number(label.split('-')[1])
+        return { principleNumber: n, recommendations: [] }
+      }
+      if (label === 'assemble') {
+        return {
+          revisedProtocol: 'Add water instead.',
+          overallAssessment: {
+            greenPrinciplesViolated: [],
+            mostImpactfulChange: 'none',
+            experimentalValidationNeeded: true,
+            disclaimer: 'test',
+          },
+        }
+      }
+      if (label?.startsWith('reevaluate-')) {
+        return {
+          action: 'confirm',
+          revisedConfidence: 'medium',
+          revisedRationale: 'ok',
+          evidenceAssessment: {
+            supportsOriginalIssue: true,
+            supportsAlternative: true,
+            contextMatch: 'partial',
+            quantitativeData: false,
+          },
+          concerns: [],
+        }
+      }
+      return {}
+    })
+
+    await analyzeProtocol('Add ethanol (5 mL). Monitor by TLC.', (e) => {
+      events.push(e as { type: string; status?: string; number?: number })
+    })
+
+    const p1 = events.filter((e) => e.type === 'principle' && e.number === 1)
+    expect(p1.some((e) => e.status === 'failed')).toBe(true)
+    expect(p1.some((e) => e.status === 'complete')).toBe(false)
+    // First attempt + one repair for principle-1
+    const p1Calls = mocks.completeLocal.mock.calls.filter((c) => c[0]?.label === 'principle-1')
+    expect(p1Calls.length).toBe(2)
+    expect(mocks.create).not.toHaveBeenCalled()
   })
 })

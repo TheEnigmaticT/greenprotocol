@@ -120,6 +120,13 @@ export function classifyRecommendationKind(
     return 'analytical'
   }
 
+  // 1b. Model sometimes invents a different alt name while saying "same reagent" /
+  //     modified addition — treat as process_change, not chemical_swap.
+  const sameReagentCue = /\bsame\s+reagent\b|\bsame\s+chemical\b|\bmodified\s+addition\b|\baddition\s+rate\b/i
+  if (sameReagentCue.test(tipCorpus(rec))) {
+    return 'process_change'
+  }
+
   // 2. Same base chemical (water→water (...), anhydride→anhydride (reduced...)) → process tip.
   if (isSameChemicalTip(rec)) {
     return 'process_change'

@@ -59,6 +59,21 @@ describe('classifyRecommendationKind', () => {
     expect(kindBadgeLabel('analytical')).toBe('Analytical')
   })
 
+  it('classifies same-reagent / modified-addition tips as process_change even with different alt name', () => {
+    const rec = makeRec({
+      kind: 'chemical_swap',
+      original: { chemical: 'acetic anhydride', issue: 'exothermic quench' },
+      alternative: {
+        chemical: 'water (same reagent, modified addition rate)',
+        rationale: 'Add water slowly to the same anhydride mixture',
+        yieldImpact: 'n/a',
+        caveats: '',
+        evidenceBasis: 'lab practice',
+      },
+    })
+    expect(classifyRecommendationKind(rec)).toBe('process_change')
+  })
+
   it('classifies same-chemical dose tips as process_change', () => {
     const rec = makeRec({
       kind: undefined,
