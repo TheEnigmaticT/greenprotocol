@@ -16,8 +16,22 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: mocks.createAdminClient,
 }))
 
+const localPipelineMocks = vi.hoisted(() => ({
+  isLocalPipelineEnabled: vi.fn(() => false),
+}))
+
+vi.mock('@/lib/local-llm', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/local-llm')>('@/lib/local-llm')
+  return {
+    ...actual,
+    isLocalPipelineEnabled: localPipelineMocks.isLocalPipelineEnabled,
+  }
+})
+
 import {
+  buildLiteratureQuery,
   citationFromEvidenceMatch,
+  LITERATURE_QUERY_MAX_CHARS,
   searchLiteratureEvidence,
 } from '@/lib/literature-evidence'
 
@@ -45,6 +59,7 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
+  localPipelineMocks.isLocalPipelineEnabled.mockReset().mockReturnValue(false)
   mocks.embeddingCreate.mockReset().mockResolvedValue({
     data: [{ embedding: new Array(1536).fill(0.1) }],
   })
@@ -204,5 +219,37 @@ describe('citationFromEvidenceMatch', () => {
       doi: '10.1039/example',
     })
     expect(citation.citation).toContain('pp. 2–4')
+  })
+})
+
+
+describe('buildLiteratureQuery', () => {
+  it('builds a chemicals-first query without rationale', () => {
+    expect(buildLiteratureQuery('DMF', 'ethyl acetate')).toBe(
+      'Green chemistry alternative for DMF: ethyl acetate',
+    )
+  })
+
+  it('appends rationale when under the 500-char limit', () => {
+    const q = buildLiteratureQuery('DMF', 'ethyl acetate', 'Lower toxicity solvent')
+    expect(q).toBe(
+      'Green chemistry alternative for DMF: ethyl acetate. Lower toxicity solvent',
+    )
+    expect(q.length).toBeLessThanOrEqual(LITERATURE_QUERY_MAX_CHARS)
+  })
+
+  it('truncates long rationales instead of exceeding 500 chars', () => {
+    const long = 'x'.repeat(800)
+    const q = buildLiteratureQuery('Dichloromethane', 'Ethyl acetate', long)
+    expect(q.length).toBe(LITERATURE_QUERY_MAX_CHARS)
+    expect(q.startsWith('Green chemistry alternative for Dichloromethane: Ethyl acetate. ')).toBe(true)
+    expect(q.includes('x')).toBe(true)
+  })
+
+  it('never exceeds 500 even with very long chemical names', () => {
+    const longName = 'A'.repeat(300)
+    const q = buildLiteratureQuery(longName, longName, 'rationale '.repeat(50))
+    expect(q.length).toBeLessThanOrEqual(LITERATURE_QUERY_MAX_CHARS)
+    expect(q.length).toBeGreaterThan(0)
   })
 })

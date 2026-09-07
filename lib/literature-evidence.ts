@@ -17,6 +17,45 @@ const SUPPORTED_SIGNAL_GROUPS: Record<EvidenceSignalGroup, true> = {
   hazard: true,
 }
 
+
+/** Max query length accepted by searchLiteratureEvidence / validateInput. */
+export const LITERATURE_QUERY_MAX_CHARS = 500
+
+/**
+ * Build a Phase 2.5 / 2.7 literature search query.
+ * Chemicals-first; appends a truncated rationale only if room remains under 500 chars.
+ * Prefers truncation over throwing so validateInput never fails for normal chemical names.
+ */
+export function buildLiteratureQuery(
+  original: string,
+  alternative: string,
+  rationale?: string,
+): string {
+  const max = LITERATURE_QUERY_MAX_CHARS
+  const orig = (original ?? '').trim()
+  const alt = (alternative ?? '').trim()
+  let base = `Green chemistry alternative for ${orig}: ${alt}`
+  if (base.length > max) {
+    return base.slice(0, max)
+  }
+
+  const reason = (rationale ?? '').trim()
+  if (!reason) {
+    return base
+  }
+
+  const separator = '. '
+  const room = max - base.length - separator.length
+  if (room <= 0) {
+    return base
+  }
+
+  if (reason.length <= room) {
+    return `${base}${separator}${reason}`
+  }
+  return `${base}${separator}${reason.slice(0, room)}`
+}
+
 export interface LiteratureEvidenceTiming {
   embeddingStartedAt?: number
   embeddingFinishedAt?: number

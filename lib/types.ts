@@ -65,12 +65,16 @@ export interface Citation {
   doi?: string
 }
 
+export type RecommendationKind = 'chemical_swap' | 'process_change' | 'analytical'
+
 export interface Recommendation {
   id?: string
   stepNumber: number
   principleNumbers: number[]
   principleNames: string[]
   severity: 'high' | 'medium' | 'low'
+  /** Segregates substitutions from process/analytical tips. Missing → treat as chemical_swap. */
+  kind?: RecommendationKind
   original: {
     chemical: string
     issue: string

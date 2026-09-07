@@ -1,8 +1,28 @@
 'use client'
 
 import { AnalysisResult, Recommendation } from '@/lib/types'
+import { kindBadgeLabel, resolveRecommendationKind } from '@/lib/recommendation-kind'
 import { RecommendationApprovalReceipt, TalkAboutThis } from './TalkAboutThis'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
+
+function KindBadge({ rec }: { rec: Recommendation }) {
+  const kind = resolveRecommendationKind(rec)
+  const label = kindBadgeLabel(kind)
+  const styles =
+    kind === 'chemical_swap'
+      ? { bg: '#E8F5E9', text: '#166534' }
+      : kind === 'analytical'
+        ? { bg: '#E0F2FE', text: '#0369A1' }
+        : { bg: '#F3E8FF', text: '#7E22CE' }
+  return (
+    <span
+      className="px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider font-[family-name:var(--font-mono)]"
+      style={{ background: styles.bg, color: styles.text, letterSpacing: '0.08em' }}
+    >
+      {label}
+    </span>
+  )
+}
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -61,6 +81,7 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
           Step {rec.stepNumber}
         </span>
         <SeverityBadge severity={rec.severity} />
+        <KindBadge rec={rec} />
         <span
           className="px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase font-[family-name:var(--font-mono)]"
           style={{ background: '#F0EBE1', color: '#78716C', letterSpacing: '0.08em' }}
@@ -73,15 +94,31 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
         className="m-0 mb-2.5 font-[family-name:var(--font-serif)] font-bold text-[19px] sm:text-[22px] leading-snug"
         style={{ color: '#0D1F16' }}
       >
-        Replace{' '}
-        <span className="font-[family-name:var(--font-mono)] font-medium text-[16px] sm:text-[16px] tabular-nums">
-          {rec.original.chemical}
-        </span>{' '}
-        with{' '}
-        <span className="font-[family-name:var(--font-mono)] font-medium text-[16px] tabular-nums">
-          {rec.alternative.chemical}
-        </span>
-        .
+        {resolveRecommendationKind(rec) === 'chemical_swap' ? (
+          <>
+            Replace{' '}
+            <span className="font-[family-name:var(--font-mono)] font-medium text-[16px] sm:text-[16px] tabular-nums">
+              {rec.original.chemical}
+            </span>{' '}
+            with{' '}
+            <span className="font-[family-name:var(--font-mono)] font-medium text-[16px] tabular-nums">
+              {rec.alternative.chemical}
+            </span>
+            .
+          </>
+        ) : (
+          <>
+            Tip:{' '}
+            <span className="font-[family-name:var(--font-mono)] font-medium text-[16px] sm:text-[16px] tabular-nums">
+              {rec.alternative.chemical}
+            </span>
+            {' '}for{' '}
+            <span className="font-[family-name:var(--font-mono)] font-medium text-[16px] sm:text-[16px] tabular-nums">
+              {rec.original.chemical}
+            </span>
+            .
+          </>
+        )}
       </p>
 
       <p
@@ -238,6 +275,7 @@ export default function FinalizedProtocol({
                       <span className="text-xs font-bold uppercase tracking-wider font-[family-name:var(--font-mono)]" style={{ color: '#1C1917' }}>
                         Step {rec.stepNumber}
                       </span>
+                      <KindBadge rec={rec} />
                       <p className="m-0 flex flex-wrap items-baseline gap-x-3 font-[family-name:var(--font-mono)] text-sm font-medium">
                         <span style={{ color: '#A8A29E', textDecoration: 'line-through' }}>{rec.original.chemical}</span>
                         <span>→</span>

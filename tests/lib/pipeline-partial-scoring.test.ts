@@ -20,10 +20,14 @@ vi.mock('@/lib/chemistry-service', () => ({
   isServiceAvailable: mocks.isServiceAvailable,
 }))
 
-vi.mock('@/lib/literature-evidence', () => ({
-  searchLiteratureEvidence: mocks.evidenceSearch,
-  citationFromEvidenceMatch: () => ({ source_id: 'test', source_name: 'Test', citation: 'Test.' }),
-}))
+vi.mock('@/lib/literature-evidence', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/literature-evidence')>('@/lib/literature-evidence')
+  return {
+    ...actual,
+    searchLiteratureEvidence: mocks.evidenceSearch,
+    citationFromEvidenceMatch: () => ({ source_id: 'test', source_name: 'Test', citation: 'Test.' }),
+  }
+})
 
 import { analyzeProtocol } from '@/lib/pipeline'
 

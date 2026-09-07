@@ -4,6 +4,7 @@ import type { LiteratureEvidenceMatch, Recommendation } from '@/lib/types'
 const mocks = vi.hoisted(() => ({
   anthropicCreate: vi.fn(),
   evidenceSearch: vi.fn(),
+  isLocalPipeline: vi.fn(() => false),
 }))
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -18,16 +19,34 @@ vi.mock('@/lib/chemistry-service', () => ({
   isServiceAvailable: vi.fn().mockResolvedValue(false),
 }))
 
-vi.mock('@/lib/literature-evidence', () => ({
-  searchLiteratureEvidence: mocks.evidenceSearch,
-  citationFromEvidenceMatch: (match: LiteratureEvidenceMatch) => ({
-    source_id: match.id,
-    source_name: match.title,
-    citation: `${match.title}. pp. ${match.pageStart}–${match.pageEnd}.`,
-    doi: match.doi,
-  }),
-}))
+vi.mock('@/lib/literature-evidence', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/literature-evidence')>('@/lib/literature-evidence')
+  return {
+    ...actual,
+    searchLiteratureEvidence: mocks.evidenceSearch,
+    citationFromEvidenceMatch: (match: LiteratureEvidenceMatch) => ({
+      source_id: match.id,
+      source_name: match.title,
+      citation: `${match.title}. pp. ${match.pageStart}–${match.pageEnd}.`,
+      doi: match.doi,
+    }),
+  }
+})
 
+vi.mock('@/lib/local-llm', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/local-llm')>('@/lib/local-llm')
+  return {
+    ...actual,
+    isLocalPipelineEnabled: mocks.isLocalPipeline,
+  }
+})
+vi.mock('@/lib/local-parse', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/local-parse')>('@/lib/local-parse')
+  return {
+    ...actual,
+    isLocalParseEnabled: () => false,
+  }
+})
 
 import { analyzeProtocol, deriveEvidenceTier, rankRecommendations } from '@/lib/pipeline'
 
@@ -81,6 +100,7 @@ function anthropicResponse(input: Record<string, unknown>) {
 beforeEach(() => {
   mocks.anthropicCreate.mockReset()
   mocks.evidenceSearch.mockReset().mockResolvedValue([])
+  mocks.isLocalPipeline.mockReset().mockReturnValue(false)
 })
 
 describe('deriveEvidenceTier', () => {
@@ -132,6 +152,7 @@ describe('rankRecommendations', () => {
 
 describe('Phase 2.5 evidence grounding', () => {
   it('attaches a page-bounded candidate citation in Phase 2.5', async () => {
+    mocks.isLocalPipeline.mockReturnValue(false)
     mocks.evidenceSearch.mockResolvedValue([candidateMatch('doi:p4:u2')])
     mocks.anthropicCreate
       .mockResolvedValueOnce(anthropicResponse({
@@ -195,9 +216,10 @@ describe('Phase 2.5 evidence grounding', () => {
 })
 
 describe.each(['confirm', 'suppress'] as const)(
-  'Phase 2.7 candidate-only re-evaluation',
+  'Phase 2.7 candidate-only re-evaluation (hard mode)',
   action => {
     it(`does not ${action} a recommendation from candidate-only evidence`, async () => {
+      mocks.isLocalPipeline.mockReturnValue(false)
       mocks.evidenceSearch.mockResolvedValue([candidateMatch('doi:p4:u2')])
       mocks.anthropicCreate
         .mockResolvedValueOnce(anthropicResponse({

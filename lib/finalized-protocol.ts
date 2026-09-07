@@ -1,4 +1,5 @@
 import { AnalysisResult, Recommendation } from './types'
+import { isChemicalSwapRecommendation } from './recommendation-kind'
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -14,17 +15,17 @@ function applyRecommendation(text: string, rec: Recommendation): string {
   return text.replace(pattern, alternative)
 }
 
-function applyAcceptedRecommendations(text: string, recs: Recommendation[]): string {
+function applyAcceptedChemicalSwaps(text: string, recs: Recommendation[]): string {
   return recs
-    .filter(rec => rec.isAccepted === true)
+    .filter(rec => rec.isAccepted === true && isChemicalSwapRecommendation(rec))
     .sort((a, b) => b.original.chemical.length - a.original.chemical.length)
     .reduce((current, rec) => applyRecommendation(current, rec), text)
 }
 
-function buildStepProcedure(analysis: AnalysisResult, accepted: Recommendation[]): string {
+function buildStepProcedure(analysis: AnalysisResult, acceptedSwaps: Recommendation[]): string {
   const lines = analysis.steps.map((step) => {
-    const stepRecs = accepted.filter(rec => rec.stepNumber === step.stepNumber)
-    const description = applyAcceptedRecommendations(step.description, stepRecs)
+    const stepRecs = acceptedSwaps.filter(rec => rec.stepNumber === step.stepNumber)
+    const description = applyAcceptedChemicalSwaps(step.description, stepRecs)
     return `Step ${step.stepNumber}. ${description}`
   })
 
@@ -36,18 +37,21 @@ export function buildFinalizedProtocol(
   originalProtocol?: string | null
 ): string {
   const accepted = analysis.recommendations.filter(rec => rec.isAccepted === true)
+  const acceptedSwaps = accepted.filter(isChemicalSwapRecommendation)
 
+  // When every recommendation is accepted, assemble already incorporated chemical_swaps only.
   if (accepted.length === analysis.recommendations.length && analysis.revisedProtocol.trim()) {
     return analysis.revisedProtocol
   }
 
-  if (accepted.length === 0) {
+  if (acceptedSwaps.length === 0) {
     return originalProtocol?.trim() || buildStepProcedure(analysis, [])
   }
 
   if (analysis.steps.length > 0) {
-    return buildStepProcedure(analysis, accepted)
+    return buildStepProcedure(analysis, acceptedSwaps)
   }
 
-  return applyAcceptedRecommendations(originalProtocol || analysis.revisedProtocol, accepted)
+  return applyAcceptedChemicalSwaps(originalProtocol || analysis.revisedProtocol, acceptedSwaps)
 }
+

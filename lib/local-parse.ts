@@ -1,12 +1,13 @@
 /**
- * Fail-closed Phase 1 parse over local Ollama.
- * When GCAI_LOCAL_PARSE=1, Anthropic must never be used for parse.
+ * Fail-closed Phase 1 parse over local Ollama or OpenRouter local-quality models.
+ * When GCAI_LOCAL_PARSE=1 / GCAI_LOCAL_PIPELINE=1, Anthropic must never be used for parse.
  */
 import { OLLAMA_PILOT_MODELS } from '@/lib/decomposed-benchmark/ollama-provider'
+import { OPENROUTER_LOCAL_QUALITY_MODELS, completeLocalJson } from '@/lib/local-llm'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import type { AnalysisStep } from '@/lib/types'
 
-export const LOCAL_PARSE_MODELS = OLLAMA_PILOT_MODELS
+export const LOCAL_PARSE_MODELS = Object.freeze([...OLLAMA_PILOT_MODELS, ...OPENROUTER_LOCAL_QUALITY_MODELS] as const)
 
 export const LOCAL_PARSE_ROLES = [
   'solvent',
@@ -265,56 +266,23 @@ export function flattenChemicalsForScore(steps: ReturnType<typeof adaptStepsForL
   return [...seen.values()]
 }
 
-async function ollamaParseOnce(options: {
+async function localParseOnce(options: {
   protocolText: string
   model: string
   system: string
   fetchImpl: typeof fetch
   timeoutMs: number
 }): Promise<unknown> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs)
-  try {
-    const response = await options.fetchImpl('http://127.0.0.1:11434/api/chat', {
-      method: 'POST',
-      redirect: 'error',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: options.model,
-        messages: [
-          { role: 'system', content: options.system },
-          { role: 'user', content: options.protocolText },
-        ],
-        format: LOCAL_PARSE_SCHEMA,
-        stream: false,
-        think: false,
-        options: { temperature: 0, num_predict: 4096, num_ctx: 32768 },
-      }),
-    })
-    if (!response.ok) throw new Error('local_parse_http_failed')
-    const data = await response.json() as {
-      model?: string
-      done?: boolean
-      done_reason?: string
-      message?: { role?: string; content?: string; tool_calls?: unknown }
-    }
-    if (
-      data.model !== options.model
-      || data.done !== true
-      || data.done_reason !== 'stop'
-      || data.message?.role !== 'assistant'
-      || data.message?.tool_calls
-      || typeof data.message?.content !== 'string'
-      || !data.message.content.trim()
-    ) {
-      throw new Error('local_parse_response_invalid')
-    }
-    return JSON.parse(data.message.content)
-  } finally {
-    clearTimeout(timer)
-  }
+  return completeLocalJson({
+    system: options.system,
+    user: options.protocolText,
+    schema: LOCAL_PARSE_SCHEMA as unknown as Record<string, unknown>,
+    model: options.model,
+    label: 'parse',
+    fetchImpl: options.fetchImpl,
+    timeoutMs: options.timeoutMs,
+    numPredict: 8192,
+  })
 }
 
 export async function parseProtocolLocal(options: {
@@ -336,7 +304,7 @@ export async function parseProtocolLocal(options: {
   const timeoutMs = options.timeoutMs ?? 180_000
   const system = `${PARSE_SYSTEM_PROMPT}\n\n${LOCAL_PARSE_ADDENDUM}`
 
-  let parsed = await ollamaParseOnce({ protocolText: text, model, system, fetchImpl, timeoutMs })
+  let parsed = await localParseOnce({ protocolText: text, model, system, fetchImpl, timeoutMs })
   let validated = validateLocalParseResult(text, parsed)
   let repaired = false
   if (!validated.ok) {
@@ -344,7 +312,7 @@ export async function parseProtocolLocal(options: {
     const repairSystem = `${system}\n\nPrevious JSON failed validation (${validated.reason}). `
       + 'Copy each step.description verbatim from the protocol. '
       + 'Use only roles solvent|reagent|reactant|catalyst|product|byproduct|unknown.'
-    parsed = await ollamaParseOnce({
+    parsed = await localParseOnce({
       protocolText: text,
       model,
       system: repairSystem,

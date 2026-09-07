@@ -20,10 +20,14 @@ vi.mock('@/lib/chemistry-service', () => ({
   scoreProtocol: vi.fn().mockResolvedValue(null),
   isServiceAvailable: vi.fn().mockResolvedValue(false),
 }))
-vi.mock('@/lib/literature-evidence', () => ({
-  searchLiteratureEvidence: vi.fn().mockResolvedValue([]),
-  citationFromEvidenceMatch: vi.fn(),
-}))
+vi.mock('@/lib/literature-evidence', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/literature-evidence')>('@/lib/literature-evidence')
+  return {
+    ...actual,
+    searchLiteratureEvidence: vi.fn().mockResolvedValue([]),
+    citationFromEvidenceMatch: vi.fn(),
+  }
+})
 vi.mock('@/lib/trace', () => ({ logLLMTrace: vi.fn(), logDedupTrace: vi.fn() }))
 vi.mock('@/lib/local-parse', async () => {
   const actual = await vi.importActual<typeof import('@/lib/local-parse')>('@/lib/local-parse')

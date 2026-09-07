@@ -1,6 +1,7 @@
 'use client'
 
 import type { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical, ScoreProvenance } from '@/lib/types'
+import { kindBadgeLabel, resolveRecommendationKind } from '@/lib/recommendation-kind'
 import { buildRecommendationCitationString, formatCitationACS } from '@/lib/citation'
 import { TalkAboutThis } from './TalkAboutThis'
 
@@ -382,6 +383,9 @@ export default function PrincipleSection({
                       Accepted
                     </span>
                   )}
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: '#F0EBE1', color: '#44403C' }}>
+                    {kindBadgeLabel(resolveRecommendationKind(rec))}
+                  </span>
                   {/* Evidence tier badge */}
                   {(rec.evidenceTier ?? 'inferred') === 'sourced' ? (
                     <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: '#DCFCE7', color: '#166534' }}>

@@ -153,6 +153,8 @@ INSTRUCTIONS:
 - Be CONSERVATIVE — only recommend alternatives with published evidence or well-established precedent.
 - Do NOT hallucinate citations — say "published studies" or "CHEM21 solvent guide" if referencing general knowledge.
 - Use chemical names from our database when referring to alternatives listed above.
+- For EACH recommendation, set "kind" to one of: "chemical_swap" (replace one chemical with another), "process_change" (dose/energy/condition tip with no chemical replacement), or "analytical" (monitoring/analysis tip such as TLC, IR, HPLC, inline/real-time).
+- Do NOT encode process or analytical tips as chemical substitutions. If the alternative is not a different chemical, use process_change or analytical.
 - For EACH recommendation, include a "primaryBenefit" field: a short (under 15 words) workflow-relevant reason such as "reduces toxic waste", "cuts liquid cleanup burden", "lowers direct chemical waste", or "reduces purification steps". This must be a concrete benefit, not a restatement of the principle.
 
 Return ONLY valid JSON (no markdown fences, no extra text):
@@ -165,6 +167,7 @@ Return ONLY valid JSON (no markdown fences, no extra text):
       "principleNumbers": [${principle.number}],
       "principleNames": ["${principle.name}"],
       "severity": "high|medium|low",
+      "kind": "chemical_swap|process_change|analytical",
       "original": {
         "chemical": "Chemical name as it appears in the protocol",
         "issue": "Why this violates Principle ${principle.number}"

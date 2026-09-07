@@ -4,7 +4,7 @@
  */
 import type { ScoreProvenance } from '@/lib/types'
 import { getChemistryServiceConfig } from '@/lib/chemistry-service-config'
-const TIMEOUT_MS = 90_000
+const TIMEOUT_MS = 240_000
 
 interface ConvertResult {
   chemical_name: string

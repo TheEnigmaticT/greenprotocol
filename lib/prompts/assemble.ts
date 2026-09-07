@@ -16,7 +16,7 @@ export function buildAssemblePrompt(
   return `You are a green chemistry protocol writer. You have been given:
 1. An original laboratory protocol
 2. The parsed steps
-3. A set of green chemistry recommendations (substitutions)
+3. A set of green chemistry chemical-substitution recommendations (chemical_swap only; process/analytical tips are excluded)
 
 Your job is to:
 1. Write a REVISED version of the original protocol that incorporates ALL the recommended substitutions
@@ -33,7 +33,7 @@ ${recsJson}
 
 INSTRUCTIONS:
 - Write the revised protocol as a complete, usable laboratory procedure
-- Substitute every recommended chemical replacement into the revised text
+- Substitute every listed chemical replacement into the revised text (do not invent process or analytical tip changes)
 - Keep the same step structure and numbering as the original
 - Adjust quantities, conditions, or procedures as needed for the substitutions
 - Do NOT add recommendations beyond what is listed above — just incorporate the given ones

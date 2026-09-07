@@ -15,10 +15,16 @@ import {
   completeLocalJson,
   isLocalPipelineEnabled,
   requireLocalPipelineModel,
+  resolveLocalProvider,
 } from '@/lib/local-llm'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
-import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
+import {
+  recommendationsForAssemble,
+  recommendationsForLiteratureReevaluation,
+  stampRecommendationKinds,
+} from '@/lib/recommendation-kind'
+import { buildLiteratureQuery, citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
 import { buildSdsReferences } from '@/lib/sds'
 import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
 import { logLLMTrace, logDedupTrace } from '@/lib/trace'
@@ -99,6 +105,7 @@ const PRINCIPLE_SCHEMA: InputSchema = {
           principleNumbers: { type: 'array', items: { type: 'number' } },
           principleNames: { type: 'array', items: { type: 'string' } },
           severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+          kind: { type: 'string', enum: ['chemical_swap', 'process_change', 'analytical'] },
           original: {
             type: 'object',
             properties: {
@@ -141,9 +148,11 @@ const ASSEMBLE_SCHEMA: InputSchema = {
         disclaimer: { type: 'string' },
       },
       required: ['greenPrinciplesViolated', 'mostImpactfulChange', 'experimentalValidationNeeded', 'disclaimer'],
+      additionalProperties: false,
     },
   },
   required: ['revisedProtocol', 'overallAssessment'],
+  additionalProperties: false,
 }
 
 interface CallContext {
@@ -167,7 +176,7 @@ async function callClaude<T>(
   // Fail-closed local pipeline: never fall through to Anthropic when enabled.
   if (isLocalPipelineEnabled()) {
     const localModel = requireLocalPipelineModel()
-    console.log(`[callClaude] ${label}: local Ollama model=${localModel}`)
+    console.log(`[callClaude] ${label}: local provider=${resolveLocalProvider()} model=${localModel}`)
     try {
       const result = await completeLocalJson<T>({
         system,
@@ -175,7 +184,7 @@ async function callClaude<T>(
         schema: schema as unknown as Record<string, unknown>,
         model: localModel,
         label,
-        numPredict: label.startsWith('principle-') || label === 'assemble' ? 6144 : 4096,
+        numPredict: label === 'assemble' ? 16384 : (label.startsWith('principle-') || label.startsWith('reevaluate') ? 12288 : 8192),
       })
       if (context?.userId) {
         const endTime = new Date()
@@ -470,20 +479,27 @@ async function assembleResult(
 ): Promise<AssembleResult> {
   console.log('Phase 3: Assembling revised protocol...')
 
-  // If no recommendations, skip the API call
-  if (recommendations.length === 0) {
+  // Process/analytical tips must not enter assemble — substitutions only.
+  const swapRecommendations = recommendationsForAssemble(recommendations)
+
+  // If no chemical substitutions, skip the API call (tips alone do not revise text)
+  if (swapRecommendations.length === 0) {
     return {
       revisedProtocol: protocolText, // unchanged
       overallAssessment: {
         greenPrinciplesViolated: [],
-        mostImpactfulChange: 'No changes needed — this protocol already follows green chemistry principles.',
-        experimentalValidationNeeded: false,
-        disclaimer: 'This protocol was evaluated against all 12 Principles of Green Chemistry and no significant improvements were identified.',
+        mostImpactfulChange: recommendations.length === 0
+          ? 'No changes needed — this protocol already follows green chemistry principles.'
+          : 'No chemical substitutions to apply; process/analytical tips remain available for review.',
+        experimentalValidationNeeded: recommendations.length > 0,
+        disclaimer: recommendations.length === 0
+          ? 'This protocol was evaluated against all 12 Principles of Green Chemistry and no significant improvements were identified.'
+          : 'Process and analytical tips were identified but are not applied as chemical substitutions in the revised protocol.',
       },
     }
   }
 
-  const systemPrompt = buildAssemblePrompt(protocolText, steps, recommendations)
+  const systemPrompt = buildAssemblePrompt(protocolText, steps, swapRecommendations)
 
   try {
     const result = await callClaude<AssembleResult>(systemPrompt, 'Generate the revised protocol and overall assessment based on the recommendations above.', ASSEMBLE_SCHEMA, 'assemble', SONNET, context)
@@ -492,13 +508,13 @@ async function assembleResult(
   } catch (err) {
     // Graceful degradation: if assembly fails, return without revised protocol
     console.error('Phase 3 failed, returning without revised protocol:', err)
-    const violatedPrinciples = [...new Set(recommendations.flatMap(r => r.principleNumbers))].sort()
+    const violatedPrinciples = [...new Set(swapRecommendations.flatMap(r => r.principleNumbers))].sort()
     return {
       revisedProtocol: '',
       overallAssessment: {
         greenPrinciplesViolated: violatedPrinciples,
-        mostImpactfulChange: recommendations[0]
-          ? `Replace ${recommendations[0].original.chemical} with ${recommendations[0].alternative.chemical}`
+        mostImpactfulChange: swapRecommendations[0]
+          ? `Replace ${swapRecommendations[0].original.chemical} with ${swapRecommendations[0].alternative.chemical}`
           : 'See individual recommendations',
         experimentalValidationNeeded: true,
         disclaimer: 'These recommendations are based on published literature and established green chemistry principles. Experimental validation is required before adopting any changes. Yields, selectivity, and purity may be affected.',
@@ -530,7 +546,7 @@ export function rankRecommendations(recs: Recommendation[]): Recommendation[] {
 
 // ─── Phase 2.7: Re-evaluation ───────────────────────────────────
 
-interface ReevaluationResult {
+export interface ReevaluationResult {
   action: 'confirm' | 'downgrade' | 'suppress'
   revisedConfidence: 'high' | 'medium' | 'low'
   revisedSeverity?: 'high' | 'medium' | 'low'
@@ -570,11 +586,57 @@ function isCandidateOnlyEvidence(matches: LiteratureEvidenceMatch[]): boolean {
   )
 }
 
-function enforceCandidateOnlyReevaluation(
+const CANDIDATE_ONLY_CAVEAT =
+  'Candidate-only evidence cannot independently confirm or suppress this intervention.'
+
+function ensureCandidateOnlyConcern(concerns: string[]): string[] {
+  if (concerns.some(c => /candidate-only/i.test(c))) {
+    return concerns
+  }
+  return [...concerns, CANDIDATE_ONLY_CAVEAT]
+}
+
+export function enforceCandidateOnlyReevaluation(
   reevaluation: ReevaluationResult,
   matches: LiteratureEvidenceMatch[],
+  localPipeline: boolean = isLocalPipelineEnabled(),
 ): ReevaluationResult {
-  if (!isCandidateOnlyEvidence(matches) || reevaluation.action === 'downgrade') {
+  if (!isCandidateOnlyEvidence(matches)) {
+    return reevaluation
+  }
+
+  // Soft mode for local pipeline: do not force-downgrade confirmations.
+  if (localPipeline) {
+    if (reevaluation.action === 'suppress') {
+      // Preserve safety: never suppress on candidate-only evidence.
+      return {
+        ...reevaluation,
+        action: 'downgrade',
+        revisedConfidence: 'low',
+        concerns: ensureCandidateOnlyConcern(reevaluation.concerns),
+        suppressionReason: undefined,
+      }
+    }
+
+    if (reevaluation.action === 'confirm') {
+      const revisedConfidence =
+        reevaluation.revisedConfidence === 'high' ? 'medium' : reevaluation.revisedConfidence
+      return {
+        ...reevaluation,
+        revisedConfidence,
+        concerns: ensureCandidateOnlyConcern(reevaluation.concerns),
+      }
+    }
+
+    // downgrade: keep action/confidence, ensure candidate-only caveat
+    return {
+      ...reevaluation,
+      concerns: ensureCandidateOnlyConcern(reevaluation.concerns),
+    }
+  }
+
+  // Hard mode (local pipeline OFF): force downgrade unless already downgraded.
+  if (reevaluation.action === 'downgrade') {
     return reevaluation
   }
 
@@ -584,7 +646,7 @@ function enforceCandidateOnlyReevaluation(
     revisedConfidence: 'low',
     concerns: [
       ...reevaluation.concerns,
-      'Candidate-only evidence cannot independently confirm or suppress this intervention.',
+      CANDIDATE_ONLY_CAVEAT,
     ],
     suppressionReason: undefined,
   }
@@ -608,7 +670,7 @@ async function reevaluateAllRecommendations(
     console.log(`Phase 2.7: [${i + 1}/${recommendations.length}] Re-evaluating ${chemName}...`)
 
     // Retrieve literature for this specific recommendation
-    const query = `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
+    const query = buildLiteratureQuery(rec.original.chemical, rec.alternative.chemical, rec.alternative.rationale)
     let literatureEvidence: LiteratureEvidenceMatch[] = []
     
     try {
@@ -709,8 +771,8 @@ function deduplicateRecommendations(
 
   for (let i = 0; i < recs.length; i++) {
     const rec = recs[i]
-    // Key by step + original chemical (case-insensitive)
-    const key = `${rec.stepNumber}:${rec.original.chemical.toLowerCase()}`
+    // Key by step + original chemical + kind (case-insensitive)
+    const key = `${rec.stepNumber}:${rec.original.chemical.toLowerCase()}:${rec.kind ?? 'chemical_swap'}`
     const existing = map.get(key)
 
     if (!existing) {
@@ -965,18 +1027,21 @@ export async function analyzeProtocol(
 
   // Phase 2: Evaluate all 12 principles in parallel (LLM qualitative recommendations)
   onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
-  const rawRecommendations = await evaluateAllPrinciples(parsed.steps, onProgress, context)
+  const rawRecommendations = stampRecommendationKinds(
+    await evaluateAllPrinciples(parsed.steps, onProgress, context)
+  )
 
-  // Phase 2.5: Ground recommendations in literature via Vector Search
+  // Phase 2.5: Ground chemical_swap recommendations in literature via Vector Search
+  // Process/analytical tips skip literature grounding (fail-closed: no tip→lit poisoning).
   onProgress?.({ type: 'phase', phase: 2, message: 'Grounding recommendations in literature...' })
   try {
-    // Build all query strings first, then batch-retrieve
-    const queries = rawRecommendations.map(rec =>
-      `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
+    const litTargets = recommendationsForLiteratureReevaluation(rawRecommendations)
+    const queries = litTargets.map(rec =>
+      buildLiteratureQuery(rec.original.chemical, rec.alternative.chemical, rec.alternative.rationale)
     )
 
     const results = await Promise.allSettled(
-      rawRecommendations.map((rec, i) =>
+      litTargets.map((rec, i) =>
         searchLiteratureEvidence({
           query: queries[i],
           limit: 3,
@@ -985,16 +1050,16 @@ export async function analyzeProtocol(
       )
     )
 
-    for (let i = 0; i < rawRecommendations.length; i++) {
+    for (let i = 0; i < litTargets.length; i++) {
       const result = results[i]
       if (result.status === 'rejected') {
-        console.warn(`[pipeline] Phase 2.5 retrieval failed for ${rawRecommendations[i].original.chemical}:`, result.reason)
+        console.warn(`[pipeline] Phase 2.5 retrieval failed for ${litTargets[i].original.chemical}:`, result.reason)
         continue
       }
       const matches = result.value
       if (matches.length === 0) continue
 
-      const rec = rawRecommendations[i]
+      const rec = litTargets[i]
       if (!rec.evidence) {
         rec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
       }
@@ -1015,8 +1080,9 @@ export async function analyzeProtocol(
     console.warn('[pipeline] Phase 2.5 skipped due to error:', err)
   }
 
-  // Deduplicate: merge recommendations for the same chemical in the same step
-  const { deduped: recommendations } = deduplicateRecommendations(rawRecommendations, context)
+  // Deduplicate: merge recommendations for the same chemical+kind in the same step
+  const { deduped } = deduplicateRecommendations(rawRecommendations, context)
+  const recommendations = stampRecommendationKinds(deduped)
   console.log(`Deduplication: ${rawRecommendations.length} raw → ${recommendations.length} merged`)
   onProgress?.({ type: 'phase', phase: 2, message: `Found ${recommendations.length} recommendations` })
 
@@ -1066,8 +1132,14 @@ export async function analyzeProtocol(
   let finalRecommendations = recommendations
   
   try {
-    const reevalResult = await reevaluateAllRecommendations(recommendations, onProgress)
-    finalRecommendations = reevalResult.recommendations
+    const swapRecs = recommendationsForLiteratureReevaluation(recommendations)
+    const tipRecs = recommendations.filter(r => !swapRecs.includes(r))
+    const reevalResult = await reevaluateAllRecommendations(swapRecs, onProgress)
+    // Tips skip lit reevaluation; keep them as-is alongside reevaluated swaps.
+    finalRecommendations = stampRecommendationKinds([
+      ...reevalResult.recommendations,
+      ...tipRecs,
+    ])
     reevaluationStats = reevalResult.stats
   } catch (err) {
     console.warn('[pipeline] Phase 2.7 re-evaluation skipped due to error:', err)
