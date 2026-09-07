@@ -32,8 +32,8 @@ function skimWhyLine(rec: Recommendation): string | null {
   if (issue) return issue
   const rationale = rec.alternative.rationale?.trim()
   if (!rationale) return null
-  const firstSentence = rationale.split(/(?<=[.!?])\s+/)[0]?.trim() || rationale
-  return firstSentence
+  const sentences = rationale.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean)
+  return sentences.slice(0, 2).join(' ') || rationale
 }
 
 function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analysisId, recommendationIndex }: {
@@ -70,31 +70,19 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
       </div>
 
       <p
-        className="m-0 mb-2.5 font-[family-name:var(--font-serif)] font-bold text-[19px] sm:text-[22px] leading-snug"
+        className="m-0 mb-2.5 font-[family-name:var(--font-sans)] font-medium text-[16px] sm:text-[17px] leading-snug"
         style={{ color: '#0D1F16' }}
       >
         Replace{' '}
-        <span className="font-[family-name:var(--font-mono)] font-medium text-[16px] sm:text-[16px] tabular-nums">
-          {rec.original.chemical}
-        </span>{' '}
-        with{' '}
-        <span className="font-[family-name:var(--font-mono)] font-medium text-[16px] tabular-nums">
-          {rec.alternative.chemical}
-        </span>
-        .
-      </p>
-
-      <p
-        className="m-0 mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-[family-name:var(--font-mono)] text-[15px] sm:text-base font-medium leading-snug tabular-nums"
-      >
         <span style={{ color: '#DC2626' }}>{rec.original.chemical}</span>
-        <span style={{ color: '#44403C', fontWeight: 400 }}>→</span>
+        {' '}with{' '}
         <span style={{ color: '#006D15' }}>{rec.alternative.chemical}</span>
+        .
       </p>
 
       {whyLine && (
         <p
-          className="m-0 mb-4 font-[family-name:var(--font-sans)] text-sm leading-snug line-clamp-1"
+          className="m-0 mb-4 font-[family-name:var(--font-sans)] text-sm leading-snug line-clamp-2"
           style={{ color: '#57534E' }}
           title={whyLine}
         >
@@ -193,7 +181,7 @@ export default function FinalizedProtocol({
         {pending.length > 0 && (
           <section>
             <p
-              className="m-0 mb-3 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]"
+              className="m-0 mb-3 px-4 sm:px-5 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]"
               style={{ color: '#9D8026' }}
             >
               Pending review · {pending.length}
@@ -220,7 +208,7 @@ export default function FinalizedProtocol({
         {accepted.length > 0 && (
           <section>
             <p
-              className="m-0 mb-3 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]"
+              className="m-0 mb-3 px-4 sm:px-5 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]"
               style={{ color: '#9D8026' }}
             >
               Accepted · {accepted.length}
@@ -272,7 +260,7 @@ export default function FinalizedProtocol({
         {declined.length > 0 && (
           <section>
             <p
-              className="m-0 mb-3 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]"
+              className="m-0 mb-3 px-4 sm:px-5 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]"
               style={{ color: '#9D8026' }}
             >
               Rejected · {declined.length}

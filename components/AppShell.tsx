@@ -6,12 +6,15 @@ import UserMenu from './UserMenu'
 
 export type AppShellTab = 'decisions' | 'atlas'
 
+/** Shared content column — matches Decisions / Atlas page mains. */
+const CONTENT_COL = 'mx-auto max-w-6xl px-4 sm:px-6'
+
 export default function AppShell({
   children,
   analysisId,
   activeTab,
   historyHref = '/dashboard',
-  historyLabel = 'History',
+  historyLabel = 'Dashboard',
   onNewAnalysis,
 }: {
   children: React.ReactNode
@@ -24,11 +27,16 @@ export default function AppShell({
   const inAnalysis = Boolean(analysisId)
   const decisionsHref = analysisId ? `/analyze/${analysisId}` : '/analyze'
   const atlasHref = analysisId ? `/analyze/${analysisId}/evidence` : undefined
+  const dashboardHref = historyHref || '/dashboard'
+  const dashboardLabel = historyLabel === 'History' ? 'Dashboard' : historyLabel || 'Dashboard'
+
+  const chromeLabel =
+    'font-[family-name:var(--font-sans)] text-[12px] font-medium tracking-[0.04em]'
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#F6F3EB' }}>
       <header className="print:hidden sticky top-0 z-40" style={{ background: '#1C3822', color: '#F6F3EB' }}>
-        <div className="mx-auto flex min-h-14 items-center justify-between gap-3 px-4 sm:px-6 lg:px-10 max-w-[calc(1120px+160px)]">
+        <div className={`${CONTENT_COL} flex min-h-14 items-center gap-3`}>
           <Link
             href="/"
             className="flex items-center gap-2.5 min-w-0 shrink-0"
@@ -42,7 +50,7 @@ export default function AppShell({
               className="block shrink-0"
             />
             <span
-              className="font-[family-name:var(--font-mono)] font-bold text-[11px] sm:text-[13px] tracking-wide whitespace-nowrap"
+              className="font-[family-name:var(--font-sans)] font-semibold text-[13px] tracking-wide whitespace-nowrap"
               style={{ color: '#F6F3EB' }}
             >
               greenchemistry.ai
@@ -51,13 +59,13 @@ export default function AppShell({
 
           {inAnalysis && (
             <nav
-              className="hidden sm:flex items-stretch justify-center gap-1 flex-1 min-w-0"
+              className="hidden sm:flex items-stretch justify-center gap-1 shrink-0"
               aria-label="In this analysis"
             >
               <Link
                 href={decisionsHref}
                 aria-current={activeTab === 'decisions' ? 'page' : undefined}
-                className="font-[family-name:var(--font-mono)] text-[11px] font-bold tracking-[0.16em] uppercase px-3.5 pt-[18px] pb-4 border-b-2"
+                className={`${chromeLabel} uppercase px-3.5 pt-[18px] pb-4 border-b-2`}
                 style={{
                   color: activeTab === 'decisions' ? '#ECB815' : '#A8C5A2',
                   borderBottomColor: activeTab === 'decisions' ? '#ECB815' : 'transparent',
@@ -69,7 +77,7 @@ export default function AppShell({
                 <Link
                   href={atlasHref}
                   aria-current={activeTab === 'atlas' ? 'page' : undefined}
-                  className="font-[family-name:var(--font-mono)] text-[11px] font-bold tracking-[0.16em] uppercase px-3.5 pt-[18px] pb-4 border-b-2"
+                  className={`${chromeLabel} uppercase px-3.5 pt-[18px] pb-4 border-b-2`}
                   style={{
                     color: activeTab === 'atlas' ? '#ECB815' : '#A8C5A2',
                     borderBottomColor: activeTab === 'atlas' ? '#ECB815' : 'transparent',
@@ -81,35 +89,53 @@ export default function AppShell({
             </nav>
           )}
 
-          <div className="flex items-center gap-3 sm:gap-4 justify-end shrink-0">
+          {/* Spacer pushes primary actions + avatar to the right */}
+          <div className="flex-1 min-w-0" aria-hidden="true" />
+
+          <div className="flex items-center gap-2 sm:gap-3 justify-end shrink-0">
+            {/* Primary CTA: Dashboard */}
             <Link
-              href={historyHref}
-              className="font-[family-name:var(--font-mono)] text-[10px] sm:text-[11px] font-bold tracking-[0.14em] uppercase"
-              style={{ color: '#A8C5A2' }}
+              href={dashboardHref}
+              className={`inline-flex items-center justify-center min-h-9 px-3.5 sm:px-4 ${chromeLabel} uppercase`}
+              style={{ background: '#ECB815', color: '#0D1F16' }}
             >
-              {historyLabel}
+              {dashboardLabel}
             </Link>
+
+            {/* Secondary: New Analysis — quieter ghost */}
             {onNewAnalysis ? (
               <button
                 type="button"
                 onClick={onNewAnalysis}
-                className="inline-flex items-center justify-center min-h-9 px-2.5 sm:px-3.5 font-[family-name:var(--font-mono)] text-[10px] sm:text-[11px] font-bold tracking-[0.12em] uppercase cursor-pointer"
-                style={{ background: '#ECB815', color: '#0D1F16' }}
+                className={`inline-flex items-center justify-center min-h-9 px-2.5 sm:px-3 ${chromeLabel} uppercase cursor-pointer border`}
+                style={{
+                  background: 'transparent',
+                  color: '#A8C5A2',
+                  borderColor: '#2D4A3A',
+                }}
               >
                 New Analysis
               </button>
             ) : (
               <Link
                 href={NEW_ANALYSIS_HREF}
-                className="inline-flex items-center justify-center min-h-9 px-2.5 sm:px-3.5 font-[family-name:var(--font-mono)] text-[10px] sm:text-[11px] font-bold tracking-[0.12em] uppercase"
-                style={{ background: '#ECB815', color: '#0D1F16' }}
+                className={`inline-flex items-center justify-center min-h-9 px-2.5 sm:px-3 ${chromeLabel} uppercase border`}
+                style={{
+                  background: 'transparent',
+                  color: '#A8C5A2',
+                  borderColor: '#2D4A3A',
+                }}
               >
                 New Analysis
               </Link>
             )}
-            <div className="hidden md:block [&_a]:!text-[#A8C5A2] [&_a]:!border-[#2D4A3A] [&_button]:!text-[#A8C5A2] [&_button]:!border-[#2D4A3A] [&_span]:!text-[#A8C5A2]">
-              <UserMenu />
-            </div>
+
+            {/* Top-right circular account control */}
+            <UserMenu
+              historyHref={dashboardHref}
+              historyLabel={dashboardLabel}
+              chrome="dark"
+            />
           </div>
         </div>
         <div className="h-0.5 w-full" style={{ background: '#ECB815' }} aria-hidden="true" />
@@ -136,7 +162,7 @@ export default function AppShell({
           <Link
             href={decisionsHref}
             aria-current={activeTab === 'decisions' ? 'page' : undefined}
-            className="flex items-center justify-center min-h-[52px] font-[family-name:var(--font-mono)] text-[11px] font-bold tracking-[0.16em] uppercase"
+            className={`flex items-center justify-center min-h-[52px] ${chromeLabel} uppercase`}
             style={{ color: activeTab === 'decisions' ? '#ECB815' : '#A8C5A2' }}
           >
             Decisions
@@ -144,7 +170,7 @@ export default function AppShell({
           <Link
             href={atlasHref}
             aria-current={activeTab === 'atlas' ? 'page' : undefined}
-            className="flex items-center justify-center min-h-[52px] font-[family-name:var(--font-mono)] text-[11px] font-bold tracking-[0.16em] uppercase"
+            className={`flex items-center justify-center min-h-[52px] ${chromeLabel} uppercase`}
             style={{ color: activeTab === 'atlas' ? '#ECB815' : '#A8C5A2' }}
           >
             Atlas
