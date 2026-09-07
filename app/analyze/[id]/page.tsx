@@ -169,7 +169,7 @@ export default function AnalysisByIdPage() {
   return (
     <AppShell analysisId={id} activeTab="decisions">
       <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-10">
-        <header>
+        <header className="px-4 sm:px-5">
           <p className="m-0 mb-2 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>
             Protocol under review
           </p>
