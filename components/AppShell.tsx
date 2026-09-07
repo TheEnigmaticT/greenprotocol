@@ -14,7 +14,7 @@ export default function AppShell({
   analysisId,
   activeTab,
   historyHref = '/dashboard',
-  historyLabel = 'History',
+  historyLabel = 'Dashboard',
   onNewAnalysis,
 }: {
   children: React.ReactNode
@@ -27,6 +27,8 @@ export default function AppShell({
   const inAnalysis = Boolean(analysisId)
   const decisionsHref = analysisId ? `/analyze/${analysisId}` : '/analyze'
   const atlasHref = analysisId ? `/analyze/${analysisId}/evidence` : undefined
+  const dashboardHref = historyHref || '/dashboard'
+  const dashboardLabel = historyLabel === 'History' ? 'Dashboard' : historyLabel || 'Dashboard'
 
   const chromeLabel =
     'font-[family-name:var(--font-sans)] text-[12px] font-medium tracking-[0.04em]'
@@ -34,7 +36,7 @@ export default function AppShell({
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#F6F3EB' }}>
       <header className="print:hidden sticky top-0 z-40" style={{ background: '#1C3822', color: '#F6F3EB' }}>
-        <div className={`${CONTENT_COL} flex min-h-14 items-center justify-between gap-3`}>
+        <div className={`${CONTENT_COL} flex min-h-14 items-center gap-3`}>
           <Link
             href="/"
             className="flex items-center gap-2.5 min-w-0 shrink-0"
@@ -57,7 +59,7 @@ export default function AppShell({
 
           {inAnalysis && (
             <nav
-              className="hidden sm:flex items-stretch justify-center gap-1 flex-1 min-w-0"
+              className="hidden sm:flex items-stretch justify-center gap-1 shrink-0"
               aria-label="In this analysis"
             >
               <Link
@@ -87,28 +89,51 @@ export default function AppShell({
             </nav>
           )}
 
-          <div className="flex items-center gap-2.5 sm:gap-3 justify-end shrink-0">
+          {/* Spacer pushes primary actions + avatar to the right */}
+          <div className="flex-1 min-w-0" aria-hidden="true" />
+
+          <div className="flex items-center gap-2 sm:gap-3 justify-end shrink-0">
+            {/* Primary CTA: Dashboard */}
+            <Link
+              href={dashboardHref}
+              className={`inline-flex items-center justify-center min-h-9 px-3.5 sm:px-4 ${chromeLabel} uppercase`}
+              style={{ background: '#ECB815', color: '#0D1F16' }}
+            >
+              {dashboardLabel}
+            </Link>
+
+            {/* Secondary: New Analysis — quieter ghost */}
             {onNewAnalysis ? (
               <button
                 type="button"
                 onClick={onNewAnalysis}
-                className={`inline-flex items-center justify-center min-h-9 px-2.5 sm:px-3.5 ${chromeLabel} uppercase cursor-pointer`}
-                style={{ background: '#ECB815', color: '#0D1F16' }}
+                className={`inline-flex items-center justify-center min-h-9 px-2.5 sm:px-3 ${chromeLabel} uppercase cursor-pointer border`}
+                style={{
+                  background: 'transparent',
+                  color: '#A8C5A2',
+                  borderColor: '#2D4A3A',
+                }}
               >
                 New Analysis
               </button>
             ) : (
               <Link
                 href={NEW_ANALYSIS_HREF}
-                className={`inline-flex items-center justify-center min-h-9 px-2.5 sm:px-3.5 ${chromeLabel} uppercase`}
-                style={{ background: '#ECB815', color: '#0D1F16' }}
+                className={`inline-flex items-center justify-center min-h-9 px-2.5 sm:px-3 ${chromeLabel} uppercase border`}
+                style={{
+                  background: 'transparent',
+                  color: '#A8C5A2',
+                  borderColor: '#2D4A3A',
+                }}
               >
                 New Analysis
               </Link>
             )}
+
+            {/* Top-right circular account control */}
             <UserMenu
-              historyHref={historyHref}
-              historyLabel={historyLabel}
+              historyHref={dashboardHref}
+              historyLabel={dashboardLabel}
               chrome="dark"
             />
           </div>

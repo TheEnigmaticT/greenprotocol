@@ -4,10 +4,29 @@ import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
+import { NEW_ANALYSIS_HREF } from '@/lib/analysis-session'
+
+function avatarInitials(user: User): string {
+  const meta = user.user_metadata as Record<string, unknown> | undefined
+  const name =
+    (typeof meta?.full_name === 'string' && meta.full_name) ||
+    (typeof meta?.name === 'string' && meta.name) ||
+    ''
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  if (parts.length === 1 && parts[0].length > 0) {
+    return parts[0][0].toUpperCase()
+  }
+  const local = user.email?.split('@')[0] ?? ''
+  if (local.length >= 2) return local.slice(0, 2).toUpperCase()
+  return (user.email?.[0] ?? 'U').toUpperCase()
+}
 
 export default function UserMenu({
   historyHref = '/dashboard',
-  historyLabel = 'History',
+  historyLabel = 'Dashboard',
   chrome = 'light',
 }: {
   historyHref?: string
@@ -79,10 +98,10 @@ export default function UserMenu({
     )
   }
 
-  const initials = (user.email?.[0] ?? 'U').toUpperCase()
+  const initials = avatarInitials(user)
   // History and Dashboard are the same destination in this app; prefer one label.
   const accountHref = historyHref || '/dashboard'
-  const accountLabel = historyLabel === 'History' ? 'Dashboard' : historyLabel
+  const accountLabel = historyLabel === 'History' ? 'Dashboard' : historyLabel || 'Dashboard'
 
   return (
     <div ref={rootRef} className="relative">
@@ -92,21 +111,18 @@ export default function UserMenu({
         aria-expanded={open}
         aria-label="Account menu"
         onClick={() => setOpen(v => !v)}
-        className="inline-flex items-center gap-2 min-h-9 px-2.5 text-[12px] font-medium font-[family-name:var(--font-sans)] rounded-md border cursor-pointer"
-        style={{ color: triggerColor, borderColor: triggerBorder, background: 'transparent' }}
+        className="inline-flex items-center justify-center w-9 h-9 rounded-full cursor-pointer shrink-0 border-0 p-0"
+        style={{
+          background: onDarkChrome ? '#F6F3EB' : '#1C3822',
+          color: onDarkChrome ? '#1C3822' : '#F6F3EB',
+        }}
       >
         <span
-          className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-semibold shrink-0"
-          style={{
-            background: onDarkChrome ? '#2D4A3A' : '#E8E2D6',
-            color: onDarkChrome ? '#F6F3EB' : '#1C3822',
-          }}
+          className="text-[13px] font-semibold font-[family-name:var(--font-sans)] leading-none select-none"
           aria-hidden="true"
         >
           {initials}
         </span>
-        <span className="hidden lg:inline max-w-[140px] truncate">{user.email}</span>
-        <span aria-hidden="true" className="text-[10px] opacity-70">▾</span>
       </button>
 
       {open && (
@@ -128,6 +144,15 @@ export default function UserMenu({
             onClick={() => setOpen(false)}
           >
             {accountLabel}
+          </a>
+          <a
+            role="menuitem"
+            href={NEW_ANALYSIS_HREF}
+            className="block px-3 py-2.5 text-[13px] font-medium font-[family-name:var(--font-sans)] hover:bg-[#EFE9DF]"
+            style={{ color: itemColor }}
+            onClick={() => setOpen(false)}
+          >
+            New Analysis
           </a>
           <button
             role="menuitem"
