@@ -108,6 +108,14 @@ def test_release_workflows_require_staging_validation_and_digest_promotion():
     assert "IMAGE_DIGEST" in production
 
 
+def test_candidate_build_submits_asynchronously_and_polls_for_its_immutable_digest():
+    build = (REPO_ROOT / "scripts" / "build-chemistry-image.sh").read_text()
+
+    assert 'builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE" --async' in build
+    assert 'builds describe "$BUILD_ID" --project "$PROJECT_ID"' in build
+    assert 'Cloud Build did not finish successfully' in build
+
+
 def test_staging_deploy_uses_the_same_image_name_as_the_production_candidate():
     deploy = DEPLOY_SCRIPT.read_text()
     build = (REPO_ROOT / "scripts" / "build-chemistry-image.sh").read_text()

@@ -28,7 +28,23 @@ IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NA
 if IMAGE_DIGEST="$("$GCLOUD" artifacts docker images describe "$IMAGE" --project "$PROJECT_ID" --format='value(image_summary.digest)' 2>/dev/null)" && [[ -n "$IMAGE_DIGEST" ]]; then
   printf 'Reusing existing immutable candidate image.\n' >&2
 else
-  "$GCLOUD" builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE"
+  BUILD_ID="$("$GCLOUD" builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE" --async \
+    | sed -n 's#.*builds/\([^]]*\)].*#\1#p')"
+  [[ "$BUILD_ID" =~ ^[0-9a-f-]{36}$ ]] || fail "Cloud Build did not return a build ID."
+
+  for _ in $(seq 1 120); do
+    BUILD_STATUS="$("$GCLOUD" builds describe "$BUILD_ID" --project "$PROJECT_ID" --format='value(status)')"
+    case "$BUILD_STATUS" in
+      SUCCESS) break ;;
+      FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+        fail "Cloud Build did not finish successfully: $BUILD_STATUS"
+        ;;
+      QUEUED|WORKING|PENDING) sleep 5 ;;
+      *) fail "Cloud Build returned an unknown status: $BUILD_STATUS" ;;
+    esac
+  done
+  [[ "${BUILD_STATUS:-}" == "SUCCESS" ]] || fail "Cloud Build did not finish successfully before timeout."
+
   IMAGE_DIGEST="$("$GCLOUD" artifacts docker images describe "$IMAGE" --project "$PROJECT_ID" --format='value(image_summary.digest)')"
 fi
 
