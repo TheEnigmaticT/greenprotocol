@@ -1,0 +1,12 @@
+{
+  "caseId": "aspirin-demo",
+  "protocolText": "Aspirin synthesis (demo)\n\n1. Add 2.0 g salicylic acid to a 50 mL flask.\n2. Add 5 mL acetic anhydride and 3 drops of concentrated phosphoric acid as catalyst.\n3. Heat the mixture at 70 C for 15 minutes with stirring.\n4. Cool to room temperature, then add 20 mL cold water to crystallize the product.\n5. Filter the solid aspirin and wash with cold water. Dry the product.\n",
+  "provenance": {
+    "public": true,
+    "sourcePath": "/Users/ct-mac-mini/models/llasmol-mistral-7b/hybrid-multi-01/cases.json",
+    "sourceFileSha256": "3c9bd3c25fdafed7b1f0a036cb3c6646760ce79c68f64f3e90b996d12a104e57",
+    "sourceRecordId": "aspirin-demo",
+    "sourceProcedurePath": "/Users/ct-mac-mini/dev/greenchemistry-ai-local-e2e/scripts/smoke-full-analyze-local.ts",
+    "sourceProtocolSha256": "e256ebef81b687c7c3e2ff90cbd8643b56af884f507728b06c17ebbc79ba041d"
+  }
+}

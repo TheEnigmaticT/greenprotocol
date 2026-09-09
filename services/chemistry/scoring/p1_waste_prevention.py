@@ -137,10 +137,15 @@ def score_p1(
         normalized=round(score / 10.0, 4),
         details={
             "_summary": (
-                f"PMI = {round(pmi, 2):.1f} "
-                f"({round(total_input_g, 1):.0f} g input → {round(product_mass_g, 1):.0f} g product, "
-                f"{yield_used}% yield). "
-                + (f"vs. {reaction_type} benchmark PMI {benchmark_pmi}: {vs_benchmark.replace('_', ' ')}." if vs_benchmark else "No benchmark available.")
+                f"Benchmark-only PMI = {round(pmi, 2):.1f}; product mass was not "
+                f"derived from this protocol."
+                if method == "benchmark_pmi_only"
+                else (
+                    f"PMI = {round(pmi, 2):.1f} "
+                    f"({round(total_input_g, 1):.0f} g input → {round(product_mass_g, 1):.0f} g product, "
+                    f"{yield_used}% yield). "
+                    + (f"vs. {reaction_type} benchmark PMI {benchmark_pmi}: {vs_benchmark.replace('_', ' ')}." if vs_benchmark else "No benchmark available.")
+                )
             ),
             "pmi": round(pmi, 2),
             "total_input_g": round(total_input_g, 2),

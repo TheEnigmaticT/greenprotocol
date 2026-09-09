@@ -22,6 +22,29 @@ if [[ "$DEPLOY_ENV" == "production" && "${BREAK_GLASS:-}" != "1" ]]; then
     fail "Production deploy requires the approved release workflow or BREAK_GLASS=1."
 fi
 
+# Candidate routing is deliberately staging-only. It is validated before gcloud
+# is located or invoked so an accidental flag cannot mutate a service.
+STAGING_ENGINE_CANDIDATE="${STAGING_ENGINE_CANDIDATE:-}"
+CANDIDATE_BASE_URL=""
+CANDIDATE_MODEL=""
+if [[ "$DEPLOY_ENV" == "staging" ]]; then
+  [[ -z "$STAGING_ENGINE_CANDIDATE" || "$STAGING_ENGINE_CANDIDATE" == "1" ]] || \
+    fail "STAGING_ENGINE_CANDIDATE must be 1 or unset."
+  if [[ "$STAGING_ENGINE_CANDIDATE" == "1" ]]; then
+    CANDIDATE_BASE_URL="${STAGING_OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
+    [[ "$CANDIDATE_BASE_URL" == "https://openrouter.ai/api/v1" ]] || \
+      fail "STAGING_OPENROUTER_BASE_URL must be the exact https://openrouter.ai/api/v1 candidate endpoint."
+    CANDIDATE_MODEL="${STAGING_OPENROUTER_MODEL:-}"
+    [[ "$CANDIDATE_MODEL" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]*$ ]] || \
+      fail "STAGING_OPENROUTER_MODEL is required and must be a provider/model identifier when STAGING_ENGINE_CANDIDATE=1."
+  fi
+else
+  [[ -z "$STAGING_ENGINE_CANDIDATE" ]] || \
+    fail "STAGING_ENGINE_CANDIDATE is allowed only for DEPLOY_ENV=staging."
+  [[ -z "${STAGING_OPENROUTER_BASE_URL:-}" ]] || \
+    fail "STAGING_OPENROUTER_BASE_URL is allowed only for DEPLOY_ENV=staging."
+fi
+
 GCLOUD="${GCLOUD:-$(command -v gcloud || true)}"
 [[ -n "$GCLOUD" ]] || fail "gcloud is required."
 REGION="${REGION:-us-central1}"
@@ -71,12 +94,17 @@ IMAGE_DIGEST="${IMAGE_DIGEST:-}"
 CHEMISTRY_IMAGE_NAME="${CHEMISTRY_IMAGE_NAME:-greenchemistry-chemistry}"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NAME}:${GIT_SHA}"
 
+RUNTIME_ENV_VARS="OPENROUTER_MODEL=${PROVIDER_MODEL}"
+if [[ "$STAGING_ENGINE_CANDIDATE" == "1" ]]; then
+  RUNTIME_ENV_VARS="OPENROUTER_MODEL=${CANDIDATE_MODEL},GCAI_ENGINE_CANDIDATE=1,GCAI_LLM_BASE_URL=${CANDIDATE_BASE_URL},GCAI_LLM_MODEL=${CANDIDATE_MODEL}"
+fi
+
 "$GCLOUD" run deploy "$SERVICE_NAME" \
   --project "$PROJECT_ID" --region "$REGION" --image "${IMAGE}@${IMAGE_DIGEST}" \
   --service-account "$RUNTIME_SERVICE_ACCOUNT" \
   --labels "release-sha=${GIT_SHA},deploy-env=${DEPLOY_ENV}" \
   --set-secrets "CHEMISTRY_SERVICE_TOKEN=${TOKEN_SECRET}:latest,SUPABASE_URL=${SUPABASE_URL_SECRET}:latest,SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_SECRET}:latest,OPENROUTER_API_KEY=${PROVIDER_KEY_SECRET}:latest" \
-  --set-env-vars "OPENROUTER_MODEL=${PROVIDER_MODEL}" \
+  --set-env-vars "$RUNTIME_ENV_VARS" \
   --cpu 1 --memory 2Gi --timeout 300 --concurrency 4 --min-instances "$MIN_INSTANCES" --max-instances 3
 
 REVISION="$("$GCLOUD" run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestReadyRevisionName)')"

@@ -1,0 +1,10 @@
+{
+  "caseId": "fixture-3",
+  "protocolText": "Combine benzaldehyde, malonic acid, and water with a catalytic amount of piperidine. Stir at 80 °C for 2 hours, cool to room temperature, and acidify with dilute hydrochloric acid. Collect the precipitated cinnamic acid by filtration, wash with water, and recrystallize from ethanol.",
+  "provenance": {
+    "public": true,
+    "sourcePath": "/Users/ct-mac-mini/dev/greenchemistry-ai/benchmarks/cases/fixture-3.json",
+    "sourceFileSha256": "748761325f01678abfaae3d449b672fad3aaaa8fda6678568a0b243266833354",
+    "sourceProtocolSha256": "1f38084accb041bc78f8d81cbb79288849d5c637cf73ec00fc7ef3af89185ef5"
+  }
+}

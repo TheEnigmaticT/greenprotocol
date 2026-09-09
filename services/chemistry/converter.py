@@ -6,7 +6,8 @@ from chem21 import get_vetted_evidence
 from ghs import lookup_hcodes_with_details
 from pubchem import lookup_chemical, get_last_lookup_failure
 from cas_lookup import get_cas
-from synonyms import resolve_synonym
+from identity import resolve_cached_identity, split_combined_alias_labels
+from synonyms import resolve_synonym  # compatibility import for existing callers
 from reference_store import get_reference_store
 import cache
 
@@ -16,6 +17,7 @@ import cache
 # reference and must not be reported as recoverable lookup misses.
 INDEFINITE_CHEMICALS = {
     "brine",
+    "cellulose acetate",
 }
 
 try:
@@ -38,6 +40,11 @@ def _rdkit_mw(smiles: str) -> float | None:
     return None
 
 
+def _resolve_cached_alias(name: str) -> tuple[str, dict | None]:
+    """Resolve an exact cached/known identity without fuzzy label cleanup."""
+    return resolve_cached_identity(name, cache.get)
+
+
 async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
     """Convert a chemical name + quantity string to standardized units.
     
@@ -50,20 +57,24 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
     6. Convert: mL->g (density), g->mol (MW), mol->g (MW)
     """
     warnings: list[str] = []
-    resolved_name = resolve_synonym(chemical_name)
+    resolved_name, cached_data = _resolve_cached_alias(chemical_name)
     was_synonym = resolved_name.lower() != chemical_name.lower().strip()
+    combined_labels = split_combined_alias_labels(chemical_name)
 
-    if resolved_name.lower().strip() in INDEFINITE_CHEMICALS:
+    if (
+        resolved_name.lower().strip() in INDEFINITE_CHEMICALS
+        or any(label.lower().strip() in INDEFINITE_CHEMICALS for label in combined_labels)
+    ):
         warnings.append(
             "This material has an indefinite composition and cannot be analyzed as a single chemical."
         )
         return _build_response(
             {}, chemical_name, resolved_name, quantity,
             data_source="indefinite", cached=False, warnings=warnings,
+            reference_status="indefinite",
         )
 
     # Check process/seed cache, then the durable shared cache.
-    cached_data = cache.get(resolved_name)
     if not cached_data:
         cached_data = await get_reference_store().get_cache(resolved_name)
         if cached_data:
@@ -189,7 +200,7 @@ def _build_response(
             quantity_mol = quantity_g / mw
 
     return ConvertResponse(
-        chemical_name=resolved_name,
+        chemical_name=original_name,
         cas=get_cas(resolved_name) or get_cas(original_name),
         smiles=smiles,
         molecular_formula=chem_data.get("molecular_formula"),

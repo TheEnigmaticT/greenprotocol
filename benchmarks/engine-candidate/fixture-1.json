@@ -1,0 +1,10 @@
+{
+  "caseId": "fixture-1",
+  "protocolText": "Charge 4-hydroxybenzoic acid and methanol to a flask. Add sulfuric acid catalyst, heat at 65 °C for 3 hours, cool, then neutralize with aqueous sodium bicarbonate. Extract the ester with ethyl acetate, wash with water, dry over sodium sulfate, and evaporate the solvent.",
+  "provenance": {
+    "public": true,
+    "sourcePath": "/Users/ct-mac-mini/dev/greenchemistry-ai/benchmarks/cases/fixture-1.json",
+    "sourceFileSha256": "96f4cbea041cee55c438776d9d3d23515224558d40161d50c84c4176b9770893",
+    "sourceProtocolSha256": "64e5731a39a280f6f9213d8e095e3a26714f8780563c7ece703770598236d3a5"
+  }
+}
