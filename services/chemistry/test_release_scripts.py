@@ -100,6 +100,7 @@ def test_release_workflows_require_staging_validation_and_digest_promotion():
     assert "environment: staging" in candidate
     assert "staging-e2e" in candidate
     assert "staging-sentinel" in candidate
+    assert "set -o pipefail" in candidate
     assert "build-chemistry-image.sh" in candidate
     assert "IMAGE_DIGEST" in candidate
     assert "lfs: true" in production
