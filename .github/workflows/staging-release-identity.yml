@@ -27,3 +27,7 @@ jobs:
             *) echo "Authenticated identity is not a GreenChemistry service account." >&2; exit 1 ;;
           esac
           echo "Authenticated release account: $account"
+      - name: Verify Cloud Build source-bucket access
+        run: |
+          gcloud storage buckets describe gs://greenchemistry-ai_cloudbuild --format='value(name)'
+          gcloud storage ls gs://greenchemistry-ai_cloudbuild >/dev/null
