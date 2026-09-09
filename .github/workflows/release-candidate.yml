@@ -35,8 +35,11 @@ jobs:
           DEPLOY_ENV: staging
           GIT_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          set -o pipefail
           bash scripts/build-chemistry-image.sh | tee image.txt
-          echo "image_digest=$(awk -F= '/^image_digest=/{print $2}' image.txt)" >> "$GITHUB_OUTPUT"
+          image_digest="$(awk -F= '/^image_digest=/{print $2}' image.txt)"
+          test -n "$image_digest" || { echo "Candidate image build returned no immutable digest."; exit 1; }
+          echo "image_digest=$image_digest" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: staging-candidate-image
