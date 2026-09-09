@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
+import { boundLiteratureQuery } from './literature-query'
+import { QWEN_MODEL, callQwen } from '@/lib/qwen-adapter'
 import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type LiteratureEvidenceMatch } from '@/lib/types'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
+import { prepareChemicalInputs } from '@/lib/chemical-inputs'
+import { groundDeclaredProducts } from '@/lib/declared-products'
 import { getAnalysisMetadata } from '@/lib/version'
-import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
+import { CANDIDATE_PARSE_SYSTEM_PROMPT, PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
 import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
@@ -14,7 +18,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
 
-const anthropic = new Anthropic()
+let anthropic: Anthropic | undefined
 
 export class NotChemistryError extends Error {
   message: string
@@ -141,6 +145,16 @@ interface CallContext {
   supabase?: SupabaseClient
 }
 
+interface TransportMessage {
+  content: Array<{ type: string; input?: unknown }>
+  usage: { input_tokens: number; output_tokens: number }
+  stop_reason: string | null
+}
+
+function isQwenTransportEnabled(): boolean {
+  return process.env.GCAI_ENGINE_CANDIDATE === '1' || process.env.GCAI_QWEN_PARITY === '1'
+}
+
 async function callClaude<T>(
   system: string,
   userContent: string,
@@ -151,28 +165,39 @@ async function callClaude<T>(
 ): Promise<T> {
   const startTime = new Date()
   const start = Date.now()
-  console.log(`[callClaude] ${label}: starting (model=${model})`)
+  const selectedModel = isQwenTransportEnabled() ? process.env.GCAI_LLM_MODEL || QWEN_MODEL : model
+  console.log(`[callClaude] ${label}: starting (model=${selectedModel})`)
 
-  let message: Anthropic.Messages.Message | undefined
+  let message: TransportMessage | undefined
   let success = true
   let errorMessage: string | undefined
 
   try {
-    message = await anthropic.messages.create({
-      model,
-      max_tokens: 8192,
-      system,
-      tools: [{
-        name: 'return_result',
-        description: 'Return the structured analysis result',
-        input_schema: schema,
-      }],
-      tool_choice: { type: 'tool', name: 'return_result' },
-      messages: [{ role: 'user', content: userContent }],
-    })
+    if (isQwenTransportEnabled()) {
+      message = await callQwen<T>({
+        system,
+        userContent,
+        schema: schema as unknown as Record<string, unknown>,
+        label,
+      })
+    } else {
+      anthropic ??= new Anthropic()
+      message = await anthropic.messages.create({
+        model,
+        max_tokens: 8192,
+        system,
+        tools: [{
+          name: 'return_result',
+          description: 'Return the structured analysis result',
+          input_schema: schema,
+        }],
+        tool_choice: { type: 'tool', name: 'return_result' },
+        messages: [{ role: 'user', content: userContent }],
+      })
+    }
   } catch (err) {
     success = false
-    errorMessage = err instanceof Error ? err.message : String(err)
+    errorMessage = err instanceof Error ? err.message : 'LLM transport failed'
     throw err
   } finally {
     const endTime = new Date()
@@ -186,7 +211,7 @@ async function callClaude<T>(
         analysis_run_id: context.analysisRunId,
         user_id: context.userId,
         call_label: label,
-        model,
+        model: selectedModel,
         phase,
         started_at: startTime.toISOString(),
         completed_at: endTime.toISOString(),
@@ -232,16 +257,38 @@ interface ParseResult {
   protocolTitle: string
   chemistrySubdomain: string
   steps: AnalysisStep[]
+  inputWarnings?: string[]
   error?: string
   message?: string
 }
 
 async function parseProtocol(protocolText: string, context?: CallContext): Promise<ParseResult> {
   console.log('Phase 1: Parsing protocol...')
-  const result = await callClaude<ParseResult>(PARSE_SYSTEM_PROMPT, protocolText, PARSE_SCHEMA, 'parse', SONNET, context)
+  const prompt = process.env.GCAI_ENGINE_CANDIDATE === '1' ? CANDIDATE_PARSE_SYSTEM_PROMPT : PARSE_SYSTEM_PROMPT
+  const result = await callClaude<ParseResult>(prompt, protocolText, PARSE_SCHEMA, 'parse', SONNET, context)
 
   if (result.error === 'not_chemistry') {
     throw new NotChemistryError(result.message || 'Not a chemistry protocol')
+  }
+
+  if (!Array.isArray(result.steps) || result.steps.length === 0 || result.steps.some(step =>
+    !step || typeof step.description !== 'string' || !Array.isArray(step.chemicals) ||
+    step.chemicals.some(chemical => !chemical || typeof chemical.name !== 'string' || !chemical.name.trim())
+  )) {
+    throw new Error('Protocol parsing returned no usable steps')
+  }
+
+  if (process.env.GCAI_ENGINE_CANDIDATE === '1') {
+    const grounded = groundDeclaredProducts(result.steps, protocolText)
+    result.steps = grounded.steps
+    result.inputWarnings = grounded.warnings
+    for (const step of result.steps) {
+      step.conditions ??= { temperature: null, duration: null, atmosphere: null }
+      for (const chemical of step.chemicals) {
+        chemical.quantityKg = null
+        chemical.quantityMl = null
+      }
+    }
   }
 
   console.log(`Phase 1 complete: "${result.protocolTitle}" — ${result.steps.length} steps parsed`)
@@ -272,10 +319,12 @@ async function evaluateAllPrinciples(
   onProgress?: (event: ProgressEvent) => void,
   context?: CallContext
 ): Promise<Recommendation[]> {
-  console.log('Phase 2: Evaluating 12 principles in batches of 4...')
-
-  // Run all 12 principles in parallel — heartbeat keeps the stream alive
-  const batches: PrincipleDefinition[][] = [PRINCIPLES]
+  const batchSize = process.env.GCAI_ENGINE_CANDIDATE === '1' ? 2 : PRINCIPLES.length
+  console.log(`Phase 2: Evaluating 12 principles in batches of ${batchSize}...`)
+  const batches: PrincipleDefinition[][] = []
+  for (let index = 0; index < PRINCIPLES.length; index += batchSize) {
+    batches.push(PRINCIPLES.slice(index, index + batchSize))
+  }
 
   const allRecommendations: Recommendation[] = []
   let succeeded = 0
@@ -506,7 +555,7 @@ async function reevaluateAllRecommendations(
     
     try {
       literatureEvidence = await searchLiteratureEvidence({
-        query,
+        query: boundLiteratureQuery(query),
         limit: 5,
         threshold: 0.25,
       })
@@ -750,49 +799,10 @@ export async function analyzeProtocol(
       step.chemicals.map(c => ({ name: c.name, quantity: c.quantity || '' }))
     )
     const batchResult = await batchConvert(allChemicals)
-
-    if (batchResult) {
-      // Enrich the parsed chemicals with conversion results
-      enrichedChemicals = []
-      let batchIdx = 0
-      for (const step of parsed.steps) {
-        for (const chem of step.chemicals) {
-          if (batchIdx < batchResult.results.length) {
-            const conv = batchResult.results[batchIdx]
-            // 'error' = the service threw while converting this chemical (e.g. the
-            // June–Aug converter NameError). It must count as unresolved just like
-            // 'not_found', otherwise a fully-broken batch reports zero problems.
-            if (conv.data_source === 'indefinite') {
-              indefiniteChemicals.add(conv.chemical_name || chem.name)
-            } else if (conv.data_source === 'not_found' || conv.data_source === 'error' || conv.warnings.some(w => w.toLowerCase().includes('not found'))) {
-              unresolvedChemicals.add(conv.chemical_name || chem.name)
-            }
-            chem.quantityKg = conv.quantity_kg ?? chem.quantityKg
-            enrichedChemicals.push({
-              ...chem,
-              molecular_weight: conv.molecular_weight ?? undefined,
-              density_g_per_ml: conv.density_g_per_ml ?? undefined,
-              smiles: conv.smiles ?? undefined,
-              molecular_formula: conv.molecular_formula ?? undefined,
-              ghs_hazards: conv.ghs_hazards,
-              green_alternatives: conv.green_alternatives,
-              citations: conv.citations,
-              data_source: conv.data_source,
-            })
-          }
-          batchIdx++
-        }
-      }
-      if (batchResult.results.length < allChemicals.length) {
-        for (const missing of allChemicals.slice(batchResult.results.length)) {
-          unresolvedChemicals.add(missing.name)
-        }
-      }
-      console.log(`Rationalization complete: ${batchResult.results.length} chemicals enriched`)
-    } else {
-      // A failed batch must not silently become a score with null quantities.
-      for (const chemical of allChemicals) unresolvedChemicals.add(chemical.name)
-    }
+    const prepared = prepareChemicalInputs(parsed.steps, batchResult)
+    enrichedChemicals = prepared.enrichedChemicals
+    for (const name of prepared.unresolvedChemicals) unresolvedChemicals.add(name)
+    for (const name of prepared.indefiniteChemicals) indefiniteChemicals.add(name)
 
     // A missing or indefinite material limits only principles that require that
     // material's reference data. It must not suppress protocol-level scoring
@@ -804,22 +814,7 @@ export async function analyzeProtocol(
         indefiniteChemicals: indefiniteChemicals.size,
       })
       onProgress?.({ type: 'phase', phase: 2, message: 'Scoring against 12 principles...' })
-    const scoreChemicals = parsed.steps.flatMap(step =>
-      step.chemicals.map(c => {
-        // Find the enriched version
-        const enriched = enrichedChemicals?.find(e => e.name === c.name)
-        return {
-          name: c.name,
-          role: c.role,
-          quantity_g: c.quantityKg ? c.quantityKg * 1000 : null,
-          quantity_kg: c.quantityKg,
-          quantity_mol: enriched?.molecular_weight && c.quantityKg
-            ? (c.quantityKg * 1000) / enriched.molecular_weight : null,
-          molecular_weight: enriched?.molecular_weight ?? null,
-          step_number: step.stepNumber,
-        }
-      })
-    )
+    const scoreChemicals = prepared.scoreChemicals
 
     const scoreResult = await scoreProtocol({
       chemicals: scoreChemicals,
@@ -872,7 +867,7 @@ export async function analyzeProtocol(
     const results = await Promise.allSettled(
       rawRecommendations.map((rec, i) =>
         searchLiteratureEvidence({
-          query: queries[i],
+          query: boundLiteratureQuery(queries[i]),
           limit: 3,
           threshold: 0.25,
         })
@@ -1039,6 +1034,7 @@ export async function analyzeProtocol(
     chemistrySubdomain: parsed.chemistrySubdomain,
     steps: parsed.steps,
     recommendations: finalRecommendations,
+    ...(parsed.inputWarnings !== undefined ? { inputWarnings: parsed.inputWarnings } : {}),
     revisedProtocol: assembled.revisedProtocol,
     overallAssessment: assembled.overallAssessment,
     deterministicScores,

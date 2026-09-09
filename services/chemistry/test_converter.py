@@ -59,8 +59,8 @@ def test_convert_does_not_raise_nameerror(monkeypatch):
     """The exact regression: convert() must get past resolve_synonym()."""
     _offline(monkeypatch)
     result = asyncio.run(converter.convert("DMF", "10 mL"))
-    # Synonym resolution actually happened (DMF -> full IUPAC name).
-    assert result.chemical_name == "N,N-Dimethylformamide"
+    # Identity presented to callers remains the protocol's requested label.
+    assert result.chemical_name == "DMF"
     assert result.data_source == "pubchem"
     # mL -> g via density, then g -> mol via MW — real deterministic output,
     # not the data_source="error" the outage produced.
@@ -75,9 +75,11 @@ def test_indefinite_material_is_not_sent_to_pubchem_or_marked_missing(monkeypatc
         raise AssertionError("indefinite materials must not be sent to PubChem")
 
     monkeypatch.setattr(converter, "lookup_chemical", fail_lookup)
-    result = asyncio.run(converter.convert("brine", "100 mL"))
+    for material in ("brine", "cellulose acetate"):
+        result = asyncio.run(converter.convert(material, "100 mL"))
 
-    assert result.chemical_name == "brine"
-    assert result.data_source == "indefinite"
-    assert result.quantity_kg is None
-    assert any("indefinite composition" in warning for warning in result.warnings)
+        assert result.chemical_name == material
+        assert result.data_source == "indefinite"
+        assert result.reference_status == "indefinite"
+        assert result.quantity_kg is None
+        assert any("indefinite composition" in warning for warning in result.warnings)

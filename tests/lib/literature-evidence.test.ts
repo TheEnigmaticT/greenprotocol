@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  openaiOptions: vi.fn(),
   embeddingCreate: vi.fn(),
   rpc: vi.fn(),
   createAdminClient: vi.fn(),
@@ -8,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('openai', () => ({
   default: class MockOpenAI {
+    constructor(options: unknown) { mocks.openaiOptions(options) }
     embeddings = { create: mocks.embeddingCreate }
   },
 }))
@@ -45,6 +47,8 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
+  vi.unstubAllEnvs()
+  mocks.openaiOptions.mockReset()
   mocks.embeddingCreate.mockReset().mockResolvedValue({
     data: [{ embedding: new Array(1536).fill(0.1) }],
   })
@@ -53,6 +57,144 @@ beforeEach(() => {
 })
 
 describe('searchLiteratureEvidence', () => {
+  it('rejects an unconfigured candidate embedding route without using default OpenAI credentials', async () => {
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    vi.stubEnv('GCAI_EMBEDDING_BASE_URL', '')
+    vi.stubEnv('GCAI_EMBEDDING_MODEL', '')
+    vi.stubEnv('GCAI_EMBEDDING_API_KEY', '')
+    vi.stubEnv('OPENAI_API_KEY', 'would-be-default-key')
+    vi.stubEnv('OPENROUTER_API_KEY', 'would-be-router-key')
+
+    await expect(searchLiteratureEvidence({
+      query: 'Suzuki solvent comparison',
+      limit: 3,
+      threshold: 0.25,
+    })).rejects.toThrow('GCAI_EMBEDDING_BASE_URL is required when GCAI_ENGINE_CANDIDATE=1')
+
+    expect(mocks.openaiOptions).not.toHaveBeenCalled()
+    expect(mocks.embeddingCreate).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('uses the explicit candidate embedding transport instead of legacy parity or default OpenAI', async () => {
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    vi.stubEnv('GCAI_EMBEDDING_BASE_URL', 'https://candidate.example/v1')
+    vi.stubEnv('GCAI_EMBEDDING_MODEL', 'text-embedding-3-small')
+    vi.stubEnv('GCAI_EMBEDDING_API_KEY', 'candidate-only-key')
+    vi.stubEnv('GCAI_QWEN_PARITY', '1')
+    vi.stubEnv('OPENAI_API_KEY', 'would-be-default-key')
+    vi.stubEnv('OPENROUTER_API_KEY', 'would-be-router-key')
+
+    await searchLiteratureEvidence({
+      query: 'Suzuki solvent comparison',
+      limit: 3,
+      threshold: 0.25,
+    })
+
+    expect(mocks.openaiOptions).toHaveBeenCalledWith({
+      apiKey: 'candidate-only-key',
+      baseURL: 'https://candidate.example/v1',
+      maxRetries: 0,
+      timeout: 120_000,
+    })
+    expect(mocks.embeddingCreate).toHaveBeenCalledWith({
+      model: 'text-embedding-3-small',
+      input: 'Suzuki solvent comparison',
+    }, undefined)
+  })
+
+  it('rejects a candidate embedding route missing its model before embedding', async () => {
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    vi.stubEnv('GCAI_EMBEDDING_BASE_URL', 'https://candidate.example/v1')
+    vi.stubEnv('GCAI_EMBEDDING_MODEL', '')
+    vi.stubEnv('GCAI_EMBEDDING_API_KEY', 'candidate-only-key')
+    vi.stubEnv('OPENAI_API_KEY', 'would-be-default-key')
+
+    await expect(searchLiteratureEvidence({
+      query: 'Suzuki solvent comparison',
+      limit: 3,
+      threshold: 0.25,
+    })).rejects.toThrow('GCAI_EMBEDDING_MODEL is required when GCAI_ENGINE_CANDIDATE=1')
+
+    expect(mocks.openaiOptions).not.toHaveBeenCalled()
+    expect(mocks.embeddingCreate).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('rejects a candidate embedding route missing its API key without using other providers', async () => {
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    vi.stubEnv('GCAI_EMBEDDING_BASE_URL', 'https://candidate.example/v1')
+    vi.stubEnv('GCAI_EMBEDDING_MODEL', 'text-embedding-3-small')
+    vi.stubEnv('GCAI_EMBEDDING_API_KEY', '')
+    vi.stubEnv('OPENAI_API_KEY', 'would-be-default-key')
+    vi.stubEnv('OPENROUTER_API_KEY', 'would-be-router-key')
+
+    await expect(searchLiteratureEvidence({
+      query: 'Suzuki solvent comparison',
+      limit: 3,
+      threshold: 0.25,
+    })).rejects.toThrow('GCAI_EMBEDDING_API_KEY is required for the selected candidate endpoint')
+
+    expect(mocks.openaiOptions).not.toHaveBeenCalled()
+    expect(mocks.embeddingCreate).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('uses the OpenRouter key for an explicitly OpenRouter candidate embedding endpoint', async () => {
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    vi.stubEnv('GCAI_EMBEDDING_BASE_URL', 'https://openrouter.ai/api/v1')
+    vi.stubEnv('GCAI_EMBEDDING_MODEL', 'openai/text-embedding-3-small')
+    vi.stubEnv('GCAI_EMBEDDING_API_KEY', '')
+    vi.stubEnv('OPENROUTER_API_KEY', 'router-fallback-key')
+    vi.stubEnv('OPENAI_API_KEY', 'would-be-default-key')
+
+    await searchLiteratureEvidence({
+      query: 'Suzuki solvent comparison',
+      limit: 3,
+      threshold: 0.25,
+    })
+
+    expect(mocks.openaiOptions).toHaveBeenCalledWith({
+      apiKey: 'router-fallback-key',
+      baseURL: 'https://openrouter.ai/api/v1',
+      maxRetries: 0,
+      timeout: 120_000,
+    })
+    expect(mocks.embeddingCreate).toHaveBeenCalledWith({
+      model: 'openai/text-embedding-3-small',
+      input: 'Suzuki solvent comparison',
+    }, undefined)
+  })
+
+  it('does not use the OpenRouter key for a non-exact candidate endpoint URL', async () => {
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    vi.stubEnv('GCAI_EMBEDDING_BASE_URL', 'https://openrouter.ai/api/v1/')
+    vi.stubEnv('GCAI_EMBEDDING_MODEL', 'openai/text-embedding-3-small')
+    vi.stubEnv('GCAI_EMBEDDING_API_KEY', '')
+    vi.stubEnv('OPENROUTER_API_KEY', 'router-fallback-key')
+    vi.stubEnv('OPENAI_API_KEY', 'would-be-default-key')
+
+    await expect(searchLiteratureEvidence({
+      query: 'Suzuki solvent comparison',
+      limit: 3,
+      threshold: 0.25,
+    })).rejects.toThrow('GCAI_EMBEDDING_API_KEY is required for the selected candidate endpoint')
+
+    expect(mocks.openaiOptions).not.toHaveBeenCalled()
+    expect(mocks.embeddingCreate).not.toHaveBeenCalled()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('preserves the embedding model and public research query when routed via OpenRouter', async () => {
+    vi.stubEnv('GCAI_QWEN_PARITY', '1')
+    vi.stubEnv('OPENROUTER_API_KEY', 'test-only-key')
+    await searchLiteratureEvidence({ query: 'Suzuki solvent comparison', limit: 3, threshold: 0.25 })
+    expect(mocks.openaiOptions).toHaveBeenCalledWith(expect.objectContaining({
+      baseURL: 'https://openrouter.ai/api/v1', apiKey: 'test-only-key', maxRetries: 0,
+    }))
+    expect(mocks.embeddingCreate).toHaveBeenCalledWith({ model: 'openai/text-embedding-3-small', input: 'Suzuki solvent comparison' }, undefined)
+    expect(mocks.rpc).toHaveBeenCalledWith('match_literature_evidence_units', expect.objectContaining({ requested_visibility: 'public', match_count: 3, match_threshold: 0.25 }))
+  })
   it('embeds a bounded query and returns page-bounded candidate evidence', async () => {
     const matches = await searchLiteratureEvidence({
       query: 'replace DMF with ethyl acetate',

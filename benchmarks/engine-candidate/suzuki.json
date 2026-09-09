@@ -1,0 +1,10 @@
+{
+  "caseId": "suzuki",
+  "protocolText": "Suzuki-Miyaura Cross-Coupling Reaction\n\nStep 1: To a 250 mL round-bottom flask under nitrogen atmosphere, add 4-bromoanisole (1.87g, 10 mmol), phenylboronic acid (1.34g, 11 mmol), and Pd(PPh3)4 (0.58g, 0.5 mmol, 5 mol%) in 100 mL of DMF.\nStep 2: Add potassium carbonate (4.15g, 30 mmol) dissolved in 20 mL water.\nStep 3: Heat the mixture to 80°C and stir for 12 hours under nitrogen.\nStep 4: Cool to room temperature and dilute with 200 mL diethyl ether.\nStep 5: Wash with 3 × 100 mL water, then 1 × 100 mL brine.\nStep 6: Dry over magnesium sulfate, filter, and concentrate.\nStep 7: Purify by column chromatography (hexane/ethyl acetate 9:1) to yield 4-methoxybiphenyl.\n",
+  "provenance": {
+    "public": true,
+    "sourcePath": "/tmp/gcai-path-b-suzuki.txt",
+    "sourceFileSha256": "f1ee3028399330af09b1bfa50940ffa214e163573d7d899d7c0aa51ec6f2fe8f",
+    "sourceProtocolSha256": "f1ee3028399330af09b1bfa50940ffa214e163573d7d899d7c0aa51ec6f2fe8f"
+  }
+}

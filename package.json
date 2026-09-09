@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "engine:analyze": "tsx scripts/run-engine-candidate.ts",
+    "engine:chemistry": "uv run --with-requirements services/chemistry/requirements.txt python scripts/run-engine-chemistry.py"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

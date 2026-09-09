@@ -8,6 +8,9 @@ const TIMEOUT_MS = 90_000
 
 interface ConvertResult {
   chemical_name: string
+  input_quantity?: string
+  reference_status?: string
+  reference_queued?: boolean
   smiles: string | null
   molecular_formula: string | null
   molecular_weight: number | null
@@ -114,6 +117,13 @@ export async function scoreProtocol(params: {
   chemicals: Array<{
     name: string
     role: string
+    quantity?: string
+    smiles?: string | null
+    reference_status?: string
+    raw_quantity?: string | null
+    reference_name?: string | null
+    reference_smiles?: string | null
+    reference_provenance?: string | null
     quantity_g?: number | null
     quantity_kg?: number | null
     quantity_mol?: number | null

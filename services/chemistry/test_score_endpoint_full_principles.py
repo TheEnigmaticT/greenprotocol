@@ -65,8 +65,16 @@ def test_score_endpoint_extracts_reaction_smiles_when_missing(monkeypatch):
     monkeypatch.setattr(main, "compute_waste_analysis", lambda **kwargs: {})
     monkeypatch.setattr(main, "compute_regulatory_context", lambda **kwargs: {})
 
+    # No reaction inventory was provided: the helper must not introduce ethanol
+    # into a water-only workup, even if its output parses in RDKit.
     response = asyncio.run(main.score_protocol(_request()))
+    assert captured["reaction_smiles"] is None
 
+    request = _request()
+    request.chemicals = [ChemicalInput(
+        name="ethanol", role="reagent", reference_smiles="CCO", reference_status="available",
+    )]
+    response = asyncio.run(main.score_protocol(request))
     assert captured["reaction_smiles"] == "CCO>>CC=O"
     assert response.smiles_extraction["llm_called"] is True
 

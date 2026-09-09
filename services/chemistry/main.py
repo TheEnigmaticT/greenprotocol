@@ -2,7 +2,7 @@ import os
 import secrets
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from scoring.models import ScoringRequest, ScoringResponse
+from scoring.models import ScoringRequest, ScoringResponse, ScoreProvenance
 from scoring.p1_waste_prevention import score_p1
 from scoring.p2_atom_economy import score_p2
 from scoring.p3_less_hazardous import score_p3
@@ -23,9 +23,13 @@ from models import BatchRequest, BatchResponse, ConvertResponse
 from assistant_tools import AssistantToolPayload, AssistantToolResponse, execute_assistant_tool
 from converter import convert
 from yield_extractor import extract_yield_and_type
-from smiles_extractor import extract_reaction_smiles
+from smiles_extractor import (
+    build_reaction_catalog,
+    extract_reaction_smiles,
+    validate_reaction_smiles,
+)
 import cache as chem_cache
-from synonyms import resolve_synonym
+from identity import resolve_cached_identity
 from cas_lookup import get_cas
 from contextlib import asynccontextmanager
 import asyncio
@@ -103,14 +107,13 @@ async def assistant_tools(request: AssistantToolPayload):
 
 
 def _hcodes_from_cache(chem_name: str) -> list[str]:
-    """Resolve GHS H-codes for a chemical from the cache, supporting all shapes.
+    """Resolve GHS H-codes through the shared exact chemical identity helper.
 
-    - Live-converted records carry rich {"ghs_hazards": [{code, ...}]}.
-    - The name record may carry a flat {"hcodes": [...]}.
-    - Otherwise the name record holds a `cid` and the hazards live under a
-      separate "ghs_<cid>" record (how the seeded cache and ghs.py store them).
+    Cached aliases are deliberately exact: ``DMF (N,N-dimethylformamide)``
+    reaches the same record as DMF, while an unrelated parenthetical label does
+    not inherit a cached hazard profile.
     """
-    rec = chem_cache.get(resolve_synonym(chem_name)) or chem_cache.get(chem_name)
+    _, rec = resolve_cached_identity(chem_name, chem_cache.get)
     if not rec:
         return []
     if rec.get("ghs_hazards"):
@@ -125,47 +128,148 @@ def _hcodes_from_cache(chem_name: str) -> list[str]:
     return []
 
 
+def _reference_identity_name(chem) -> str:
+    """Return the cache-resolved reference name without changing display name."""
+    requested = chem.reference_name or chem.name
+    resolved, _ = resolve_cached_identity(requested, chem_cache.get)
+    return resolved
+
+
 @app.post("/score", response_model=ScoringResponse, dependencies=[Depends(require_service_token)])
 async def score_protocol(request: ScoringRequest):
     """Score a protocol based on Green Chemistry principles."""
     if not request.chemicals:
         raise HTTPException(status_code=400, detail="No chemicals provided")
 
-    # Read GHS H-codes from the converter cache (populated by /batch).
-    # Falls back to [] for chemicals not yet converted, so P3 degrades gracefully.
+    # Reference data is per occurrence. Keep protocol labels for display while
+    # using the shared exact identity path for reference-only lookups.
+    chemical_records = [
+        {
+            "name": chem.name,
+            "role": chem.role,
+            "quantity": chem.raw_quantity if chem.raw_quantity is not None else chem.quantity,
+            "reference_name": chem.reference_name,
+            "reference_smiles": chem.reference_smiles,
+            "reference_status": chem.reference_status,
+            "reference_provenance": chem.reference_provenance,
+        }
+        for chem in request.chemicals
+    ]
+
+    # Read GHS H-codes from the verified occurrence when supplied, otherwise
+    # from the converter cache through the same exact alias resolver.
     hcodes_map: dict[str, list[str]] = {}
     for chem in request.chemicals:
-        hcodes_map[chem.name] = _hcodes_from_cache(chem.name)
+        hcodes_map[chem.name] = (
+            list(chem.reference_hcodes)
+            if chem.reference_hcodes is not None
+            else _hcodes_from_cache(chem.reference_name or chem.name)
+        )
 
     # Extract yield and reaction type for P1 PMI calculation.
     yield_info: dict = {}
     if request.protocol_text:
         try:
-            chem_dicts = [
-                {"name": c.name, "role": c.role, "quantity": c.quantity}
-                for c in request.chemicals
-            ]
-            yield_info = await extract_yield_and_type(request.protocol_text, chem_dicts)
+            yield_info = await extract_yield_and_type(request.protocol_text, chemical_records)
         except Exception as e:
             print(f"[score] yield extraction failed: {e}")
 
-    # Extract reaction SMILES when the caller did not provide one. This keeps
-    # P2 deterministic while using the existing surgical LLM extractor only
-    # when necessary.
-    smiles_metadata: dict = {"provided": bool(request.reaction_smiles), "llm_called": False}
+    # Caller-provided and model-inferred reactions follow the same minimal
+    # parseability + verified-identity checks. A failure only withholds P2.
+    known_reactants, declared_products, unresolved_participants = build_reaction_catalog(chemical_records)
+    desired_product_index = 0
+    smiles_metadata: dict = {
+        "provided": bool(request.reaction_smiles),
+        "llm_called": False,
+        "inferred": False,
+        "validated": False,
+        "identity_validation": "not_attempted",
+        "known_reactants": [item["name"] for item in known_reactants],
+        "declared_products": [item["name"] for item in declared_products],
+        "validation_errors": [],
+    }
     reaction_smiles = request.reaction_smiles
-    if not reaction_smiles and request.protocol_text:
+    if reaction_smiles and unresolved_participants:
+        reaction_smiles = None
+        smiles_metadata.update({
+            "identity_validation": "unavailable",
+            "validation_errors": ["Unresolved declared reaction participants: " + ", ".join(unresolved_participants)],
+        })
+    elif reaction_smiles:
+        valid, reason, product_index = validate_reaction_smiles(
+            reaction_smiles,
+            known_reactants=known_reactants,
+            declared_products=declared_products,
+        )
+        if valid:
+            desired_product_index = product_index or 0
+            smiles_metadata.update({
+                "validated": True,
+                "identity_validation": "parseable_and_identity_consistent",
+                "desired_product_index": product_index,
+            })
+        else:
+            reaction_smiles = None
+            smiles_metadata.update({
+                "identity_validation": "failed",
+                "validation_errors": [reason],
+            })
+    elif request.protocol_text:
         try:
-            reaction_smiles, smiles_metadata = await extract_reaction_smiles(
+            reaction_smiles, extracted_metadata = await extract_reaction_smiles(
                 request.protocol_text,
-                [{"name": c.name, "role": c.role, "quantity": c.quantity} for c in request.chemicals],
+                chemical_records,
             )
+            smiles_metadata.update(extracted_metadata)
+            if reaction_smiles:
+                valid, reason, product_index = validate_reaction_smiles(
+                    reaction_smiles,
+                    known_reactants=known_reactants,
+                    declared_products=declared_products,
+                )
+                if valid:
+                    desired_product_index = product_index or 0
+                    smiles_metadata.update({
+                        "validated": True,
+                        "identity_validation": "parseable_and_identity_consistent",
+                        "desired_product_index": product_index,
+                    })
+                else:
+                    reaction_smiles = None
+                    smiles_metadata.update({
+                        "validated": False,
+                        "identity_validation": "failed",
+                    })
+                    smiles_metadata.setdefault("validation_errors", []).append(reason)
         except Exception as e:
             print(f"[score] reaction SMILES extraction failed: {e}")
-            smiles_metadata = {"provided": False, "llm_called": True, "error": str(e)}
+            reaction_smiles = None
+            smiles_metadata.update({
+                "llm_called": True,
+                "identity_validation": "failed",
+                "validation_errors": [str(e)],
+            })
+
+    # Predicting an unnamed product is a separate, explicitly inferred mode;
+    # it must not be represented as a verified declared product identity.
+    product_provenance = (
+        "unavailable" if not reaction_smiles else
+        "declared" if declared_products else
+        "caller-provided" if request.reaction_smiles else "model-inferred"
+    )
+    smiles_metadata["product_provenance"] = product_provenance
+    if product_provenance == "model-inferred":
+        smiles_metadata["identity_validation"] = "reactants_verified_product_inferred"
 
     # Calculate scores
-    p2 = score_p2(reaction_smiles=reaction_smiles)
+    p2 = score_p2(
+        reaction_smiles=reaction_smiles,
+        desired_product_index=desired_product_index,
+    )
+    if product_provenance == "model-inferred" and p2.score >= 0:
+        p2.confidence = ScoreProvenance.MODEL_INFERRED
+        p2.details["product_provenance"] = product_provenance
+        p2.details["input_limitation"] = "Product predicted by the configured model, not declared in the procedure."
     ae_pct = p2.details.get("atom_economy_pct")
     benchmark = yield_info.get("benchmark", {})
 
@@ -205,7 +309,7 @@ async def score_protocol(request: ScoringRequest):
     cas_map = {
         chem.name: cas
         for chem in request.chemicals
-        if (cas := get_cas(resolve_synonym(chem.name)) or get_cas(chem.name))
+        if (cas := get_cas(_reference_identity_name(chem)) or get_cas(chem.name))
     }
     waste["regulatoryContext"] = compute_regulatory_context(
         chemicals=request.chemicals,

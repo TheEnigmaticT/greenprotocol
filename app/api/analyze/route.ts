@@ -7,6 +7,7 @@ import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 import { getAnalysisMetadata } from '@/lib/version'
 import { buildCanonicalScoringSnapshot, protocolFingerprint } from '@/lib/scoring-snapshot'
 import { notifyAnalysis } from '@/lib/operational-alerts'
+import { isCandidateEngineSelected } from '@/lib/model-runtime'
 import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 300
@@ -29,6 +30,8 @@ function isSentinelRequest(request: Request): boolean {
 }
 
 async function countProtocolTokens(protocolText: string): Promise<number | null> {
+  if (isCandidateEngineSelected()) return null
+
   try {
     const result = await new Anthropic().messages.countTokens({
       model: 'claude-sonnet-4-5-20250929',
@@ -84,6 +87,7 @@ export async function POST(request: Request) {
   }
 
   const protocolFingerprintValue = await protocolFingerprint(protocolText)
+  const candidateEngineSelected = isCandidateEngineSelected()
   const protocolInputTokens = await countProtocolTokens(protocolText)
   const runSource = isSentinelRequest(request) ? 'sentinel' : 'human'
 
@@ -237,13 +241,21 @@ export async function POST(request: Request) {
       const error = err as { status?: number; message?: string; error?: { message?: string } }
 
       if (error.status === 401 || error.message?.includes('authentication') || error.message?.includes('API key')) {
-        pipelineErrors.push('Anthropic API key is missing or invalid.')
-        send({ type: 'error', error: 'Anthropic API key is missing or invalid. Check ANTHROPIC_API_KEY environment variable.' })
+        const message = candidateEngineSelected
+          ? 'Selected model API key is missing or invalid. Check the selected candidate model configuration.'
+          : 'Anthropic API key is missing or invalid. Check ANTHROPIC_API_KEY environment variable.'
+        pipelineErrors.push(message)
+        send({ type: 'error', error: message })
         return
       }
 
       if (error.status === 429) {
-        send({ type: 'error', error: 'Rate limited by Claude API. Please wait a moment and try again.' })
+        send({
+          type: 'error',
+          error: candidateEngineSelected
+            ? 'Rate limited by selected model API. Please wait a moment and try again.'
+            : 'Rate limited by Claude API. Please wait a moment and try again.',
+        })
         return
       }
 

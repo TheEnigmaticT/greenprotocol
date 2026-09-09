@@ -1,6 +1,33 @@
 import asyncio
 
+import pytest
+
 import llm_client
+
+
+@pytest.fixture(autouse=True)
+def _isolate_llm_environment_and_forbid_unmocked_http(monkeypatch):
+    for name in (
+        "GCAI_ENGINE_CANDIDATE",
+        "GCAI_LLM_BASE_URL",
+        "GCAI_LLM_MODEL",
+        "GCAI_LLM_API_KEY",
+        "GCAI_QWEN_PARITY",
+        "LLM_PROVIDER",
+        "LLM_MODEL",
+        "LOCAL_LLM_URL",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_BASE_URL",
+        "OPENROUTER_MODEL",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    def unmocked_async_client(*args, **kwargs):
+        raise AssertionError("real HTTP is forbidden in llm client tests")
+
+    monkeypatch.setattr(llm_client.httpx, "AsyncClient", unmocked_async_client)
 
 
 def test_call_llm_prefers_openrouter_for_chemistry_scoring(monkeypatch):

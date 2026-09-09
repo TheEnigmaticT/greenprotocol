@@ -8,6 +8,7 @@ Score: 0 (all renewable) to 10 (all petroleum-derived)
 """
 
 from scoring.models import ChemicalInput, PrincipleScore
+from identity import preferred_identity_name
 
 # Curated set of known renewable / bio-based chemicals
 # Sources: EPA Safer Chemical Ingredients List, various bio-based reviews
@@ -84,7 +85,7 @@ def score_p7(chemicals: list[ChemicalInput]) -> PrincipleScore:
 
     for chem in scoreable:
         mass_g = chem.quantity_g or 10.0
-        renewable = is_renewable(chem.name)
+        renewable = is_renewable(preferred_identity_name(chem.reference_name or chem.name))
 
         total_mass += mass_g
         if renewable:
