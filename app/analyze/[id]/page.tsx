@@ -199,6 +199,7 @@ export default function AnalysisByIdPage() {
             onUpdateAnalysis={handleUpdateAnalysis}
             analysisId={id}
             onRecommendationApproved={handleRecommendationApproved}
+            showProcedure={false}
           />
         </section>
 
@@ -209,6 +210,14 @@ export default function AnalysisByIdPage() {
         ) : data.analysis.chemistryDataStatus?.deterministicScoringAvailable === false ? (
           <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} />
         ) : null}
+
+        <section>
+          <FinalizedProtocol
+            analysis={data.analysis}
+            originalProtocol={data.protocolText}
+            showRecommendations={false}
+          />
+        </section>
 
         <details className="print:hidden border-t pt-6 group" style={{ borderColor: '#D6D0C4' }}>
           <summary className="cursor-pointer list-none font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>

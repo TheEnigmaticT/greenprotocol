@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { AnalysisResult, Recommendation } from '@/lib/types'
 import { RecommendationApprovalReceipt, TalkAboutThis } from './TalkAboutThis'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
@@ -124,27 +125,110 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
   )
 }
 
+export function ProcedureWorkbench({
+  analysis,
+  originalProtocol,
+}: {
+  analysis: AnalysisResult
+  originalProtocol?: string
+}) {
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle')
+  const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
+  const pending = analysis.recommendations.filter(r => r.isAccepted === undefined || r.isAccepted === null)
+  const finalizedProtocol = buildFinalizedProtocol(analysis, originalProtocol)
+  const procedureTitle = pending.length > 0 ? 'Current Lab Procedure Draft' : 'Finished Lab Procedure'
+
+  const copyProcedure = async () => {
+    try {
+      await navigator.clipboard.writeText(finalizedProtocol)
+      setCopyStatus('copied')
+    } catch {
+      window.prompt('Copy the procedure text below:', finalizedProtocol)
+    }
+  }
+
+  return (
+    <section
+      id="procedure-workbench"
+      className="reward"
+      style={{
+        marginTop: 4,
+        padding: '14px 16px 14px 18px',
+        borderLeft: '3px solid #ECB815',
+        background: '#FAFAF8',
+        borderTop: '1px solid #D6D0C4',
+        borderRight: '1px solid #D6D0C4',
+        borderBottom: '1px solid #D6D0C4',
+      }}
+    >
+      <div className="hidden print:block mb-6 pb-4" style={{ borderBottom: '1px solid #D6D0C4' }}>
+        <p className="text-xs font-[family-name:var(--font-mono)]" style={{ color: '#78716C' }}>
+          greenchemistry.ai — {analysis.protocolTitle} —{' '}
+          {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        </p>
+      </div>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 print:hidden">
+        <div>
+          <h2 className="text-lg font-semibold m-0 font-[family-name:var(--font-serif)]" style={{ color: '#1C3822' }}>
+            {procedureTitle}
+          </h2>
+          <p className="text-sm mt-1 mb-0 font-[family-name:var(--font-sans)]" style={{ color: '#57534E' }}>
+            {accepted.length} accepted change{accepted.length === 1 ? '' : 's'} applied. Pending and rejected items remain as written.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={copyProcedure}
+            className="text-xs px-4 py-2 rounded border transition-colors"
+            style={{ color: '#1C3822', borderColor: '#D6D0C4', background: 'white' }}
+          >
+            {copyStatus === 'copied' ? 'Copied' : 'Copy Procedure'}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="text-xs px-4 py-2 rounded border transition-colors"
+            style={{ color: '#1C3822', borderColor: '#D6D0C4', background: 'white' }}
+          >
+            Print Procedure
+          </button>
+        </div>
+      </div>
+      <h2 className="hidden print:block text-lg font-semibold mb-2 font-[family-name:var(--font-serif)]" style={{ color: '#1C3822' }}>
+        {procedureTitle}
+      </h2>
+      <pre
+        className="m-0 text-sm whitespace-pre-wrap font-[family-name:var(--font-mono)] leading-relaxed"
+        style={{ color: '#1C1917' }}
+      >
+        {finalizedProtocol}
+      </pre>
+    </section>
+  )
+}
+
 export default function FinalizedProtocol({
   analysis,
   originalProtocol,
   onUpdateAnalysis,
   onRecommendationApproved,
   analysisId,
+  showRecommendations = true,
+  showProcedure = true,
 }: {
   analysis: AnalysisResult
   originalProtocol?: string
   onUpdateAnalysis?: (updated: AnalysisResult) => void
   onRecommendationApproved?: (receipt: RecommendationApprovalReceipt) => void
   analysisId?: string
+  showRecommendations?: boolean
+  showProcedure?: boolean
 }) {
   const total = analysis.recommendations.length
   const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
   const declined = analysis.recommendations.filter(r => r.isAccepted === false)
   const pending = analysis.recommendations.filter(r => r.isAccepted === undefined || r.isAccepted === null)
-  const reviewed = accepted.length + declined.length
-  const shouldShowFinalizedProtocol = reviewed > 0 || total === 0
-  const finalizedProtocol = buildFinalizedProtocol(analysis, originalProtocol)
-  const procedureTitle = pending.length > 0 ? 'Current Lab Procedure Draft' : 'Finished Lab Procedure'
 
   const setRecAccepted = (index: number, value: boolean) => {
     if (!onUpdateAnalysis) return
@@ -170,14 +254,8 @@ export default function FinalizedProtocol({
 
   return (
     <div>
-      <div className="hidden print:block mb-6 pb-4" style={{ borderBottom: '1px solid #D6D0C4' }}>
-        <p className="text-xs font-[family-name:var(--font-mono)]" style={{ color: '#78716C' }}>
-          greenchemistry.ai — {analysis.protocolTitle} —{' '}
-          {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-        </p>
-      </div>
-
-      <div className="space-y-8">
+      {showRecommendations && (
+      <div className="space-y-8 print:hidden">
         {pending.length > 0 && (
           <section>
             <p
@@ -289,49 +367,12 @@ export default function FinalizedProtocol({
           </section>
         )}
 
-        {shouldShowFinalizedProtocol && (
-          <section
-            className="reward"
-            style={{
-              marginTop: 4,
-              padding: '14px 16px 14px 18px',
-              borderLeft: '3px solid #ECB815',
-              background: '#FAFAF8',
-              borderTop: '1px solid #D6D0C4',
-              borderRight: '1px solid #D6D0C4',
-              borderBottom: '1px solid #D6D0C4',
-            }}
-          >
-            <h3 className="text-sm font-semibold mb-2 font-[family-name:var(--font-serif)]" style={{ color: '#1C3822' }}>
-              {procedureTitle}
-            </h3>
-            {pending.length > 0 && (
-              <p className="text-sm mb-3 font-[family-name:var(--font-sans)]" style={{ color: '#1C1917' }}>
-                Draft reflects accepted changes only. Pending items remain as written.
-              </p>
-            )}
-            {accepted.length > 0 && (
-              <button
-                onClick={() => window.print()}
-                className="print:hidden text-xs px-4 py-2 mb-3 rounded border transition-colors"
-                style={{ color: '#1C3822', borderColor: '#D6D0C4', background: 'white' }}
-              >
-                Print Lab Manual
-              </button>
-            )}
-            <pre
-              className="m-0 text-sm whitespace-pre-wrap font-[family-name:var(--font-mono)] leading-relaxed"
-              style={{ color: '#1C1917' }}
-            >
-              {finalizedProtocol}
-            </pre>
-          </section>
-        )}
-
         {total === 0 && (
           <p className="text-sm" style={{ color: '#78716C' }}>No recommendations for this protocol.</p>
         )}
       </div>
+      )}
+      {showProcedure && <ProcedureWorkbench analysis={analysis} originalProtocol={originalProtocol} />}
     </div>
   )
 }
