@@ -1,0 +1,33 @@
+name: Verify staging release identity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/staging-release-identity.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-identity:
+    runs-on: ubuntu-24.04
+    environment: staging
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_STAGING_RELEASE_CREDENTIALS }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Report authenticated service account
+        run: |
+          account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
+          test -n "$account"
+          case "$account" in
+            *@greenchemistry-ai.iam.gserviceaccount.com) ;;
+            *) echo "Authenticated identity is not a GreenChemistry service account." >&2; exit 1 ;;
+          esac
+          echo "Authenticated release account: $account"
+      - name: Verify candidate-image resolution
+        run: |
+          digest="$(gcloud artifacts docker images describe 'us-central1-docker.pkg.dev/greenchemistry-ai/cloud-run-source-deploy/greenchemistry-chemistry:dfc287f4e8d1c6d77fd470071c0d20e70b69149a' --project greenchemistry-ai --format='value(image_summary.digest)')"
+          test "$digest" = 'sha256:42cc3ed13aa83b28893a7228a58b724879310fd4a49a46ffd3f58291820f8955'
