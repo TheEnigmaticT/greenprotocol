@@ -120,6 +120,8 @@ export interface AnalysisResult {
   deterministicScores?: DeterministicScores
   enrichedChemicals?: EnrichedChemical[]
   chemistryDataStatus?: ChemistryDataStatus
+  /** Source-grounding exclusions; predicted products are not declared inventory. */
+  inputWarnings?: string[]
   // v0.6: waste analysis + citability
   analysisMetadata?: AnalysisMetadata
   wasteAnalysis?: WasteAnalysis
@@ -210,6 +212,9 @@ export interface DeterministicScores {
 }
 
 export interface EnrichedChemical extends ParsedChemical {
+  occurrenceId?: string
+  stepNumber?: number
+  reference_status?: string
   molecular_weight?: number
   density_g_per_ml?: number
   smiles?: string

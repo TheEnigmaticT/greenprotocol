@@ -49,3 +49,8 @@
 - Analysis routes show `DeterministicScoreRecovery` when deterministic scoring is explicitly unavailable and no deterministic scores exist.
 - The panel uses the existing cream/forest palette with the established red unavailable treatment, and its retry button calls the existing authenticated `/api/rescore` route.
 - Successful retries merge scores into the analysis through the existing update path, which also performs the revision-checked PATCH; failures remain visible in an alert.
+
+## Procedure workbench
+- Keep recommendation decisions above the scorecard and render the `ProcedureWorkbench` immediately below it on both new and persisted analysis routes.
+- The workbench always renders, including before any recommendation has been decided. It applies accepted changes only and states that pending/rejected items remain as written.
+- Provide visible `Copy Procedure` and `Print Procedure` controls. Print hides the scorecard and decisions, leaving the procedure and its analysis heading.

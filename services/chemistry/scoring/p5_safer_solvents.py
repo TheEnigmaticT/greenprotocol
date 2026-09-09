@@ -9,6 +9,7 @@ Score: 0 (all recommended solvents) to 10 (all highly hazardous)
 
 from scoring.models import ChemicalInput, PrincipleScore
 from chem21 import lookup_solvent, SolventEntry
+from identity import preferred_identity_name
 from solvent_evidence_store import SolventEvidenceUnavailableError
 
 
@@ -65,7 +66,7 @@ def score_p5(chemicals: list[ChemicalInput]) -> PrincipleScore:
             mass_g = 100.0  # Default assumption if mass unknown
 
         try:
-            entry = lookup_solvent(chem.name)
+            entry = lookup_solvent(preferred_identity_name(chem.reference_name or chem.name))
         except SolventEvidenceUnavailableError as error:
             return _chem21_unavailable(error)
 

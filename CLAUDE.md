@@ -8,14 +8,15 @@ AI-powered green chemistry protocol optimizer for LabreNew.org.
 - `npm run lint` — ESLint
 
 ## Branches & Deploy
-- **`main`** — integration/source of truth. All local work + Lovable's external pushes land here. Push freely: `git push origin main`.
-- **`production`** — the deploy branch. Vercel (project `greenchemistryai`) deploys to greenchemistry.ai **only** from `production`. Code on `main` is NOT live until promoted.
-- **Promote to production:** `git push origin main:production` (fast-forward `production` to `main`'s tip → triggers Vercel autodeploy). Then verify: `vercel ls greenchemistryai --prod`.
-- Keep `main` == `origin/main` == `origin/production` after each deploy. Do **not** keep a local `production` branch — it goes stale and is a footgun; deploy by pushing `main:production`, not by checking production out.
-- Note: `git fetch` updates `origin/*` tracking refs but never moves local branch pointers — a local `production` will silently drift behind `origin/production` even on a single machine.
+- **`main`** — integration/source of truth. Changes land through reviewed PRs and are validated by CI. It is not production.
+- **`production`** — protected release branch. Vercel (project `greenchemistryai`) deploys greenchemistry.ai only after an approved `main` → `production` PR merges.
+- **Never push, force-push, or refspec-push to `production`.** Do not use `git push origin main:production` or deploy from a local worktree.
+- A release candidate PR runs the staging image, chemistry sentinel, and deployed web smoke. It must pass all required checks, receive PR approval, then receive explicit GitHub Production Environment approval.
+- Production deploys only the immutable, staging-validated image digest for the approved commit. Read back Vercel alias, Cloud Run revision/traffic, and sentinel evidence after each release.
+- Roll back with a revert PR to `production`, not a force push. See `docs/runbooks/release-rollback.md`.
 
 ## Stack
-Next.js 15 (App Router), TypeScript, Tailwind v4, Supabase Auth, Claude Sonnet API
+Next.js 16 (App Router), TypeScript, Tailwind v4, Supabase Auth, OpenRouter-compatible chemistry-provider routing
 
 ## Architecture
 - `app/` — Next.js App Router pages and API routes

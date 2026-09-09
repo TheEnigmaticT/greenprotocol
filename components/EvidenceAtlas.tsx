@@ -193,16 +193,20 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
     const chem = searchParams.get('chem')?.trim()
     const pRaw = searchParams.get('p')?.trim()
     if (chem) {
-      setMode('chemicals')
-      setSelectedChemical(chem)
+      queueMicrotask(() => {
+        setMode('chemicals')
+        setSelectedChemical(chem)
+      })
       deepLinkApplied.current = true
       return
     }
     if (pRaw) {
       const pn = Number(pRaw)
       if (Number.isFinite(pn) && pn >= 1 && pn <= 12) {
-        setMode('principles')
-        setSelectedPrinciple(pn)
+        queueMicrotask(() => {
+          setMode('principles')
+          setSelectedPrinciple(pn)
+        })
         deepLinkApplied.current = true
       }
     }
@@ -227,7 +231,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
 
   useEffect(() => {
     if (!selectedChemical && flaggedChemicalsMap.length > 0) {
-      setSelectedChemical(flaggedChemicalsMap[0][0])
+      queueMicrotask(() => setSelectedChemical(flaggedChemicalsMap[0][0]))
     }
   }, [flaggedChemicalsMap, selectedChemical])
 

@@ -5,14 +5,24 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ChemicalInput(BaseModel):
-    """A chemical from the LLM's Phase 1 parse output."""
+    """A parsed protocol chemical plus optional per-occurrence reference data.
+
+    ``name`` is always the protocol's requested label.  Reference fields are
+    evidence attached to that occurrence; they must not silently replace it.
+    """
     name: str
     role: str = "unknown"  # solvent, reagent, catalyst, product, etc.
-    quantity: str = ""     # raw quantity string, e.g. "5 mL"
+    quantity: str | None = None  # compatibility raw quantity; null stays null
+    raw_quantity: str | None = None  # original parser quantity, including null
     quantity_g: float | None = None   # from unit converter
     quantity_kg: float | None = None
     quantity_mol: float | None = None
     molecular_weight: float | None = None
+    reference_name: str | None = None  # exact canonical reference identity
+    reference_smiles: str | None = None  # verified structure for this occurrence
+    reference_status: str | None = None  # available, indefinite, unavailable, etc.
+    reference_provenance: str | None = None  # cache, pubchem, supplied, etc.
+    reference_hcodes: list[str] | None = None
     step_number: int = 0
 
 

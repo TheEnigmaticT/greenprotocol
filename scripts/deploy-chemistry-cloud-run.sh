@@ -1,100 +1,112 @@
 #!/usr/bin/env bash
+# Build and deploy a release-identified chemistry service. This script never
+# creates cloud resources and never defaults to production.
 set -euo pipefail
 
-SERVICE_NAME="${SERVICE_NAME:-greenchemistry-chemistry}"
+fail() { printf '%s\n' "$*" >&2; exit 1; }
+
+DEPLOY_ENV="${DEPLOY_ENV:-}"
+[[ -n "$DEPLOY_ENV" ]] || fail "DEPLOY_ENV is required (staging or production)."
+[[ "$DEPLOY_ENV" == "staging" || "$DEPLOY_ENV" == "production" ]] || fail "DEPLOY_ENV must be staging or production."
+
+GIT_SHA="${GIT_SHA:-}"
+[[ -n "$GIT_SHA" ]] || fail "GIT_SHA is required."
+[[ "$GIT_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "GIT_SHA must be a full 40-character commit SHA."
+HEAD_SHA="$(git rev-parse HEAD)"
+[[ "$GIT_SHA" == "$HEAD_SHA" ]] || fail "GIT_SHA does not match checked-out HEAD ($HEAD_SHA)."
+
+# Production needs the protected workflow identity. BREAK_GLASS is deliberately
+# explicit so an incident command cannot look like an ordinary release.
+if [[ "$DEPLOY_ENV" == "production" && "${BREAK_GLASS:-}" != "1" ]]; then
+  [[ "${GITHUB_ACTIONS:-}" == "true" && "${RELEASE_AUTHORITY:-}" == "approved-production-release" ]] || \
+    fail "Production deploy requires the approved release workflow or BREAK_GLASS=1."
+fi
+
+# Candidate routing is deliberately staging-only. It is validated before gcloud
+# is located or invoked so an accidental flag cannot mutate a service.
+STAGING_ENGINE_CANDIDATE="${STAGING_ENGINE_CANDIDATE:-}"
+CANDIDATE_BASE_URL=""
+CANDIDATE_MODEL=""
+if [[ "$DEPLOY_ENV" == "staging" ]]; then
+  [[ -z "$STAGING_ENGINE_CANDIDATE" || "$STAGING_ENGINE_CANDIDATE" == "1" ]] || \
+    fail "STAGING_ENGINE_CANDIDATE must be 1 or unset."
+  if [[ "$STAGING_ENGINE_CANDIDATE" == "1" ]]; then
+    CANDIDATE_BASE_URL="${STAGING_OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
+    [[ "$CANDIDATE_BASE_URL" == "https://openrouter.ai/api/v1" ]] || \
+      fail "STAGING_OPENROUTER_BASE_URL must be the exact https://openrouter.ai/api/v1 candidate endpoint."
+    CANDIDATE_MODEL="${STAGING_OPENROUTER_MODEL:-}"
+    [[ "$CANDIDATE_MODEL" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]*$ ]] || \
+      fail "STAGING_OPENROUTER_MODEL is required and must be a provider/model identifier when STAGING_ENGINE_CANDIDATE=1."
+  fi
+else
+  [[ -z "$STAGING_ENGINE_CANDIDATE" ]] || \
+    fail "STAGING_ENGINE_CANDIDATE is allowed only for DEPLOY_ENV=staging."
+  [[ -z "${STAGING_OPENROUTER_BASE_URL:-}" ]] || \
+    fail "STAGING_OPENROUTER_BASE_URL is allowed only for DEPLOY_ENV=staging."
+fi
+
+GCLOUD="${GCLOUD:-$(command -v gcloud || true)}"
+[[ -n "$GCLOUD" ]] || fail "gcloud is required."
 REGION="${REGION:-us-central1}"
 SOURCE_DIR="${SOURCE_DIR:-services/chemistry}"
-REPOSITORY="${REPOSITORY:-greenchemistry}"
+[[ -d "$SOURCE_DIR" ]] || fail "Chemistry source directory does not exist: $SOURCE_DIR"
 
-GCLOUD="${GCLOUD:-}"
-if [[ -z "$GCLOUD" ]] && command -v gcloud >/dev/null 2>&1; then
-  GCLOUD="$(command -v gcloud)"
-elif [[ -z "$GCLOUD" && -x "/opt/homebrew/share/google-cloud-sdk/bin/gcloud" ]]; then
-  GCLOUD="/opt/homebrew/share/google-cloud-sdk/bin/gcloud"
+case "$DEPLOY_ENV" in
+  staging)
+    PROJECT_ID="${STAGING_GCP_PROJECT_ID:-greenchemistry-ai}"
+    SERVICE_NAME="${STAGING_CHEMISTRY_SERVICE:-gcai-chemistry}"
+    RUNTIME_SERVICE_ACCOUNT="${STAGING_CHEMISTRY_RUNTIME_SERVICE_ACCOUNT:-gcai-staging-runtime@${PROJECT_ID}.iam.gserviceaccount.com}"
+    MIN_INSTANCES="${STAGING_MIN_INSTANCES:-0}"
+    # The image registry is shared solely to preserve a single immutable digest
+    # between staging verification and production promotion.
+    REPOSITORY="${STAGING_ARTIFACT_REPOSITORY:-cloud-run-source-deploy}"
+    TOKEN_SECRET="${STAGING_CHEMISTRY_TOKEN_SECRET:-staging-chemistry-service-token}"
+    SUPABASE_URL_SECRET="${STAGING_SUPABASE_URL_SECRET:-staging-supabase-url}"
+    SUPABASE_SERVICE_ROLE_SECRET="${STAGING_SUPABASE_SERVICE_ROLE_SECRET:-staging-supabase-service-role-key}"
+    PROVIDER_KEY_SECRET="${STAGING_OPENROUTER_API_KEY_SECRET:-staging-greenchemistry-openrouter-api-key}"
+    PROVIDER_MODEL="${STAGING_OPENROUTER_MODEL:-anthropic/claude-sonnet-4.5}"
+    ;;
+  production)
+    PROJECT_ID="${PRODUCTION_GCP_PROJECT_ID:-greenchemistry-ai}"
+    SERVICE_NAME="${PRODUCTION_CHEMISTRY_SERVICE:-greenchemistry-chemistry}"
+    RUNTIME_SERVICE_ACCOUNT="${PRODUCTION_CHEMISTRY_RUNTIME_SERVICE_ACCOUNT:-greenchemistry-chemservice@${PROJECT_ID}.iam.gserviceaccount.com}"
+    MIN_INSTANCES="${PRODUCTION_MIN_INSTANCES:-1}"
+    REPOSITORY="${PRODUCTION_ARTIFACT_REPOSITORY:-cloud-run-source-deploy}"
+    TOKEN_SECRET="${PRODUCTION_CHEMISTRY_TOKEN_SECRET:-chemistry-service-token}"
+    SUPABASE_URL_SECRET="${PRODUCTION_SUPABASE_URL_SECRET:-supabase-url}"
+    SUPABASE_SERVICE_ROLE_SECRET="${PRODUCTION_SUPABASE_SERVICE_ROLE_SECRET:-supabase-service-role-key}"
+    PROVIDER_KEY_SECRET="${PRODUCTION_OPENROUTER_API_KEY_SECRET:-greenchemistry-openrouter-api-key}"
+    PROVIDER_MODEL="${PRODUCTION_OPENROUTER_MODEL:-anthropic/claude-sonnet-4.5}"
+    ;;
+esac
+
+for required in TOKEN_SECRET SUPABASE_URL_SECRET SUPABASE_SERVICE_ROLE_SECRET PROVIDER_KEY_SECRET PROVIDER_MODEL; do
+  [[ -n "${!required}" ]] || fail "$required must be configured for $DEPLOY_ENV; refusing to infer credentials or routing."
+done
+
+# Deployment never builds an image. Staging must establish an immutable candidate
+# first; production may only promote that exact digest after a reviewed release PR.
+IMAGE_DIGEST="${IMAGE_DIGEST:-}"
+[[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || \
+  fail "IMAGE_DIGEST is required and must be an immutable sha256 digest."
+# The image name is intentionally independent from the runtime service name so
+# staging and production deploy the same immutable artifact digest.
+CHEMISTRY_IMAGE_NAME="${CHEMISTRY_IMAGE_NAME:-greenchemistry-chemistry}"
+IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NAME}:${GIT_SHA}"
+
+RUNTIME_ENV_VARS="OPENROUTER_MODEL=${PROVIDER_MODEL}"
+if [[ "$STAGING_ENGINE_CANDIDATE" == "1" ]]; then
+  RUNTIME_ENV_VARS="OPENROUTER_MODEL=${CANDIDATE_MODEL},GCAI_ENGINE_CANDIDATE=1,GCAI_LLM_BASE_URL=${CANDIDATE_BASE_URL},GCAI_LLM_MODEL=${CANDIDATE_MODEL}"
 fi
-
-if [[ -z "$GCLOUD" ]]; then
-  echo "gcloud is not installed. Install Google Cloud CLI first:"
-  echo "https://cloud.google.com/sdk/docs/install"
-  exit 1
-fi
-
-if [[ -z "${CLOUDSDK_PYTHON:-}" && -x "/opt/homebrew/opt/python@3.13/libexec/bin/python" ]]; then
-  export CLOUDSDK_PYTHON="/opt/homebrew/opt/python@3.13/libexec/bin/python"
-fi
-
-if [[ -d "/opt/homebrew/opt/expat/lib" ]]; then
-  export DYLD_LIBRARY_PATH="/opt/homebrew/opt/expat/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
-fi
-
-if [[ -z "${PROJECT_ID:-}" ]]; then
-  echo "PROJECT_ID is required."
-  echo "Example: PROJECT_ID=greenchemistry-ai-prod CHEMISTRY_SERVICE_TOKEN=... $0"
-  exit 1
-fi
-
-if [[ -z "${CHEMISTRY_SERVICE_TOKEN:-}" ]]; then
-  echo "CHEMISTRY_SERVICE_TOKEN is required."
-  echo "Generate one with: openssl rand -hex 32"
-  exit 1
-fi
-
-if ! "$GCLOUD" projects describe "$PROJECT_ID" >/dev/null 2>&1; then
-  "$GCLOUD" projects create "$PROJECT_ID" --name="Green Chemistry AI"
-fi
-
-"$GCLOUD" config set project "$PROJECT_ID"
-
-if [[ -n "${BILLING_ACCOUNT_ID:-}" ]]; then
-  "$GCLOUD" billing projects link "$PROJECT_ID" --billing-account="$BILLING_ACCOUNT_ID"
-fi
-
-"$GCLOUD" services enable \
-  run.googleapis.com \
-  cloudbuild.googleapis.com \
-  artifactregistry.googleapis.com
-
-if ! "$GCLOUD" artifacts repositories describe "$REPOSITORY" \
-  --location "$REGION" >/dev/null 2>&1; then
-  "$GCLOUD" artifacts repositories create "$REPOSITORY" \
-    --repository-format docker \
-    --location "$REGION" \
-    --description "GreenChemistry.ai containers"
-fi
-
-IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}:latest"
-
-ENV_VARS="CHEMISTRY_SERVICE_TOKEN=${CHEMISTRY_SERVICE_TOKEN}"
-if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-  ENV_VARS="${ENV_VARS},ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
-fi
-if [[ -n "${LOCAL_LLM_URL:-}" ]]; then
-  ENV_VARS="${ENV_VARS},LOCAL_LLM_URL=${LOCAL_LLM_URL}"
-fi
-if [[ -n "${LLM_MODEL:-}" ]]; then
-  ENV_VARS="${ENV_VARS},LLM_MODEL=${LLM_MODEL}"
-fi
-
-"$GCLOUD" builds submit "$SOURCE_DIR" --tag "$IMAGE"
 
 "$GCLOUD" run deploy "$SERVICE_NAME" \
-  --image "$IMAGE" \
-  --region "$REGION" \
-  --allow-unauthenticated \
-  --cpu 1 \
-  --memory 2Gi \
-  --timeout 300 \
-  --concurrency 4 \
-  --min-instances 1 \
-  --max-instances 3 \
-  --set-env-vars "$ENV_VARS"
+  --project "$PROJECT_ID" --region "$REGION" --image "${IMAGE}@${IMAGE_DIGEST}" \
+  --service-account "$RUNTIME_SERVICE_ACCOUNT" \
+  --labels "release-sha=${GIT_SHA},deploy-env=${DEPLOY_ENV}" \
+  --set-secrets "CHEMISTRY_SERVICE_TOKEN=${TOKEN_SECRET}:latest,SUPABASE_URL=${SUPABASE_URL_SECRET}:latest,SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_SECRET}:latest,OPENROUTER_API_KEY=${PROVIDER_KEY_SECRET}:latest" \
+  --set-env-vars "$RUNTIME_ENV_VARS" \
+  --cpu 1 --memory 2Gi --timeout 300 --concurrency 4 --min-instances "$MIN_INSTANCES" --max-instances 3
 
-SERVICE_URL="$("$GCLOUD" run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')"
-
-echo
-echo "Cloud Run service URL:"
-echo "$SERVICE_URL"
-echo
-echo "Set these in Vercel production:"
-echo "CHEMISTRY_SERVICE_URL=$SERVICE_URL"
-echo "CHEMISTRY_SERVICE_TOKEN=<same token>"
+REVISION="$("$GCLOUD" run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestReadyRevisionName)')"
+SERVICE_URL="$("$GCLOUD" run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
+printf 'deploy_env=%s\ngit_sha=%s\nimage=%s\nimage_digest=%s\nrevision=%s\nservice_url=%s\n' "$DEPLOY_ENV" "$GIT_SHA" "$IMAGE" "$IMAGE_DIGEST" "$REVISION" "$SERVICE_URL"

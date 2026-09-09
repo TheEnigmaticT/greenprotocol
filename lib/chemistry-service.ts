@@ -3,13 +3,14 @@
  * Handles unit conversions and deterministic scoring.
  */
 import type { ScoreProvenance } from '@/lib/types'
-
-const CHEMISTRY_SERVICE_URL = process.env.CHEMISTRY_SERVICE_URL || 'http://localhost:8000'
-const CHEMISTRY_SERVICE_TOKEN = process.env.CHEMISTRY_SERVICE_TOKEN
+import { getChemistryServiceConfig } from '@/lib/chemistry-service-config'
 const TIMEOUT_MS = 90_000
 
 interface ConvertResult {
   chemical_name: string
+  input_quantity?: string
+  reference_status?: string
+  reference_queued?: boolean
   smiles: string | null
   molecular_formula: string | null
   molecular_weight: number | null
@@ -63,11 +64,9 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
   }
 }
 
-function serviceHeaders(extra?: HeadersInit): HeadersInit {
+function serviceHeaders(token: string, extra?: HeadersInit): HeadersInit {
   const headers = new Headers(extra)
-  if (CHEMISTRY_SERVICE_TOKEN) {
-    headers.set('X-Chemistry-Service-Token', CHEMISTRY_SERVICE_TOKEN)
-  }
+  headers.set('X-Chemistry-Service-Token', token)
   return headers
 }
 
@@ -76,9 +75,10 @@ function serviceHeaders(extra?: HeadersInit): HeadersInit {
  */
 export async function isServiceAvailable(): Promise<boolean> {
   try {
-    const resp = await fetchWithTimeout(`${CHEMISTRY_SERVICE_URL}/health`, {
+    const { url, token } = getChemistryServiceConfig()
+    const resp = await fetchWithTimeout(`${url}/health`, {
       method: 'GET',
-      headers: serviceHeaders(),
+      headers: serviceHeaders(token),
     })
     return resp.ok
   } catch {
@@ -93,9 +93,10 @@ export async function batchConvert(
   chemicals: Array<{ name: string; quantity: string }>
 ): Promise<BatchResult | null> {
   try {
-    const resp = await fetchWithTimeout(`${CHEMISTRY_SERVICE_URL}/batch`, {
+    const { url, token } = getChemistryServiceConfig()
+    const resp = await fetchWithTimeout(`${url}/batch`, {
       method: 'POST',
-      headers: serviceHeaders({ 'Content-Type': 'application/json' }),
+      headers: serviceHeaders(token, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ chemicals: chemicals.map(c => ({
         chemical_name: c.name,
         quantity: c.quantity,
@@ -116,6 +117,13 @@ export async function scoreProtocol(params: {
   chemicals: Array<{
     name: string
     role: string
+    quantity?: string
+    smiles?: string | null
+    reference_status?: string
+    raw_quantity?: string | null
+    reference_name?: string | null
+    reference_smiles?: string | null
+    reference_provenance?: string | null
     quantity_g?: number | null
     quantity_kg?: number | null
     quantity_mol?: number | null
@@ -127,9 +135,10 @@ export async function scoreProtocol(params: {
   reaction_smiles?: string
 }): Promise<ScoreResult | null> {
   try {
-    const resp = await fetchWithTimeout(`${CHEMISTRY_SERVICE_URL}/score`, {
+    const { url, token } = getChemistryServiceConfig()
+    const resp = await fetchWithTimeout(`${url}/score`, {
       method: 'POST',
-      headers: serviceHeaders({ 'Content-Type': 'application/json' }),
+      headers: serviceHeaders(token, { 'Content-Type': 'application/json' }),
       body: JSON.stringify(params),
     })
     if (!resp.ok) return null

@@ -107,4 +107,27 @@ describe('partial chemistry reference data', () => {
       indefiniteChemicals: ['brine'],
     })
   })
+
+  it('passes raw quantities and retrieved structures for the correct occurrence', async () => {
+    mocks.anthropicCreate.mockImplementationOnce(() => Promise.resolve(response({
+      protocolTitle: 'Water handling', chemistrySubdomain: 'Processing',
+      steps: [5, 20].map((amount, index) => ({
+        stepNumber: index + 1, description: `Add ${amount} mL water.`, conditions: {},
+        chemicals: [{ name: 'water', role: index ? 'workup' : 'solvent', quantity: `${amount} mL`, quantityKg: 99 }],
+      })),
+    })))
+    mocks.batchConvert.mockResolvedValue({ results: [20, 5].map(amount => ({
+      chemical_name: 'water', input_quantity: `${amount} mL`, smiles: 'O', molecular_weight: 18,
+      molecular_formula: 'H2O', density_g_per_ml: 1, quantity_g: amount, quantity_kg: amount / 1000,
+      quantity_mol: amount / 18, ghs_hazards: [], green_alternatives: [], citations: [],
+      data_source: 'cache', cached: true, warnings: [], error: null,
+    })) })
+    await analyzeProtocol('Add 5 mL water. Then wash with 20 mL water.')
+    expect(mocks.scoreProtocol).toHaveBeenCalledWith(expect.objectContaining({
+      chemicals: [
+        expect.objectContaining({ quantity: '5 mL', quantity_g: 5, smiles: 'O', step_number: 1 }),
+        expect.objectContaining({ quantity: '20 mL', quantity_g: 20, smiles: 'O', step_number: 2 }),
+      ],
+    }))
+  })
 })

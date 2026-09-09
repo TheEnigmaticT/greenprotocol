@@ -1,0 +1,126 @@
+name: Deploy staging candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: staging-dispatch
+  cancel-in-progress: false
+
+jobs:
+  require-main-dispatch:
+    name: require-main-dispatch
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail closed unless this dispatch targets main
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" != "refs/heads/main" ]]; then
+            echo "Staging dispatches must target refs/heads/main; received ${{ github.ref }}." >&2
+            exit 1
+          fi
+
+  deploy-staging:
+    name: deploy-staging
+    needs: require-main-dispatch
+    if: needs.require-main-dispatch.result == 'success' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: staging
+    outputs:
+      image_digest: ${{ steps.image.outputs.image_digest }}
+    steps:
+      - name: Checkout the exact dispatched commit with LFS
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          lfs: true
+          fetch-depth: 0
+
+      - name: Require successful CI push run for this exact main SHA
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const workflowRuns = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                branch: "main",
+                event: "push",
+                status: "completed",
+                per_page: 100,
+              },
+            );
+            const ciRun = workflowRuns.find((run) =>
+              run.event === "push" &&
+              run.head_branch === "main" &&
+              run.head_sha === context.sha &&
+              run.conclusion === "success" &&
+              run.path === ".github/workflows/ci.yml",
+            );
+            if (!ciRun) {
+              core.setFailed(`No successful CI push/main run exists for exact SHA ${context.sha}.`);
+            }
+
+      - name: Authenticate to the staging release identity
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_STAGING_RELEASE_CREDENTIALS }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - id: image
+        name: Build or resolve the immutable staging candidate image
+        env:
+          DEPLOY_ENV: staging
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          bash scripts/build-chemistry-image.sh | tee image.txt
+          image_digest="$(awk -F= '/^image_digest=/{print $2}' image.txt)"
+          [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Build did not return an immutable image digest." >&2; exit 1; }
+          echo "image_digest=$image_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy the exact staging candidate digest
+        env:
+          DEPLOY_ENV: staging
+          GIT_SHA: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.image_digest }}
+          STAGING_ENGINE_CANDIDATE: '1'
+          STAGING_OPENROUTER_MODEL: qwen/qwen3.8-27b
+        run: bash scripts/deploy-chemistry-cloud-run.sh
+
+      - name: Verify the requested staging candidate runtime and sentinel
+        env:
+          DEPLOY_ENV: staging
+          GIT_SHA: ${{ github.sha }}
+          STAGING_CHEMISTRY_SERVICE_TOKEN: ${{ secrets.STAGING_CHEMISTRY_SERVICE_TOKEN }}
+          STAGING_ENGINE_CANDIDATE: '1'
+          STAGING_OPENROUTER_MODEL: qwen/qwen3.8-27b
+        run: bash scripts/verify-chemistry-release.sh
+
+  staging-release-evidence:
+    name: staging-release-evidence
+    needs: deploy-staging
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Record sanitized staging release evidence
+        run: |
+          {
+            echo "deploy_env=staging"
+            echo "git_sha=${{ github.sha }}"
+            echo "image_digest=${{ needs.deploy-staging.outputs.image_digest }}"
+            echo "candidate_engine=1"
+            echo "candidate_endpoint=https://openrouter.ai/api/v1"
+            echo "candidate_model=qwen/qwen3.8-27b"
+            echo "release_workflow=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } | tee staging-release-evidence.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staging-release-evidence
+          path: staging-release-evidence.txt

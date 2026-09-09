@@ -1,4 +1,9 @@
 import OpenAI from 'openai'
+import {
+  CompatibleModelConfigurationError,
+  isCandidateEngineSelected,
+  OPENROUTER_COMPATIBLE_BASE_URL,
+} from '@/lib/model-runtime'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type {
   Citation,
@@ -85,6 +90,50 @@ function optionalString(value: unknown): string | undefined {
   return nonEmptyString(value) ? value : undefined
 }
 
+function configuredValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const value = env[name]?.trim()
+  return value || undefined
+}
+
+interface CandidateEmbeddingRuntime {
+  baseURL: string
+  model: string
+  apiKey: string
+}
+
+function resolveCandidateEmbeddingRuntime(
+  env: NodeJS.ProcessEnv = process.env,
+): CandidateEmbeddingRuntime | undefined {
+  if (!isCandidateEngineSelected(env)) return undefined
+
+  const baseURL = configuredValue(env, 'GCAI_EMBEDDING_BASE_URL')
+  if (!baseURL) {
+    throw new CompatibleModelConfigurationError(
+      'GCAI_EMBEDDING_BASE_URL is required when GCAI_ENGINE_CANDIDATE=1',
+    )
+  }
+
+  const model = configuredValue(env, 'GCAI_EMBEDDING_MODEL')
+  if (!model) {
+    throw new CompatibleModelConfigurationError(
+      'GCAI_EMBEDDING_MODEL is required when GCAI_ENGINE_CANDIDATE=1',
+    )
+  }
+
+  const apiKey = configuredValue(env, 'GCAI_EMBEDDING_API_KEY') ?? (
+    baseURL === OPENROUTER_COMPATIBLE_BASE_URL
+      ? configuredValue(env, 'OPENROUTER_API_KEY')
+      : undefined
+  )
+  if (!apiKey) {
+    throw new CompatibleModelConfigurationError(
+      'GCAI_EMBEDDING_API_KEY is required for the selected candidate endpoint',
+    )
+  }
+
+  return { baseURL, model, apiKey }
+}
+
 function shapeEvidenceMatch(row: unknown): LiteratureEvidenceMatch | null {
   if (!row || typeof row !== 'object') return null
   const value = row as EvidenceRpcRow
@@ -150,12 +199,30 @@ export async function searchLiteratureEvidence(
   const query = validateInput(input)
   throwIfAborted(input.signal)
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  const candidateRuntime = resolveCandidateEmbeddingRuntime()
+  // Parity mode changes transport only: same embedding model, index and query.
+  const viaOpenRouter = !candidateRuntime && process.env.GCAI_QWEN_PARITY === '1'
+  const openai = new OpenAI(candidateRuntime ? {
+    apiKey: candidateRuntime.apiKey,
+    baseURL: candidateRuntime.baseURL,
+    maxRetries: 0,
+    timeout: 120_000,
+  } : viaOpenRouter ? {
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
+    maxRetries: 0,
+    timeout: 120_000,
+  } : { apiKey: process.env.OPENAI_API_KEY })
   const timing: LiteratureEvidenceTiming = { embeddingStartedAt: performance.now() }
   reportTiming(input, timing)
   const embeddingResponse = await awaitWithAbort(
     openai.embeddings.create(
-      { model: 'text-embedding-3-small', input: query },
+      {
+        model: candidateRuntime?.model ?? (
+          viaOpenRouter ? 'openai/text-embedding-3-small' : 'text-embedding-3-small'
+        ),
+        input: query,
+      },
       input.signal ? { signal: input.signal } : undefined,
     ),
     input.signal,
