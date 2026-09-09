@@ -1,11 +1,17 @@
 """Pydantic models for request/response schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ConvertRequest(BaseModel):
     chemical_name: str = Field(..., description="Chemical name or common abbreviation")
     quantity: str = Field(..., description="Quantity string, e.g. '5 mL', '2.3 g', '0.1 mol'")
+
+    @field_validator("quantity", mode="before")
+    @classmethod
+    def normalize_missing_quantity(cls, value: object) -> object:
+        """Saved analyses created before extraction can contain JSON null."""
+        return "" if value is None else value
 
 
 class ConvertResponse(BaseModel):

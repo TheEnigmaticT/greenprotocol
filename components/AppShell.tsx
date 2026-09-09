@@ -50,7 +50,7 @@ export default function AppShell({
               className="block shrink-0"
             />
             <span
-              className="font-[family-name:var(--font-sans)] font-semibold text-[13px] tracking-wide whitespace-nowrap"
+              className="hidden sm:block font-[family-name:var(--font-sans)] font-semibold text-[13px] tracking-wide whitespace-nowrap"
               style={{ color: '#F6F3EB' }}
             >
               greenchemistry.ai
