@@ -1,0 +1,898 @@
+{
+  "model": "qwen/qwen3.8-27b",
+  "provider": "openrouter",
+  "scope": "Public built-in aspirin demo and Suzuki example from lib/prompts.ts; direct pipeline, no persistence",
+  "runCount": 7,
+  "note": "Historical outputs include defects fixed during this pass. ok=true is not accuracy acceptance. Latest recovery-from classifier regression was tested offline, not in another live run.",
+  "runs": [
+    {
+      "run": "aspirin-1",
+      "summary": "/tmp/gcai-path-b-live/aspirin-1/summary.json",
+      "returnedResult": true,
+      "stepCount": 5,
+      "recommendationsByKind": {
+        "chemical_swap": 2,
+        "process_change": 3,
+        "analytical": 2,
+        "unspecified": 0
+      },
+      "reevaluationStats": {
+        "confirmed": 0,
+        "downgraded": 2,
+        "suppressed": 0,
+        "failed": 0
+      },
+      "phaseFailures": [],
+      "rawResponses": [
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-001.json",
+          "sha256": "0d13f6b11995c2a60d2cc7ebfe6bec52d0d733331de926093d763fb7b0afddbe",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-002.json",
+          "sha256": "0c2eacef00ff47f9bd4256de8e75b0f86131accadfdc5491a6d5003714964987",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-003.json",
+          "sha256": "90cf2aff3b251fdcae4d13ac54e1b4364d6d58f70050c2ea26f56928e237454a",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-004.json",
+          "sha256": "33f6c662db52f28fea2ad39a41fe97cff2705390e1ef0e36509ce23279e720e2",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-005.json",
+          "sha256": "c0e7808c8acc393af3435b3beea60ee3406aea272eab0e7ec7d73f4a37a714b1",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-006.json",
+          "sha256": "54ea98fcce5620ce22ce062563e24efe34cef070a72ac58b4876b9aefb3a6d99",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-007.json",
+          "sha256": "7054279844abe90fa2fe853e1043931296bec296adc4c95b307d95cb64dd4b64",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-008.json",
+          "sha256": "fb0492b6b4525b664c237f2f6048f0b2cc4754fb94d44bd8b518ad697522c2c0",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-009.json",
+          "sha256": "49ca72a2067284da2dca18ba69bae089dd58c194456006515504bd43d2c730a8",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-010.json",
+          "sha256": "c5311249817235950352b0ed2049268c2cf0ca96782db22903aa25fb070f5ad2",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-011.json",
+          "sha256": "dfb25146ca1b0d3f0109e9d6fbae15ff90a0036aa57ebe69f4919e5f7cbd2c19",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-012.json",
+          "sha256": "a725bf575782591af69ca625312f72aedffc050e353610ebea9ce223469b7b6b",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-013.json",
+          "sha256": "4c7ffc80b6dfb869c332f14b80fe0558ca1361b9d27c7c0a1a8345ef959d680f",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-014.json",
+          "sha256": "16766ae8bc248c37cb03865df3e20d97c2191d320440417eab34cb1944197647",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-015.json",
+          "sha256": "e3e2a893d849676b94349b68149b5120d8f2f0ad999b9aa20525071468197cc4",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-016.json",
+          "sha256": "4eab538e2734fcae7c8fae9ac6567f9d37bbe0655bb0256291a8c84d3f09bc45",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-1/model-017.json",
+          "sha256": "5eeeec427e77527e10aac8bad5985a639c9dbe29d93c5fe24abaa308a3c8937d",
+          "responseCaptured": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "run": "aspirin-2",
+      "summary": "/tmp/gcai-path-b-live/aspirin-2/summary.json",
+      "returnedResult": true,
+      "stepCount": 5,
+      "recommendationsByKind": {
+        "chemical_swap": 2,
+        "process_change": 4,
+        "analytical": 3,
+        "unspecified": 0
+      },
+      "reevaluationStats": {
+        "confirmed": 0,
+        "downgraded": 2,
+        "suppressed": 0,
+        "failed": 0
+      },
+      "phaseFailures": [],
+      "rawResponses": [
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-001.json",
+          "sha256": "52a580aae41ce95c0c7b807c43381bc14f5aebdfa35fe6f51ff682409ca52f3f",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-002.json",
+          "sha256": "471af233d99bc509e839e80754d9f04277d4e3096e866e58967962040f3dac37",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-003.json",
+          "sha256": "ceea1da32a97dadcbb8233a8b0276152f9caf3979dc9e20ee10755bc86ce4a57",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-004.json",
+          "sha256": "bcbe4c2437769c2df7171f11362d78ba4b45b3ba0983acb02943299d0c01d47c",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-005.json",
+          "sha256": "fc28cb4018ee6a0f37736a46b4e61fc037fc08b752c536bbece09727bdd0a0f0",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-006.json",
+          "sha256": "a6e16a185acfca5c17f5d7223b3650e6ad907bdab5d7e79ec03d20b41b2173e4",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-007.json",
+          "sha256": "f53f66cc2191bfb22989195404d9289c102f2a1f5449d9fa192ec400097ac43e",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-008.json",
+          "sha256": "6365b571e2545c3ffa1943c2433a6c59aa921ede6db51c3d167942b8e6ea1f96",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-009.json",
+          "sha256": "fbd8d7ca62a024d3e5ea91f4f54d718c9df289cdf98e3759656e0ee443eb7100",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-010.json",
+          "sha256": "69bc65ba169caf78bb033ef8095d6bf227e4c81e69c983d44e4298094ce7f1ed",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-011.json",
+          "sha256": "61419202b88f549141d85688c3b583218039678d189ec106a3e7015e93450a5c",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-012.json",
+          "sha256": "719f8433d51bba310189e528f31d3e394054f947f35258c7f2bc9ea27dc1ca43",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-013.json",
+          "sha256": "bc8bb5880f1ed71c6be5420021405abaf27b4e79e49877c5caa344761e24818d",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-014.json",
+          "sha256": "c4bf557f1e5e99746aab311015fa5266842e9c42593a691590ad5d1899439760",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-015.json",
+          "sha256": "75c3e11cb3565c37fa41355081ea2ad439554d51c99f1d5252d7661671f32c02",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-2/model-016.json",
+          "sha256": "92348ec97c4176bd5dcb0ea3ebe2e9d7b22e400a23175277c8348039757438ff",
+          "responseCaptured": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "run": "aspirin-3",
+      "summary": "/tmp/gcai-path-b-live/aspirin-3/summary.json",
+      "returnedResult": true,
+      "stepCount": 5,
+      "recommendationsByKind": {
+        "chemical_swap": 2,
+        "process_change": 3,
+        "analytical": 2,
+        "unspecified": 0
+      },
+      "reevaluationStats": {
+        "confirmed": 0,
+        "downgraded": 3,
+        "suppressed": 0,
+        "failed": 0
+      },
+      "phaseFailures": [
+        "Principle 11 evaluation failed: Error: local_llm_timeout"
+      ],
+      "rawResponses": [
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-001.json",
+          "sha256": "0fb0805f0bfb2b497ea120a3eb9bda230fbcec87748210f5e0208951ba2bdbe6",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-002.json",
+          "sha256": "eb6621f3404d322f4bdac98286873010d877dc14ed66c4f259d5283264519ab2",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-003.json",
+          "sha256": "489b47eec598672bb0afc7926b99294e975e7890e7525813c1827e23d1a18928",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-004.json",
+          "sha256": "d62f042d45320d9a6052bf5305dc34fb219582416cc5251ce3737faddc5ff7ac",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-005.json",
+          "sha256": "c188116dd539f28ab34a045bb729d1ee72f48c4bf458805d2d10d4c7a15e156e",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-006.json",
+          "sha256": "9fa3f857e49b02fa069ebb7c2a594bc08b77602d3023d7f8576d3bb1885d3bd8",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-007.json",
+          "sha256": "1c28bd7d69df4fb937cbcded7c4310e8832956e5e20498455dd19fa8d134bee5",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-008.json",
+          "sha256": "8068a5ef4e24eed20a1410926db1a5780a95f27c519352fff1480ed93a03141b",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-009.json",
+          "sha256": "7c6bcf8aff09520d8836f5683109601debb70bbf205969d36e31e7b2ad063beb",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-010.json",
+          "sha256": "ec63a24d27c934dff34d19aa0e7b896ce1afe3bcca0e748b7592873a94ac0011",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-011.json",
+          "sha256": "96c23b0c06df608eb5ef28cbc086d7a43be8215b456f4da809d5a9aef929ee04",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-012.json",
+          "sha256": "594167e4a224d5f37b59b3f56e8d1a3c7ffd1979bdb7f9cfcd229b0d44fc2939",
+          "responseCaptured": false,
+          "error": "AbortError: This operation was aborted"
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-013.json",
+          "sha256": "601885c7dcf0df7e272538dc48fa4425032a0f80e9f4f9fced6dc6cfb77c908c",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-014.json",
+          "sha256": "81def2d25cbd0535a209310dc6f7cda6aef80d6329ad7beed792b7f85ae79801",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-015.json",
+          "sha256": "5f628d989a3045bbd1fe73d3b852dd6bc55f09301539fac5fc2ebe8be827c56c",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-016.json",
+          "sha256": "b62f4f2f1f1a650e14d61583ef31a55bf06468c68bc0eed3eec55a510f33e5a4",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-3/model-017.json",
+          "sha256": "40c9290daccfaaafb2fa836502802ffdf478cb6640a4013e899612946559876c",
+          "responseCaptured": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "run": "aspirin-4",
+      "summary": "/tmp/gcai-path-b-live/aspirin-4/summary.json",
+      "returnedResult": true,
+      "stepCount": 5,
+      "recommendationsByKind": {
+        "chemical_swap": 2,
+        "process_change": 3,
+        "analytical": 1,
+        "unspecified": 0
+      },
+      "reevaluationStats": {
+        "confirmed": 0,
+        "downgraded": 2,
+        "suppressed": 0,
+        "failed": 0
+      },
+      "phaseFailures": [
+        "Principle 1 evaluation failed: Error: local_llm_timeout"
+      ],
+      "rawResponses": [
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-001.json",
+          "sha256": "52575125291b2d005ae96c6fd042f26a684254b17800445535c7f956d940a35a",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-002.json",
+          "sha256": "9777dc7722f5dc74d0754e8a3a3e2a4b6ce0eff5e9f4c2e6818f32ccd27f5d19",
+          "responseCaptured": false,
+          "error": "AbortError: This operation was aborted"
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-003.json",
+          "sha256": "cd98ecdfd5d95f53847ca97b5835766afe4b0f931652dc9a00398d35f65c9c7a",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-004.json",
+          "sha256": "71a2d20136270a4f6ee56cef8223783067a2b199e74ab388ed47750acf153672",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-005.json",
+          "sha256": "7cb0e5a5fc3121252d54be33e60e21bc62779ff34ce64bbc9a892d2743d1a180",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-006.json",
+          "sha256": "078a6559ed5469f72f3917253bc50cd97c51b6f611bfa44d83622d09641908b5",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-007.json",
+          "sha256": "830e6054ecf25b98399e91877897d75c2e937a842ce5402c6a574ac3483cf2d0",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-008.json",
+          "sha256": "547f5b273c8344f7a31209d97d6efdb3dab56fa97aff37a32c1036f31b5eccee",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-009.json",
+          "sha256": "4b00ab4490117ecd168eb5fa0ea55737f3fca6c61fd6fb275a827d933a59678e",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-010.json",
+          "sha256": "834e5e48c4d2f9794fe639caa7faef3982a7c82573464188bb8575e25d4878ba",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-011.json",
+          "sha256": "0ce5c2e06e422fd22daf3e92c14a9035953055ed2fa4706b71ad63de1fcb31ba",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-012.json",
+          "sha256": "038cf618eb95eda673bc3383579026a4000f0da577fb6c5fdc0a95b096294390",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-013.json",
+          "sha256": "c5edcb019e82a59ee907f61783e6557cd3f2b4d619bf69cefd65ac9ea0c4398e",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-014.json",
+          "sha256": "a9d1be3b5c6c450f3fcf033e9dca4bb6e1fd18927cd71a6d8b10d886a7840bbe",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-015.json",
+          "sha256": "6563fea22b28f9e34263e0f76bceb78d954d1403101f45c5e5fd1c253d26f9fd",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/aspirin-4/model-016.json",
+          "sha256": "d981c4333a51db0a3aab3d5481bbda0f4108ee7b62c6556589bd7a33a2f7a6d7",
+          "responseCaptured": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "run": "suzuki-1",
+      "summary": "/tmp/gcai-path-b-live/suzuki-1/summary.json",
+      "returnedResult": true,
+      "stepCount": 7,
+      "recommendationsByKind": {
+        "chemical_swap": 6,
+        "process_change": 3,
+        "analytical": 1,
+        "unspecified": 0
+      },
+      "reevaluationStats": {
+        "confirmed": 0,
+        "downgraded": 6,
+        "suppressed": 0,
+        "failed": 0
+      },
+      "phaseFailures": [],
+      "rawResponses": [
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-001.json",
+          "sha256": "4e32017ec5c1ef8a16e012a7479c892f1f56ac20fd61e88b59082bf22d06e409",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-002.json",
+          "sha256": "86a2cc07fa906f8ff9c41e927e7cf294824d47692ccb5a07fdd98faccb2989b5",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-003.json",
+          "sha256": "4e8ab652ebf1fd2e3926f42f28febec97434db2f0088dff1a09b6f24ff8824a9",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-004.json",
+          "sha256": "8e10f10da2242f6ed83136256c8db806c12a3b601fd8c12e69ea958fd5a22d82",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-005.json",
+          "sha256": "172a77c030bd25aec890109e4a1bca03de65943547cfab36b08b931bcd4d2334",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-006.json",
+          "sha256": "ee0cc66f9a2bf0ae4aebde7b070455517ef48a1510c056596521ff36ca908ef8",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-007.json",
+          "sha256": "81668f0efb8c60c74fd6c7c158fc3ef2dae4a7e6353c02bc70ce6a8100ca37f6",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-008.json",
+          "sha256": "cf51abd658a207d5ec15e80f6a55e5f51989a024d10d55b6bda5591265c17dd8",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-009.json",
+          "sha256": "4028d0dfa56fb7fe3ac58c3b699534bfd6e145f5c1bc30553b6faf6268efcf3a",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-010.json",
+          "sha256": "8ea4309e06d108bc5f48aa7b5db362418cacf6d19d682882f81f679bcff29670",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-011.json",
+          "sha256": "251380c244b355181709d5461a28c21381da29a9b2348478c5fbdd6f02b3f03f",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-012.json",
+          "sha256": "4e1f56dedfdd72a15898fbd4f54d6c90c063c7ffe9b4f41edd7594eed98a574a",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-013.json",
+          "sha256": "2ba4677f37113c9fcbb7674c9af305292ea5b94617d8c28a7d8da0b6ef359d94",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-014.json",
+          "sha256": "9ad2ddc9c6d08a3bdbc286dadb4910aad7813607e246e76fb8fe3a6cc836a913",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-015.json",
+          "sha256": "b299b2cd24dce462b12c605eb7039dcc0fb06a0eda33596274c4e394e33eb270",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-016.json",
+          "sha256": "95ea289b43baa0e91576dce30cfb3b30bb64cc5f2ffe3d19d1602f8016d7968c",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-017.json",
+          "sha256": "7646d6290ebee9ca5eb76f043834ee65149bc2561fdfeef7155c1b4fe02a4257",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-018.json",
+          "sha256": "7f5a7c52e4d0e10859e3d0bac96476ab16e0e67e1b3bfdc0416ea845adfcef95",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-019.json",
+          "sha256": "e3fba4fb79925bf33e794576c896fac57d518c82b4464ca87f58a0b77c684aeb",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-1/model-020.json",
+          "sha256": "afaeb0c72390758f2857ae511a6523ec3b204ec97148670eb9184e2bfc64affe",
+          "responseCaptured": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "run": "suzuki-2",
+      "summary": "/tmp/gcai-path-b-live/suzuki-2/summary.json",
+      "returnedResult": true,
+      "stepCount": 7,
+      "recommendationsByKind": {
+        "chemical_swap": 5,
+        "process_change": 2,
+        "analytical": 3,
+        "unspecified": 0
+      },
+      "reevaluationStats": {
+        "confirmed": 0,
+        "downgraded": 5,
+        "suppressed": 0,
+        "failed": 0
+      },
+      "phaseFailures": [],
+      "rawResponses": [
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-001.json",
+          "sha256": "07b177e5bfa996915ae309157f39a0277cd313410ceac0761f260dea39a80fe9",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-002.json",
+          "sha256": "507d8930027dbb61bcb1664d5941d8b484ec4f406a83a4fe98c62cc354fff9fe",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-003.json",
+          "sha256": "6519dce9b93d0a852e33d9727b78392316106042bb5a70e23b33cf6d7e6d7df8",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-004.json",
+          "sha256": "c2ce692f5034c85f542b40cf7a6b010785239f88a62723eea87c6d3241a037d6",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-005.json",
+          "sha256": "58ac01ca34d8e7a623d4b887ac43bae55e2f4e2cec874a4b698c8ec9f9c7a70f",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-006.json",
+          "sha256": "190f284bfb30c6e66b3528b28284df7d8243f564d9f42abca92528d5b659c33c",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-007.json",
+          "sha256": "e9afbf2fbc32c556136c6ab15702dc3af08e92893f28246b4c6028855b0231ba",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-008.json",
+          "sha256": "5469e9c24326b03f1331b7c31f66fb4da86dea9bdb6ec7d7bd1158137eb7d08c",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-009.json",
+          "sha256": "7cb67d2c97e304c3ff0f146216ab13de30664b39f8a0203a0e026e01bb888746",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-010.json",
+          "sha256": "1ee3de471f948713b7920ff71be844cf38feffbe5490b135bd0b3796325ce0ba",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-011.json",
+          "sha256": "8e25a91e86299d16cb580c27987e89a08437dd66186037555fa507838dbad041",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-012.json",
+          "sha256": "6134bb79336986b9f556c2e7d4641b3f6ed020822786ee62cc76ce3289181bcb",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-013.json",
+          "sha256": "e52a276541b625bf606748270c9e0cc4395903d6d30b57c9c5728c375ec9b763",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-014.json",
+          "sha256": "4594a0f64140fe0478fb17279a3b4a7b61f722b624992fc71905e4cf3ed62220",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-015.json",
+          "sha256": "1365979666ee817a76c895a013a5e40ca0c9a990c3a4502d64edf7d67c756b21",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-016.json",
+          "sha256": "8b55856682ba9c481137e9ef678ee356904ad5556e87f3cf48a42be0eb83869f",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-017.json",
+          "sha256": "51dfe2481e6360482ca95f1bfdd075fe40b7ebbf3a1617bca2e21d81005f9bd7",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-018.json",
+          "sha256": "3c24764ab1c30766c4864113b6b29203896ee84cea480f9f87b098eb96a30cd5",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-2/model-019.json",
+          "sha256": "04e3f8c43d3984c4c7aed1507089ab361b6e02d0b6477232e472e64b699e310c",
+          "responseCaptured": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "run": "suzuki-3",
+      "summary": "/tmp/gcai-path-b-live/suzuki-3/summary.json",
+      "returnedResult": true,
+      "stepCount": 7,
+      "recommendationsByKind": {
+        "chemical_swap": 4,
+        "process_change": 3,
+        "analytical": 3,
+        "unspecified": 0
+      },
+      "reevaluationStats": {
+        "confirmed": 0,
+        "downgraded": 4,
+        "suppressed": 0,
+        "failed": 0
+      },
+      "phaseFailures": [],
+      "rawResponses": [
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-001.json",
+          "sha256": "0607d590758a5e65889369e3942ad7ad0194f1101d1f9282e5b0dc76dcfb519e",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-002.json",
+          "sha256": "29089ad27bcf2c65cb00bd26e56b73c7a2d1c87f4d05adf3049eeecc5a088af9",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-003.json",
+          "sha256": "d345fe7b21a9c1dd227feaad6c6e29fe90fa43d10b59fc9c8f14a9121f6820cb",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-004.json",
+          "sha256": "5b1b0f5bb81c286c408ad6b130dc3d03e01d44ea539a4ca8e6c5700fefba736e",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-005.json",
+          "sha256": "967f80f7e472e609d863bfa4551c9ad5667503ed19fc47558be062855280b3c1",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-006.json",
+          "sha256": "a7469a4ff48b8be7d5cb366cd33ca827cb2ef7e875782d7b5117f7187961c24e",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-007.json",
+          "sha256": "7180215ab966faea8b8f516b2c98dd4db5a43bcb1fe922a631059b96ef035478",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-008.json",
+          "sha256": "300820e19e290277211eec0d84cc4cb65ae9132d03e7970de95fe039a4dae7a5",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-009.json",
+          "sha256": "15731ad0dd4d597310372b0566e6c52db0d0fe7943ab4e77a7a771fa14281633",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-010.json",
+          "sha256": "1bf6e7d86f8cc9eebada083d87479b35d1f4ffe0ef153293f5c45f6cdd1980b6",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-011.json",
+          "sha256": "fb1e025ea8177d0df0736f45ba93b60f269216ae4af9dd566b97c2eb5ae3115a",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-012.json",
+          "sha256": "7ae31d36e38f9c997e1d0f56e3d66180c79936f40f78560f997e20ce547f3bac",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-013.json",
+          "sha256": "193c326d4882fad81a1c54e1cca7ee158b037bc13ce717b64ada76d1c739add1",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-014.json",
+          "sha256": "94bc4779e86a0273504d407df3b92b6c89e75182127de95731634a20e34c677e",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-015.json",
+          "sha256": "ee7d402cbde5775c76a324a0978723e81ba6b4de8545256c35083e1a7ab43d60",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-016.json",
+          "sha256": "2d0bb4b33bf05ee894b89faf14d18db7354c955445b4808716c8e3cbcad4d308",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-017.json",
+          "sha256": "9d719350d8a01a81a84fd72416cde40045f6eec7680233b8c6c0280ae3738f3a",
+          "responseCaptured": true,
+          "error": null
+        },
+        {
+          "file": "/tmp/gcai-path-b-live/suzuki-3/model-018.json",
+          "sha256": "99ce204f3649f033c55d7547118fb963b1491f79dbb4a69b860331941d0296e0",
+          "responseCaptured": true,
+          "error": null
+        }
+      ]
+    }
+  ]
+}
