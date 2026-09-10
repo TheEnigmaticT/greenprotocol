@@ -1,17 +1,9 @@
-"""Structured waste analysis module.
+"""Structured protocol inventory and waste-availability boundary.
 
-Computes a top-level waste impact score and detailed breakdown from
-parsed chemical data. All scoring is deterministic — no LLM calls.
-
-Score formula (0-10, lower is greener):
-  base = 0
-  + solvent_mass_penalty   (0-3): penalises heavy solvent use
-  + hazard_penalty         (0-3): penalises toxic/CMR chemicals
-  + liquid_burden_penalty  (0-2): penalises high liquid throughput
-  + process_burden_penalty (0-2): penalises complex purification
-
-Weight choices are documented inline and will evolve as we validate
-against benchmark protocols.
+Parsed inputs, GHS flags, and process counts do not establish generated
+waste, liquid phase, recovery, or final disposition. Until a protocol supplies
+those data, this module emits a versioned unavailable waste estimate alongside
+the source-grounded observations that remain reportable.
 """
 
 from __future__ import annotations
@@ -19,10 +11,7 @@ from typing import Sequence
 
 from .models import ChemicalInput
 from .waste_helpers import (
-    safe_kg,
-    sum_solvent_mass_kg,
-    sum_non_solvent_mass_kg,
-    sum_liquid_mass_kg,
+    observed_input_inventory,
     bucket_hazard_chemicals,
 )
 
@@ -163,44 +152,14 @@ def compute_waste_analysis(
     wash_step_count = pm.get("wash_step_count", 0)
     workflow_complexity = pm.get("workflow_complexity", 0)
 
-    # Direct waste
-    solvent_kg = sum_solvent_mass_kg(chemicals)
-    non_solvent_kg = sum_non_solvent_mass_kg(chemicals)
-    total_kg = solvent_kg + non_solvent_kg
-
-    # Liquid burden
-    liquid_handled_kg = sum_liquid_mass_kg(chemicals)
-    # Heuristic: ~60% of liquid handled ends up discarded (washes, extractions)
-    liquid_discarded_kg = liquid_handled_kg * 0.6
-
-    # Hazard bucketing
+    inventory = observed_input_inventory(chemicals)
     buckets = bucket_hazard_chemicals(chemicals, hcodes_map)
-
-    # Sub-scores
-    sp = _solvent_penalty(solvent_kg, total_kg)
-    hp = _hazard_penalty(buckets)
-    lp = _liquid_burden_penalty(liquid_handled_kg)
-    pp = _process_burden_penalty(purification_count, wash_step_count, transfer_count)
-
-    waste_score = round(min(sp + hp + lp + pp, 10.0), 1)
-    grade = _grade(waste_score)
-    worst = _worst_category(sp, hp, lp, pp)
-    driver = _identify_primary_driver(worst, buckets)
-    next_action = _best_next_action(worst, buckets)
-
-    # Determine confidence
-    has_quantities = any(safe_kg(c) > 0 for c in chemicals)
     has_hcodes = any(len(codes) > 0 for codes in hcodes_map.values())
-    if has_quantities and has_hcodes:
-        confidence = "calculated"
-    elif has_quantities or has_hcodes:
-        confidence = "partial"
-    else:
-        confidence = "estimated"
 
-    # Evidence sources
+    # Quantity conversion and operation counts do not establish which material
+    # became waste, whether it was recovered, or its final disposition.
     sources = []
-    if has_quantities:
+    if inventory["knownMassChemicalCount"]:
         sources.append("PubChem/RDKit unit conversion")
     if has_hcodes:
         sources.append("GHS PUG-View H-codes")
@@ -208,31 +167,39 @@ def compute_waste_analysis(
         sources.append("Process complexity analysis")
 
     return {
-        "summary": {
-            "wasteImpactScore": waste_score,
-            "grade": grade,
-            "primaryDriver": driver,
-            "bestNextAction": next_action,
-            "confidence": confidence,
+        "version": "waste-analysis/v2",
+        "availability": {
+            "actualWasteMass": "unavailable",
+            "liquidDisposition": "unavailable",
+            "reason": "Actual waste generation and liquid disposition were not reported in the submitted protocol.",
         },
+        "summary": {
+            "wasteImpactScore": -1,
+            "grade": "unavailable",
+            "primaryDriver": "Actual waste generation is unknown.",
+            "bestNextAction": "Record waste streams and disposition to estimate waste.",
+            "confidence": "unavailable",
+        },
+        "observedInputInventory": inventory,
         "directWaste": {
-            "totalWasteKg": round(total_kg, 4),
-            "solventWasteKg": round(solvent_kg, 4),
-            "nonSolventWasteKg": round(non_solvent_kg, 4),
+            "totalWasteKg": None,
+            "solventWasteKg": None,
+            "nonSolventWasteKg": None,
         },
         "hazardSegments": [
             {
                 "category": cat,
-                "totalKg": round(data["totalKg"], 4),
+                "totalKg": round(data["totalKg"], 4) if data["totalKg"] is not None else None,
                 "chemicalsCount": data["count"],
                 "chemicals": data["chemicals"],
+                "massCoverage": data["massCoverage"],
             }
             for cat, data in buckets.items()
             if data["count"] > 0
         ],
         "liquidBurden": {
-            "totalLiquidHandledKg": round(liquid_handled_kg, 4),
-            "totalLiquidDiscardedKg": round(liquid_discarded_kg, 4),
+            "totalLiquidHandledKg": None,
+            "totalLiquidDiscardedKg": None,
         },
         "processBurden": {
             "transferCount": transfer_count,

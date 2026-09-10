@@ -1,8 +1,7 @@
-"""Deterministic utility functions for waste analysis calculations.
+"""Deterministic helpers for protocol inventory and hazard observations.
 
-These helpers operate on parsed chemical data and produce waste metrics
-without any LLM involvement. All quantities must be pre-converted to kg
-by the unit conversion pipeline before reaching these functions.
+Pre-converted quantities are observations of parsed inputs, not evidence of
+waste generation, liquid phase, recovery, or disposal.
 """
 
 from __future__ import annotations
@@ -40,7 +39,7 @@ SOLVENT_ROLES = {"solvent", "co-solvent", "wash solvent", "extraction solvent"}
 
 
 def safe_kg(chem: ChemicalInput) -> float:
-    """Return quantity_kg or 0.0 if missing."""
+    """Legacy numeric accessor; never use it to represent a missing mass."""
     return chem.quantity_kg or 0.0
 
 
@@ -59,20 +58,30 @@ def sum_non_solvent_mass_kg(chemicals: Sequence[ChemicalInput]) -> float:
     return sum(safe_kg(c) for c in chemicals if not is_solvent(c))
 
 
-def sum_liquid_mass_kg(chemicals: Sequence[ChemicalInput]) -> float:
-    """Total mass of all liquids handled (solvents + liquid reagents).
+def observed_input_inventory(chemicals: Sequence[ChemicalInput]) -> dict:
+    """Return declared/converted non-product input masses without calling them waste.
 
-    Heuristic: solvents are always liquid; other chemicals are liquid
-    if they have a recorded density (implying a liquid measurement).
+    Quantity conversion does not establish material phase, recovery, or disposal.
+    Keep missing masses explicit rather than replacing them with numeric zero.
     """
-    total = 0.0
-    for c in chemicals:
-        if is_solvent(c):
-            total += safe_kg(c)
-        elif c.quantity_kg and (c.quantity_g is not None or c.quantity_mol is not None):
-            # Has mass — include if originally measured in mL (proxy: has density)
-            total += safe_kg(c)
-    return total
+    inputs = [c for c in chemicals if c.role.lower().strip() != "product"]
+    known = [c for c in inputs if c.quantity_kg is not None]
+    unknown = [c for c in inputs if c.quantity_kg is None]
+    if not known:
+        coverage = "unavailable"
+        known_mass = None
+    elif unknown:
+        coverage = "partial"
+        known_mass = round(sum(c.quantity_kg or 0.0 for c in known), 4)
+    else:
+        coverage = "complete"
+        known_mass = round(sum(c.quantity_kg or 0.0 for c in known), 4)
+    return {
+        "knownInputMassKg": known_mass,
+        "knownMassChemicalCount": len(known),
+        "chemicalsWithUnknownMassCount": len(unknown),
+        "massCoverage": coverage,
+    }
 
 
 def categorize_hcodes(hcodes: list[str]) -> dict[str, bool]:
@@ -107,11 +116,28 @@ def bucket_hazard_chemicals(
     for chem in chemicals:
         codes = hcodes_map.get(chem.name, [])
         cats = categorize_hcodes(codes)
-        kg = safe_kg(chem)
+        known_mass = chem.quantity_kg is not None
+        kg = chem.quantity_kg if known_mass else 0.0
         for cat, flagged in cats.items():
             if flagged:
                 buckets[cat]["totalKg"] += kg
                 buckets[cat]["chemicals"].append(chem.name)
                 buckets[cat]["count"] += 1
+                buckets[cat].setdefault("knownMassCount", 0)
+                buckets[cat]["knownMassCount"] += int(known_mass)
+
+    for bucket in buckets.values():
+        if bucket["count"] == 0:
+            bucket["massCoverage"] = "unavailable"
+            bucket["totalKg"] = None
+        elif bucket["knownMassCount"] == 0:
+            bucket["massCoverage"] = "unavailable"
+            bucket["totalKg"] = None
+        elif bucket["knownMassCount"] < bucket["count"]:
+            bucket["massCoverage"] = "partial"
+            bucket["totalKg"] = None
+        else:
+            bucket["massCoverage"] = "complete"
+        bucket.pop("knownMassCount", None)
 
     return buckets

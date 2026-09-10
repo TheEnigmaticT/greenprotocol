@@ -35,7 +35,7 @@ def _get_atom_counts(mol) -> Counter:
     return counts_h
 
 
-def _validate_reaction(
+def validate_reaction_balance(
     reactant_mols: list, product_mols: list
 ) -> tuple[bool, str]:
     """Check if a reaction conserves atoms (is balanced)."""
@@ -64,14 +64,14 @@ def _validate_reaction(
 
 def score_p2(
     reaction_smiles: str | None = None,
-    desired_product_index: int = 0,
+    desired_product_index: int | None = None,
 ) -> PrincipleScore:
     """Score Principle 2: Atom Economy.
     
     Args:
         reaction_smiles: Reaction SMILES (reactants>>products)
                         e.g. "A.B>>C.D" where . separates molecules
-        desired_product_index: Which product is the desired one (0-indexed)
+        desired_product_index: Explicit target (0-indexed); required for multiple products.
     """
     if not RDKIT_AVAILABLE:
         return PrincipleScore(
@@ -100,13 +100,31 @@ def score_p2(
     if len(parts) != 2:
         return PrincipleScore(
             principle_number=2, principle_name="Atom Economy",
-            score=5.0, normalized=0.5,
+            score=-1.0, normalized=-1.0,
             details={"error": f"Invalid reaction SMILES format: {reaction_smiles}"},
-            confidence="model-inferred", data_sources=[],
+            confidence="unavailable", data_sources=[],
         )
 
     reactant_smiles = [s.strip() for s in parts[0].split(".") if s.strip()]
     product_smiles = [s.strip() for s in parts[1].split(".") if s.strip()]
+
+    if not reactant_smiles or not product_smiles:
+        return PrincipleScore(
+            principle_number=2, principle_name="Atom Economy",
+            score=-1.0, normalized=-1.0,
+            details={"error": "Reaction representation is missing reactants or products."},
+            confidence="unavailable", data_sources=[],
+        )
+
+    if desired_product_index is None and len(product_smiles) == 1:
+        desired_product_index = 0
+    if type(desired_product_index) is not int or not 0 <= desired_product_index < len(product_smiles):
+        return PrincipleScore(
+            principle_number=2, principle_name="Atom Economy",
+            score=-1.0, normalized=-1.0,
+            details={"error": "An explicit valid desired product selection is required for atom economy."},
+            confidence="unavailable", data_sources=[],
+        )
 
     # Parse molecules
     reactant_mols = []
@@ -136,10 +154,17 @@ def score_p2(
         product_mols.append(mol)
 
     # Validate atom conservation
-    balanced, balance_msg = _validate_reaction(reactant_mols, product_mols)
+    balanced, balance_msg = validate_reaction_balance(reactant_mols, product_mols)
     warnings = []
     if not balanced:
-        warnings.append(f"Reaction may be unbalanced: {balance_msg}")
+        return PrincipleScore(
+            principle_number=2, principle_name="Atom Economy",
+            score=-1.0, normalized=-1.0,
+            details={"error": "Atom economy requires a balanced reaction representation.",
+                     "balanced": False, "balance_detail": balance_msg,
+                     "reaction_smiles": reaction_smiles},
+            confidence="unavailable", data_sources=["rdkit"],
+        )
 
     # Calculate molecular weights
     reactant_data = []
@@ -155,9 +180,6 @@ def score_p2(
         product_data.append({"smiles": s, "mw": round(mw, 4)})
 
     # Get desired product
-    if desired_product_index >= len(product_mols):
-        desired_product_index = 0
-
     desired_mw = Descriptors.MolWt(product_mols[desired_product_index])
     byproduct_mw = sum(
         Descriptors.MolWt(m) for i, m in enumerate(product_mols)

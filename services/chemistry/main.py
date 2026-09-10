@@ -80,7 +80,7 @@ def health():
 @app.post("/batch", response_model=BatchResponse, dependencies=[Depends(require_service_token)])
 async def batch_convert(request: BatchRequest):
     """Batch convert chemicals to standardized units."""
-    tasks = [convert(c.chemical_name, c.quantity) for c in request.chemicals]
+    tasks = [convert(c.chemical_name, c.quantity, c.request_id) for c in request.chemicals]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     converted = []
     for i, result in enumerate(results):
@@ -88,6 +88,8 @@ async def batch_convert(request: BatchRequest):
             chem = request.chemicals[i]
             converted.append(ConvertResponse(
                 chemical_name=chem.chemical_name,
+                requested_chemical_name=chem.chemical_name,
+                request_id=chem.request_id,
                 input_quantity=chem.quantity,
                 data_source="error",
                 error=str(result),
@@ -103,7 +105,7 @@ async def assistant_tools(request: AssistantToolPayload):
     return await execute_assistant_tool(request)
 
 
-def _hcodes_from_cache(chem_name: str) -> list[str]:
+def _hcodes_from_cache(chem_name: str) -> list[str] | None:
     """Resolve GHS H-codes for a chemical from the cache, supporting all shapes.
 
     - Live-converted records carry rich {"ghs_hazards": [{code, ...}]}.
@@ -113,17 +115,19 @@ def _hcodes_from_cache(chem_name: str) -> list[str]:
     """
     rec = chem_cache.get(resolve_synonym(chem_name)) or chem_cache.get(chem_name)
     if not rec:
-        return []
+        return None
     if rec.get("ghs_hazards"):
-        return [h["code"] for h in rec["ghs_hazards"] if "code" in h]
+        return [h["code"] for h in rec["ghs_hazards"] if "code" in h] or None
     if rec.get("hcodes"):
-        return [c for c in rec["hcodes"] if isinstance(c, str)]
+        return [c for c in rec["hcodes"] if isinstance(c, str)] or None
     cid = rec.get("cid")
     if cid is not None:
         ghs = chem_cache.get(f"ghs_{cid}")
         if ghs and ghs.get("hcodes"):
-            return [c for c in ghs["hcodes"] if isinstance(c, str)]
-    return []
+            return [c for c in ghs["hcodes"] if isinstance(c, str)] or None
+    # An empty PubChem/cache hazard list is not evidence of a completed
+    # assessment finding no hazards. That distinction is not stored yet.
+    return None
 
 
 @app.post("/score", response_model=ScoringResponse, dependencies=[Depends(require_service_token)])
@@ -135,10 +139,12 @@ async def score_protocol(request: ScoringRequest):
     local_result = await run_local_helpers(request) if os.getenv("GCAI_LOCAL_HELPERS") else None
 
     # Read GHS H-codes from the converter cache (populated by /batch).
-    # Falls back to [] for chemicals not yet converted, so P3 degrades gracefully.
+    # Omit unknown assessments: an empty fallback would certify them as safe.
     hcodes_map: dict[str, list[str]] = {}
     for chem in request.chemicals:
-        hcodes_map[chem.name] = _hcodes_from_cache(chem.name)
+        codes = _hcodes_from_cache(chem.name)
+        if codes is not None:
+            hcodes_map[chem.name] = codes
 
     # Extract yield and reaction type for P1 PMI calculation.
     yield_info: dict = {}
@@ -187,6 +193,7 @@ async def score_protocol(request: ScoringRequest):
         atom_economy_pct=ae_pct,
         yield_pct=yield_info.get("yield_pct"),
         yield_source=yield_info.get("confidence", "unknown"),
+        product_mass_g=yield_info.get("yield_mass_g"),
         reaction_type=yield_info.get("reaction_type"),
         benchmark_efficiency=benchmark.get("typical_efficiency"),
         benchmark_pmi=benchmark.get("typical_pmi"),
@@ -243,6 +250,9 @@ async def score_protocol(request: ScoringRequest):
     )
 
     yield_extraction = {k: v for k, v in yield_info.items() if k != "benchmark"}
+    # The validated representation is an input to downstream bounded retrieval.
+    # Preserve it with extraction provenance rather than requiring a second parse.
+    smiles_extraction = {**smiles_metadata, "reaction_smiles": reaction_smiles}
 
     return ScoringResponse(
         scores=all_scores,
@@ -251,7 +261,7 @@ async def score_protocol(request: ScoringRequest):
         max_possible=max_possible,
         grade=grade,
         waste_analysis=waste,
-        smiles_extraction=smiles_metadata,
+        smiles_extraction=smiles_extraction,
         yield_extraction=yield_extraction,
         local_helpers=({**local_result, "helpers": {
             stage: {k: v for k, v in row.items() if k != "value"}

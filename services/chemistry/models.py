@@ -6,10 +6,13 @@ from pydantic import BaseModel, Field
 class ConvertRequest(BaseModel):
     chemical_name: str = Field(..., description="Chemical name or common abbreviation")
     quantity: str = Field(..., description="Quantity string, e.g. '5 mL', '2.3 g', '0.1 mol'")
+    request_id: str | None = Field(None, description="Caller-generated stable occurrence key, echoed unchanged")
 
 
 class ConvertResponse(BaseModel):
     chemical_name: str = Field(..., description="Resolved canonical name")
+    requested_chemical_name: str = Field(..., description="Verbatim requested chemical identity")
+    request_id: str | None = Field(None, description="Caller-generated stable occurrence key")
     cas: str | None = Field(None, description="CAS registry number if available")
     smiles: str | None = Field(None, description="Canonical SMILES")
     molecular_formula: str | None = Field(None)

@@ -2,6 +2,7 @@
 
 Used when PubChem is unavailable from hosted infrastructure.
 """
+from __future__ import annotations
 
 LOCAL_PROPERTIES: dict[str, dict] = {
     "water": {
@@ -144,7 +145,9 @@ LOCAL_HCODES_BY_CID: dict[int, list[str]] = {
 
 
 def lookup_local_properties(name: str) -> dict | None:
-    return LOCAL_PROPERTIES.get(name.lower().strip())
+    from synonyms import resolve_synonym
+
+    return LOCAL_PROPERTIES.get(resolve_synonym(name).lower().strip())
 
 
 def lookup_local_hcodes(cid: int) -> list[str]:

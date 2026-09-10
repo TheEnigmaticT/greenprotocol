@@ -17,6 +17,8 @@ def test_store_enqueues_claims_and_completes_via_rpc():
         calls.append((request.url.path, request.read()))
         if "claim_due" in str(request.url):
             return httpx.Response(200, json=[{"id":"1", "display_name":"Acetic Acid"}])
+        if "upsert_chemical_reference_miss" in str(request.url):
+            return httpx.Response(200, json=[{"id":"1"}])
         return httpx.Response(200, json=True)
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     store = ReferenceStore(client=client, url="https://example.supabase.co", key="service-key")
@@ -24,5 +26,23 @@ def test_store_enqueues_claims_and_completes_via_rpc():
     assert (await store.claim_due("worker"))[0]["id"] == "1"
     assert await store.complete_miss("1", "worker", result="retryable", error_code="http_503", next_attempt_at=__import__('datetime').datetime.now(__import__('datetime').timezone.utc)) is True
     assert len(calls) == 3
+    await client.aclose()
+  asyncio.run(scenario())
+
+
+def test_store_rejects_empty_or_non_boolean_mutation_rpc_responses():
+  async def scenario():
+    def handler(request):
+        if "upsert_chemical_reference_miss" in str(request.url):
+            return httpx.Response(200, json=[])
+        if "upsert_chemical_reference_cache" in str(request.url):
+            return httpx.Response(200, json={})
+        return httpx.Response(200, json=False)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    store = ReferenceStore(client=client, url="https://example.supabase.co", key="service-key")
+    assert not await store.enqueue_miss("Acetic Acid", retryable=True, http_status=503, error_code="http_503")
+    assert not await store.upsert_cache("Acetic Acid", {"cid": 176})
+    assert not await store.complete_miss("1", "worker", result="resolved")
     await client.aclose()
   asyncio.run(scenario())

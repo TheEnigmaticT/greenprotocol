@@ -253,7 +253,7 @@ def test_p5_reports_chem21_unavailable_without_reclassifying_solvents(monkeypatc
         raise SolventEvidenceUnavailableError("CHEM21 index is unavailable")
 
     monkeypatch.setattr(p5, "lookup_solvent", unavailable)
-    result = p5.score_p5([ChemicalInput(name="unlisted solvent", role="solvent")])
+    result = p5.score_p5([ChemicalInput(name="unlisted solvent", role="solvent", quantity_g=1)])
 
     assert result.score == -1.0
     assert result.normalized == -1.0

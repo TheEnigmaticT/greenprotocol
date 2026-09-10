@@ -8,6 +8,7 @@ If validation fails, we return None rather than bad data.
 import re
 from llm_client import call_llm
 from isolated_llm_policy import helper_protocol_context
+from scoring.p2_atom_economy import validate_reaction_balance
 
 try:
     from rdkit import Chem
@@ -56,7 +57,10 @@ def _validate_smiles(reaction_smiles: str) -> tuple[bool, str]:
         if Chem.MolFromSmiles(s) is None:
             return False, f"Invalid product SMILES: {s}"
 
-    return True, "valid"
+    return validate_reaction_balance(
+        [Chem.MolFromSmiles(s) for s in reactant_smiles],
+        [Chem.MolFromSmiles(s) for s in product_smiles],
+    )
 
 
 def _extract_smiles_from_response(text: str) -> str | None:

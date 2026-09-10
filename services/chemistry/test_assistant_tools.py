@@ -3,6 +3,7 @@ import pytest
 
 import assistant_tools
 from assistant_tools import AssistantToolRequest, execute_assistant_tool
+import pubchem
 from solvent_evidence_store import SolventEvidenceUnavailableError
 
 from fastapi.testclient import TestClient
@@ -127,3 +128,27 @@ def test_chem21_tool_reports_unavailable_index(monkeypatch):
     assert result.status == "unavailable"
     assert result.source == "CHEM21"
     assert result.warnings == ["CHEM21 data is unavailable: CHEM21 index is unavailable"]
+
+
+def test_pubchem_tool_reports_rate_budget_deferral_as_unavailable(monkeypatch):
+    async def scenario():
+        async def unresolved(_: str):
+            return None
+
+        monkeypatch.setattr(assistant_tools, "lookup_chemical", unresolved)
+        pubchem._last_lookup_failure.set({
+            "status": "retryable",
+            "error_code": "rate_budget",
+            "retry_after_ms": 1000,
+        })
+
+        result = await execute_assistant_tool(
+            AssistantToolRequest(operation="pubchem", chemical_name="unknown")
+        )
+
+        assert result.status == "unavailable"
+        assert result.warnings == [
+            "PubChem lookup is deferred by the shared request budget; retry after 1000 ms."
+        ]
+
+    asyncio.run(scenario())

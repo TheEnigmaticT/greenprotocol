@@ -1,98 +1,66 @@
-"""Surgical LLM calls for yield extraction and reaction type classification."""
-
-import re
+"""Surgical LLM calls for evidence-grounded yield extraction."""
 import json
+import math
+import re
 from llm_client import call_llm
 from isolated_llm_policy import helper_protocol_context
 from reaction_types import get_all_reaction_types, lookup_benchmark
 
-YIELD_SYSTEM = """You are a chemistry expert. Extract yield information from 
-a protocol. Respond with ONLY a JSON object, nothing else.
-
-Format: {"yield_pct": <number or null>, "yield_mass_g": <number or null>, 
-"reaction_type": "<type>", "confidence": "stated|inferred|unknown"}
-
-- yield_pct: percentage yield if stated (e.g., 85 for "85% yield")
-- yield_mass_g: product mass in grams if stated
-- reaction_type: classify the main reaction
-- confidence: "stated" if yield is explicitly given in the protocol,
-  "inferred" if you calculated it, "unknown" if not determinable"""
+YIELD_SYSTEM = '''Extract only directly stated yield values. Return JSON with yield_pct, yield_mass_g, reaction_type, confidence. Do not infer or convert values.'''
 
 
-async def extract_yield_and_type(
-    protocol_text: str,
-    chemicals: list[dict] | None = None,
-) -> dict:
-    """Extract yield and reaction type from protocol text.
-    
-    Returns dict with: yield_pct, yield_mass_g, reaction_type, 
-    confidence, benchmark (if reaction type matched)
-    """
+def _number(value, *, minimum: float, maximum: float | None = None) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    value = float(value)
+    return value if value > minimum and (maximum is None or value <= maximum) else None
+
+
+def _evidence(protocol: str, pct: float | None, mass: float | None) -> dict[str, str]:
+    found: dict[str, str] = {}
+    if pct is not None:
+        value = re.escape(f"{pct:g}")
+        match = re.search(rf"(?<![\d.])({value}\s*%\s*(?:yield|yielded)?)(?![\d.])", protocol, re.I)
+        if match:
+            found["yield_pct"] = match.group(1)
+    if mass is not None:
+        value = re.escape(f"{mass:g}")
+        match = re.search(rf"(?<![\d.])({value}\s*(?:g|grams?))(?![a-z])", protocol, re.I)
+        if match:
+            found["yield_mass_g"] = match.group(1)
+    return found
+
+
+async def extract_yield_and_type(protocol_text: str, chemicals: list[dict] | None = None) -> dict:
     known_types = get_all_reaction_types()
-    type_list = ", ".join(known_types)
-
-    chem_context = ""
-    if chemicals:
-        lines = [f"  - {c.get('name','?')} ({c.get('role','?')}) {c.get('quantity','')}"
-                 for c in chemicals]
-        chem_context = "\nChemicals:\n" + "\n".join(lines)
-
-    prompt = (
-        f"Extract yield and classify the reaction type.\n\n"
-        f"Protocol:\n{helper_protocol_context(protocol_text, 3000)}\n"
-        f"{chem_context}\n\n"
-        f"Known reaction types: {type_list}\n\n"
-        f"If the reaction type doesn't match any known type exactly, "
-        f"use the closest match or describe it briefly.\n\n"
-        f"Respond with ONLY the JSON object."
-    )
-
+    chem_context = "\n".join(f"- {c.get('name','?')} ({c.get('role','?')}) {c.get('quantity','')}" for c in (chemicals or []))
+    prompt = f"Extract yield and classify reaction.\nProtocol:\n{helper_protocol_context(protocol_text, 3000)}\nChemicals:\n{chem_context}\nKnown: {', '.join(known_types)}"
     response = await call_llm(prompt, system=YIELD_SYSTEM, stage="yield")
     if not response:
         return {"error": "LLM returned no response", "llm_called": True}
-
-    # Parse JSON from response
     try:
-        # Handle markdown code fences
-        clean = response.strip()
-        if clean.startswith("```"):
-            clean = re.sub(r"^```\w*\n?", "", clean)
-            clean = re.sub(r"\n?```$", "", clean)
+        clean = re.sub(r"^```\w*\n?|\n?```$", "", response.strip())
         data = json.loads(clean)
     except json.JSONDecodeError:
-        return {"error": f"Failed to parse LLM response: {response[:200]}",
-                "llm_called": True}
-
-    result = {
-        "yield_pct": data.get("yield_pct"),
-        "yield_mass_g": data.get("yield_mass_g"),
-        "reaction_type": data.get("reaction_type", "unknown"),
-        "confidence": data.get("confidence", "unknown"),
-        "llm_called": True,
-    }
-
-    # Look up benchmark for the reaction type
-    rxn_type = result["reaction_type"]
-    benchmark = lookup_benchmark(rxn_type)
-
-    # Try fuzzy match if exact match fails
-    if not benchmark and rxn_type:
-        rxn_lower = rxn_type.lower()
-        for key, bm in __import__("reaction_types").REACTION_BENCHMARKS.items():
-            if key in rxn_lower or rxn_lower in key:
-                benchmark = bm
-                break
-            if any(w in rxn_lower for w in bm.reaction_type.lower().split()):
-                benchmark = bm
-                break
-
+        return {"error": f"Failed to parse LLM response: {response[:200]}", "llm_called": True}
+    pct = _number(data.get("yield_pct"), minimum=0, maximum=100)
+    mass = _number(data.get("yield_mass_g"), minimum=0)
+    stated = data.get("confidence") == "stated"
+    evidence = _evidence(protocol_text, pct, mass) if stated else {}
+    invalid = (data.get("yield_pct") is not None and pct is None) or (data.get("yield_mass_g") is not None and mass is None)
+    unsupported = stated and ((pct is not None and "yield_pct" not in evidence) or (mass is not None and "yield_mass_g" not in evidence))
+    if not stated:
+        pct = mass = None; status = "not_explicitly_stated"; confidence = "unknown"; evidence = {}
+    elif invalid:
+        pct = mass = None; status = "invalid_stated_value"; confidence = "unknown"; evidence = {}
+    elif unsupported:
+        pct = mass = None; status = "unsupported_by_protocol"; confidence = "unknown"; evidence = {}
+    else:
+        status = "explicitly_stated"; confidence = "stated"
+    result = {"yield_pct": pct, "yield_mass_g": mass, "reaction_type": data.get("reaction_type", "unknown"), "confidence": confidence,
+              "yield_evidence_status": status, "yield_evidence": evidence, "llm_called": True}
+    benchmark = lookup_benchmark(result["reaction_type"])
     if benchmark:
-        result["benchmark"] = {
-            "reaction_type": benchmark.reaction_type,
-            "typical_efficiency": benchmark.typical_efficiency,
-            "efficiency_range": list(benchmark.efficiency_range),
-            "typical_pmi": benchmark.typical_pmi,
-            "pmi_range": list(benchmark.pmi_range),
-        }
-
+        result["benchmark"] = {"reaction_type": benchmark.reaction_type, "typical_efficiency": benchmark.typical_efficiency,
+            "efficiency_range": list(benchmark.efficiency_range), "typical_pmi": benchmark.typical_pmi, "pmi_range": list(benchmark.pmi_range)}
     return result

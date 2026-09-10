@@ -25,6 +25,8 @@ def score_p6(
 
     for step in steps:
         conds = step.get("conditions", {})
+        if not isinstance(conds, dict):
+            continue
         temp_str = conds.get("temperature")
         if not temp_str or temp_str == "null":
             continue
@@ -63,6 +65,9 @@ def score_p6(
             "temperatures": temps,
             "avg_deviation_c": round(avg_deviation, 1),
             "max_deviation_c": round(max_deviation, 1),
+            "methodology_note": "Temperature-deviation proxy from declared conditions, not measured energy. Duration, equipment efficiency and unreported temperatures are not modeled; ambient is represented by 20°C.",
+            "steps_with_temperature": len(temps),
+            "steps_without_temperature": len(steps) - len(temps),
         },
         data_sources=["protocol_parse"],
         confidence="calculated",
@@ -72,24 +77,27 @@ def score_p6(
 def _parse_temp(s: str) -> float | None:
     """Parse temperature from strings like '75-80°C', 'rt', '-78°C'."""
     import re
+    import math
+    if not isinstance(s, str):
+        return None
     s = s.lower().strip()
 
     if s in ("rt", "room temperature", "ambient", "room temp"):
         return AMBIENT_TEMP_C
 
-    # Range: "75-80°C" -> take midpoint
-    m = re.search(r"(-?\d+\.?\d*)\s*[-–to]+\s*(-?\d+\.?\d*)\s*°?\s*c", s)
-    if m:
-        return (float(m.group(1)) + float(m.group(2))) / 2
-
-    # Single value: "75°C", "75 C", "75 degrees"
-    m = re.search(r"(-?\d+\.?\d*)\s*°?\s*c", s)
-    if m:
-        return float(m.group(1))
-
-    # Just a number (assume Celsius)
-    m = re.search(r"(-?\d+\.?\d*)", s)
-    if m:
-        return float(m.group(1))
-
-    return None
+    # Require an explicit scale. A duration or a unitless number is not Celsius.
+    m = re.search(
+        r"(-?\d+(?:\.\d+)?)\s*(?:(?:-|–|—|to)\s*(-?\d+(?:\.\d+)?)\s*)?"
+        r"°?\s*(c(?:elsius)?|f(?:ahrenheit)?|k(?:elvin)?)\b", s,
+    )
+    if not m:
+        return None
+    value = float(m.group(1))
+    if m.group(2) is not None:
+        value = (value + float(m.group(2))) / 2
+    unit = m.group(3)[0]
+    if unit == "f":
+        value = (value - 32) * 5 / 9
+    elif unit == "k":
+        value -= 273.15
+    return value if math.isfinite(value) and value >= -273.15 else None

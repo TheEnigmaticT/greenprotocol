@@ -62,12 +62,15 @@ class ReferenceStore:
     async def upsert_cache(self, name: str, record: dict[str, Any]) -> bool:
         normalized = normalize_name(name)
         result = await self._rpc("upsert_chemical_reference_cache", {"p_normalized_name": normalized, "p_record": record})
-        return result is not None
+        return result is True
 
     async def enqueue_miss(self, name: str, *, retryable: bool, http_status: int | None = None, error_code: str | None = None) -> bool:
         normalized = normalize_name(name)
         result = await self._rpc("upsert_chemical_reference_miss", {"p_normalized_name": normalized, "p_display_name": name.strip(), "p_retryable": retryable, "p_http_status": http_status, "p_error_code": error_code})
-        return result is not None
+        return isinstance(result, list) and any(
+            isinstance(row, dict) and isinstance(row.get("id"), str) and row["id"]
+            for row in result
+        )
 
     async def claim_due(self, worker_id: str, limit: int = 20, lease_seconds: int = 300) -> list[dict[str, Any]]:
         result = await self._rpc("claim_due_chemical_reference_misses", {"p_worker_id": worker_id, "p_limit": min(max(limit, 1), 50), "p_lease_seconds": lease_seconds})
@@ -75,7 +78,21 @@ class ReferenceStore:
 
     async def complete_miss(self, miss_id: str, worker_id: str, *, result: str, http_status: int | None = None, error_code: str | None = None, next_attempt_at: datetime | None = None) -> bool:
         payload = {"p_id": miss_id, "p_worker_id": worker_id, "p_result": result, "p_http_status": http_status, "p_error_code": error_code, "p_next_attempt_at": next_attempt_at.isoformat() if next_attempt_at else None}
-        return (await self._rpc("complete_chemical_reference_miss", payload)) is not None
+        return (await self._rpc("complete_chemical_reference_miss", payload)) is True
+
+    async def acquire_pubchem_request_slot(self) -> tuple[bool, int]:
+        """Atomically acquire the shared one-request-per-second PubChem slot.
+
+        Absence or an invalid RPC response is deliberately a denial: callers
+        defer and retain retry truth rather than issuing uncontrolled HTTP.
+        """
+        result = await self._rpc("acquire_pubchem_request_slot", {"p_min_interval_ms": 1000})
+        if isinstance(result, list):
+            result = result[0] if result else None
+        if not isinstance(result, dict) or result.get("granted") is not True:
+            retry_after = result.get("retry_after_ms") if isinstance(result, dict) else None
+            return False, max(0, int(retry_after)) if isinstance(retry_after, (int, float)) else 1000
+        return True, 0
 
 
 _default_store: ReferenceStore | None = None

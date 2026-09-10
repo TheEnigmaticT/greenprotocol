@@ -3,6 +3,8 @@
 import asyncio
 import importlib
 
+from fastapi.testclient import TestClient
+
 import main
 from scoring.models import ChemicalInput, PrincipleScore, ScoringRequest, ScoreProvenance
 
@@ -44,6 +46,71 @@ def test_score_endpoint_returns_all_twelve_principles(monkeypatch):
     assert response.max_possible == 120.0
 
 
+def test_score_handler_returns_benchmark_only_pmi_without_product_mass(monkeypatch):
+    """A reaction benchmark must not require or invent a procedure product mass."""
+    async def benchmark_only_yield(*args, **kwargs):
+        return {
+            "reaction_type": "amide coupling",
+            "benchmark": {"typical_pmi": 25.0},
+        }
+
+    monkeypatch.setenv("CHEMISTRY_SERVICE_TOKEN", "test-token")
+    monkeypatch.setattr(main, "extract_yield_and_type", benchmark_only_yield)
+    monkeypatch.setattr(main, "score_p2", lambda **kwargs: _score(2))
+    for number in (3, 4, 5, 6, 7, 9, 10, 12):
+        monkeypatch.setattr(main, f"score_p{number}", lambda **kwargs: _score(number))
+    monkeypatch.setattr(main, "score_p8", _fake_async_score(8))
+    monkeypatch.setattr(main, "score_p11", _fake_async_score(11))
+    monkeypatch.setattr(main, "compute_waste_analysis", lambda **kwargs: {})
+    monkeypatch.setattr(main, "compute_regulatory_context", lambda **kwargs: {})
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/score",
+            headers={"X-Chemistry-Service-Token": "test-token"},
+            json={
+                "protocol_text": "Couple the substrates in solvent.",
+                "reaction_smiles": "CC(=O)O.N>>CC(=O)N",
+                "chemicals": [
+                    {"name": "acetonitrile", "role": "solvent", "quantity": "10 mL", "quantity_g": 7.86},
+                ],
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    p1 = next(score for score in response.json()["scores"] if score["principle_number"] == 1)
+    assert p1["score"] == -1.0
+    assert p1["details"]["method"] == "benchmark_reference_only"
+    assert p1["details"]["product_mass_g"] is None
+    assert p1["details"]["yield_pct"] is None
+    assert "reference only" in p1["details"]["_summary"].lower()
+
+
+def test_score_endpoint_passes_explicit_isolated_mass_to_p1(monkeypatch):
+    captured = {}
+
+    async def stated_yield(*args, **kwargs):
+        return {"yield_pct": 80.0, "yield_mass_g": 4.0, "reaction_type": "test", "confidence": "stated", "benchmark": {}}
+
+    def fake_p1(**kwargs):
+        captured.update(kwargs)
+        return _score(1)
+
+    monkeypatch.setattr(main, "extract_yield_and_type", stated_yield)
+    monkeypatch.setattr(main, "score_p1", fake_p1)
+    monkeypatch.setattr(main, "score_p2", lambda **kwargs: _score(2))
+    for number in (3, 4, 5, 6, 7, 9, 10, 12):
+        monkeypatch.setattr(main, f"score_p{number}", lambda **kwargs: _score(number))
+    monkeypatch.setattr(main, "score_p8", _fake_async_score(8))
+    monkeypatch.setattr(main, "score_p11", _fake_async_score(11))
+    monkeypatch.setattr(main, "compute_waste_analysis", lambda **kwargs: {})
+    monkeypatch.setattr(main, "compute_regulatory_context", lambda **kwargs: {})
+
+    asyncio.run(main.score_protocol(_request()))
+    assert captured["product_mass_g"] == 4.0
+    assert captured["yield_pct"] == 80.0
+
+
 def test_score_endpoint_extracts_reaction_smiles_when_missing(monkeypatch):
     """P2 should receive a validated reaction equation on normal requests."""
     captured = {}
@@ -69,6 +136,7 @@ def test_score_endpoint_extracts_reaction_smiles_when_missing(monkeypatch):
 
     assert captured["reaction_smiles"] == "CCO>>CC=O"
     assert response.smiles_extraction["llm_called"] is True
+    assert response.smiles_extraction["reaction_smiles"] == "CCO>>CC=O"
 
 
 def _request() -> ScoringRequest:

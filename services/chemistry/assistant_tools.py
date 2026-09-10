@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from chem21 import lookup_solvent_with_evidence
 from ghs import lookup_hcodes
-from pubchem import lookup_chemical
+from pubchem import get_last_lookup_failure, lookup_chemical
 from solvent_evidence_store import SolventEvidenceUnavailableError, get_store
 from solvent_screening import _valid_identity, normalize_smiles, screen_candidates
 
@@ -181,6 +181,23 @@ async def execute_assistant_tool(request: AssistantToolRequest) -> AssistantTool
 
     chemical = await lookup_chemical(request.chemical_name or "")
     if chemical is None:
+        failure = get_last_lookup_failure() or {}
+        if failure.get("status") != "terminal_not_found":
+            if failure.get("error_code") == "rate_budget":
+                retry_after_ms = failure.get("retry_after_ms", 1000)
+                warning = (
+                    "PubChem lookup is deferred by the shared request budget; "
+                    f"retry after {retry_after_ms} ms."
+                )
+            else:
+                warning = "PubChem lookup is temporarily unavailable; no absence was confirmed."
+            return AssistantToolResponse(
+                operation=request.operation,
+                chemical_name=request.chemical_name or "",
+                status="unavailable",
+                source="PubChem",
+                warnings=[warning],
+            )
         return AssistantToolResponse(
             operation=request.operation,
             chemical_name=request.chemical_name or "",

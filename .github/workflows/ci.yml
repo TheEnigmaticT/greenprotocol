@@ -74,6 +74,18 @@ jobs:
       - name: Build the generated local evidence index from committed raw data
         run: python ../../scripts/chemistry/build_solvent_evidence_index.py --raw data/solvent-evidence/raw --manifests data/solvent-evidence/manifests --output data/solvent-evidence/solvent-evidence.sqlite
       - run: pytest -q --junitxml=pytest-results.xml
+      - name: Verify shared PubChem budget migration and concurrency
+        run: |
+          container=gcai-pubchem-budget-ci
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name "$container" --network none -e POSTGRES_HOST_AUTH_METHOD=trust postgres:16
+          ready=false
+          for attempt in $(seq 1 30); do
+            if docker exec "$container" pg_isready -U postgres; then ready=true; break; fi
+            sleep 1
+          done
+          "$ready" || { printf 'PostgreSQL did not become ready\n'; exit 1; }
+          python ../../scripts/chemistry/verify_pubchem_budget.py --container "$container"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

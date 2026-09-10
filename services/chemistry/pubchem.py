@@ -15,6 +15,7 @@ def get_last_lookup_failure() -> dict | None:
     return _last_lookup_failure.get()
 
 from local_chem_data import lookup_local_properties
+from reference_store import get_reference_store
 
 PUBCHEM_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 TIMEOUT = 15.0
@@ -62,6 +63,10 @@ async def fetch_pubchem_json(url: str, label: str) -> dict | None:
 
     async with httpx.AsyncClient(timeout=TIMEOUT, headers=PUBCHEM_HEADERS) as client:
         for attempt in range(3):
+            granted, retry_after_ms = await get_reference_store().acquire_pubchem_request_slot()
+            if not granted:
+                _last_lookup_failure.set({"status": "retryable", "error_code": "rate_budget", "retry_after_ms": retry_after_ms})
+                return None
             try:
                 resp = await client.get(url)
             except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError):

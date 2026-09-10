@@ -58,7 +58,10 @@ def _offline(monkeypatch):
 def test_convert_does_not_raise_nameerror(monkeypatch):
     """The exact regression: convert() must get past resolve_synonym()."""
     _offline(monkeypatch)
-    result = asyncio.run(converter.convert("DMF", "10 mL"))
+    result = asyncio.run(converter.convert("DMF", "10 mL", request_id="step-3:chemical-1"))
+    # The caller's verbatim identity and stable occurrence key survive synonym resolution.
+    assert result.requested_chemical_name == "DMF"
+    assert result.request_id == "step-3:chemical-1"
     # Synonym resolution actually happened (DMF -> full IUPAC name).
     assert result.chemical_name == "N,N-Dimethylformamide"
     assert result.data_source == "pubchem"

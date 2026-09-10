@@ -38,7 +38,7 @@ def _rdkit_mw(smiles: str) -> float | None:
     return None
 
 
-async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
+async def convert(chemical_name: str, quantity: str, request_id: str | None = None) -> ConvertResponse:
     """Convert a chemical name + quantity string to standardized units.
     
     Pipeline:
@@ -58,7 +58,7 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
             "This material has an indefinite composition and cannot be analyzed as a single chemical."
         )
         return _build_response(
-            {}, chemical_name, resolved_name, quantity,
+            {}, chemical_name, resolved_name, quantity, request_id,
             data_source="indefinite", cached=False, warnings=warnings,
         )
 
@@ -81,7 +81,7 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
             cache.put(resolved_name, cached_data)
 
         return _build_response(
-            cached_data, chemical_name, resolved_name, quantity,
+            cached_data, chemical_name, resolved_name, quantity, request_id,
             data_source="cache", cached=True, warnings=warnings,
         )
 
@@ -107,7 +107,7 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
         # Durable writes are best-effort for successful foreground lookups.
         await get_reference_store().upsert_cache(resolved_name, pubchem_data)
         return _build_response(
-            pubchem_data, chemical_name, resolved_name, quantity,
+            pubchem_data, chemical_name, resolved_name, quantity, request_id,
             data_source=pubchem_data.get("_data_source", "pubchem"),
             cached=False, warnings=warnings,
         )
@@ -126,7 +126,7 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
 
     warnings.append(f"Chemical '{resolved_name}' not found in PubChem")
     return _build_response(
-        {}, chemical_name, resolved_name, quantity,
+        {}, chemical_name, resolved_name, quantity, request_id,
         data_source="not_found", cached=False, warnings=warnings,
         reference_status=reference_status, reference_queued=reference_status == "queued",
     )
@@ -137,6 +137,7 @@ def _build_response(
     original_name: str,
     resolved_name: str,
     quantity: str,
+    request_id: str | None,
     data_source: str,
     cached: bool,
     warnings: list[str],
@@ -190,6 +191,8 @@ def _build_response(
 
     return ConvertResponse(
         chemical_name=resolved_name,
+        requested_chemical_name=original_name,
+        request_id=request_id,
         cas=get_cas(resolved_name) or get_cas(original_name),
         smiles=smiles,
         molecular_formula=chem_data.get("molecular_formula"),
