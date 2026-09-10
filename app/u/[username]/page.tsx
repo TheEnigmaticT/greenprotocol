@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { calculateEquivalencies } from '@/lib/equivalencies'
+import { aggregateClaimableImpact } from '@/lib/impact-inventory'
 import { CumulativeImpact, ImpactDelta, Equivalency, GpcProfile } from '@/lib/types'
 import EquivalencyStory from '@/components/EquivalencyStory'
 
@@ -60,26 +61,10 @@ async function getProfileData(username: string): Promise<{
     .select('impact_delta')
     .eq('user_id', profile.user_id)
 
+  const aggregate = aggregateClaimableImpact((analyses || []).map((row) => row.impact_delta as ImpactDelta))
   const cumulative: CumulativeImpact = {
     totalAnalyses: analyses?.length || 0,
-    co2eSavedKg: 0,
-    hazardousWasteEliminatedKg: 0,
-    carcinogensEliminated: [],
-    waterSavedL: 0,
-    energySavedKwh: 0,
-  }
-
-  for (const row of analyses || []) {
-    const d = row.impact_delta as ImpactDelta
-    cumulative.co2eSavedKg += d.co2eSavedKg || 0
-    cumulative.hazardousWasteEliminatedKg += d.hazardousWasteEliminatedKg || 0
-    cumulative.waterSavedL += d.waterSavedL || 0
-    cumulative.energySavedKwh += d.energySavedKwh || 0
-    for (const c of d.carcinogensEliminated || []) {
-      if (!cumulative.carcinogensEliminated.includes(c)) {
-        cumulative.carcinogensEliminated.push(c)
-      }
-    }
+    ...aggregate,
   }
 
   const equivalencies = calculateEquivalencies(cumulative)
@@ -95,13 +80,14 @@ export default async function PublicProfilePage({ params }: Props) {
 
   const { profile, cumulative, equivalencies } = result
   const name = profile.display_name || profile.username
+  const onlyUnavailableImpact = cumulative.claimedAnalyses === 0 && cumulative.unavailableAnalyses > 0
 
   const stats = [
-    { label: 'CO2e Saved', value: `${fmt(cumulative.co2eSavedKg)} kg`, icon: '🌍' },
-    { label: 'Haz. Waste Eliminated', value: `${fmt(cumulative.hazardousWasteEliminatedKg)} kg`, icon: '☣️' },
-    { label: 'Carcinogens Eliminated', value: `${cumulative.carcinogensEliminated.length}`, icon: '🛡️' },
-    { label: 'Water Saved', value: `${fmt(cumulative.waterSavedL)} L`, icon: '💧' },
-    { label: 'Energy Saved', value: `${fmt(cumulative.energySavedKwh)} kWh`, icon: '⚡' },
+    { label: onlyUnavailableImpact ? 'CO2e Impact' : 'CO2e Saved', value: onlyUnavailableImpact ? 'Unavailable' : `${fmt(cumulative.co2eSavedKg)} kg`, icon: '🌍' },
+    { label: onlyUnavailableImpact ? 'Haz. Waste Impact' : 'Haz. Waste Eliminated', value: onlyUnavailableImpact ? 'Unavailable' : `${fmt(cumulative.hazardousWasteEliminatedKg)} kg`, icon: '☣️' },
+    { label: onlyUnavailableImpact ? 'Carcinogen Impact' : 'Carcinogens Eliminated', value: onlyUnavailableImpact ? 'Unavailable' : `${cumulative.carcinogensEliminated.length}`, icon: '🛡️' },
+    { label: onlyUnavailableImpact ? 'Water Impact' : 'Water Saved', value: onlyUnavailableImpact ? 'Unavailable' : `${fmt(cumulative.waterSavedL)} L`, icon: '💧' },
+    { label: onlyUnavailableImpact ? 'Energy Impact' : 'Energy Saved', value: onlyUnavailableImpact ? 'Unavailable' : `${fmt(cumulative.energySavedKwh)} kWh`, icon: '⚡' },
   ]
 
   return (
@@ -145,6 +131,12 @@ export default async function PublicProfilePage({ params }: Props) {
             </div>
           ))}
         </div>
+
+        {cumulative.unavailableAnalyses > 0 && (
+          <p className="text-sm" style={{ color: '#78716C' }}>
+            Impact comparison is unavailable for {cumulative.unavailableAnalyses} protocol{cumulative.unavailableAnalyses === 1 ? '' : 's'}; those rows are excluded from savings totals.
+          </p>
+        )}
 
         {/* Equivalencies */}
         {equivalencies.length > 0 && (

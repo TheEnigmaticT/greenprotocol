@@ -17,21 +17,15 @@ import {
   resolveLocalProvider,
 } from '@/lib/local-llm'
 import { completeLocalJsonValidated } from '@/lib/local-result-validate'
-import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
+import { PRINCIPLES, buildPrinciplePrompt, buildPrincipleUserMessage, type PrincipleDefinition } from '@/lib/prompts/principles'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
 import {
   recommendationsForAssemble,
   recommendationsForLiteratureReevaluation,
   stampRecommendationKinds,
 } from '@/lib/recommendation-kind'
-import {
-  collectHazardousInventory,
-  countChemicalSwaps,
-  inventoryRefsFromSteps,
-  shouldRepairChemicalSwaps,
-} from '@/lib/hazardous-inventory'
-import { runChemicalSwapRepair } from '@/lib/chemical-swap-repair'
 import { buildLiteratureQuery, citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
+import { buildPredecisionEvidenceContext, buildPredecisionQuery } from '@/lib/predecision-evidence'
 import { buildSdsReferences } from '@/lib/sds'
 import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
 import { logLLMTrace, logDedupTrace } from '@/lib/trace'
@@ -39,6 +33,13 @@ import { mapSettledWithConcurrency } from '@/lib/concurrency'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 const SONNET = 'claude-sonnet-4-5-20250929'
+
+/** Exact identity matching tolerates presentation-only case/whitespace changes.
+ * Do not infer aliases here: an unverified alias must remain unresolved rather
+ * than inheriting another material's quantity or hazard record. */
+function enrichmentIdentity(name: string): string {
+  return name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+}
 
 const anthropic = new Anthropic()
 
@@ -385,17 +386,21 @@ interface PrincipleResult {
 async function evaluatePrinciple(
   principleNumber: number,
   steps: AnalysisStep[],
+  enrichedChemicals?: EnrichedChemical[],
+  predecisionEvidence?: string,
   context?: CallContext
 ): Promise<PrincipleResult> {
   const principle = PRINCIPLES.find(p => p.number === principleNumber)!
   const systemPrompt = buildPrinciplePrompt(principle, steps)
-  const stepsJson = JSON.stringify(steps, null, 2)
+  const userMessage = buildPrincipleUserMessage(principle, steps, enrichedChemicals, predecisionEvidence)
 
-  return callClaude<PrincipleResult>(systemPrompt, `Analyze these protocol steps against Principle ${principleNumber}:\n\n${stepsJson}`, PRINCIPLE_SCHEMA, `principle-${principleNumber}`, SONNET, context)
+  return callClaude<PrincipleResult>(systemPrompt, userMessage, PRINCIPLE_SCHEMA, `principle-${principleNumber}`, SONNET, context)
 }
 
 async function evaluateAllPrinciples(
   steps: AnalysisStep[],
+  enrichedChemicals?: EnrichedChemical[],
+  predecisionEvidence?: string,
   onProgress?: (event: ProgressEvent) => void,
   context?: CallContext
 ): Promise<Recommendation[]> {
@@ -428,7 +433,7 @@ async function evaluateAllPrinciples(
       batchResults = []
       for (const p of batch) {
         try {
-          batchResults.push({ status: 'fulfilled', value: await evaluatePrinciple(p.number, steps, context) })
+          batchResults.push({ status: 'fulfilled', value: await evaluatePrinciple(p.number, steps, enrichedChemicals, predecisionEvidence, context) })
         } catch (reason) {
           batchResults.push({ status: 'rejected', reason })
         }
@@ -438,7 +443,7 @@ async function evaluateAllPrinciples(
         console.log('Phase 2: parallel principles (openrouter provider)')
       }
       batchResults = await Promise.allSettled(
-        batch.map(p => evaluatePrinciple(p.number, steps, context))
+        batch.map(p => evaluatePrinciple(p.number, steps, enrichedChemicals, predecisionEvidence, context))
       )
     }
     console.log(`Phase 2: batch ${batchIdx + 1} completed in ${((Date.now() - batchStart) / 1000).toFixed(1)}s`)
@@ -629,6 +634,46 @@ function ensureCandidateOnlyConcern(concerns: string[]): string[] {
   return [...concerns, CANDIDATE_ONLY_CAVEAT]
 }
 
+function applicationEligibilityFromReevaluation(
+  reevaluation: ReevaluationResult,
+  matches: LiteratureEvidenceMatch[],
+): Recommendation['applicationEligibility'] {
+  const applicableEvidence = matches.some(
+    match => match.candidateStatus !== 'candidate_pending_adjudication'
+  )
+
+  if (!applicableEvidence) {
+    return {
+      status: 'hypothesis_only',
+      reason: matches.length === 0
+        ? 'No reaction-specific literature evidence was retrieved for this substitution.'
+        : 'Retrieved literature evidence is candidate-only and cannot support applying this substitution.',
+    }
+  }
+  if (reevaluation.action !== 'confirm') {
+    return {
+      status: 'hypothesis_only',
+      reason: 'Literature re-evaluation did not confirm this substitution for application.',
+    }
+  }
+  if (!reevaluation.evidenceAssessment.supportsAlternative) {
+    return {
+      status: 'hypothesis_only',
+      reason: 'Literature re-evaluation did not support the proposed alternative.',
+    }
+  }
+  if (!['strong', 'partial'].includes(reevaluation.evidenceAssessment.contextMatch)) {
+    return {
+      status: 'hypothesis_only',
+      reason: 'Literature context did not match the submitted procedure closely enough to apply this substitution.',
+    }
+  }
+  return {
+    status: 'supported',
+    reason: 'Applicable non-candidate literature evidence confirmed this substitution.',
+  }
+}
+
 export function enforceCandidateOnlyReevaluation(
   reevaluation: ReevaluationResult,
   matches: LiteratureEvidenceMatch[],
@@ -727,7 +772,17 @@ async function reevaluateOneRecommendationItem(
     : null
 
   if (!reevaluation) {
-    return { status: 'failed', chemName, recommendation: rec }
+    return {
+      status: 'failed',
+      chemName,
+      recommendation: {
+        ...rec,
+        applicationEligibility: {
+          status: 'unavailable',
+          reason: 'Literature re-evaluation was unavailable, so this substitution cannot be applied.',
+        },
+      },
+    }
   }
 
   if (reevaluation.action === 'suppress') {
@@ -756,6 +811,7 @@ async function reevaluateOneRecommendationItem(
   }
   // @ts-expect-error — adding non-standard field for evidence assessment metadata
   updatedRec.evidence.reevaluationMeta = reevaluation.evidenceAssessment
+  updatedRec.applicationEligibility = applicationEligibilityFromReevaluation(reevaluation, literatureEvidence)
 
   const action = reevaluation.action === 'confirm' ? 'confirm' : 'downgrade'
   if (action === 'confirm') {
@@ -1002,6 +1058,7 @@ export async function analyzeProtocol(
   let deterministicScores: DeterministicScores | undefined
   let enrichedChemicals: EnrichedChemical[] | undefined
   let wasteAnalysis: WasteAnalysis | undefined
+
   const unresolvedChemicals = new Set<string>()
   const indefiniteChemicals = new Set<string>()
 
@@ -1010,48 +1067,75 @@ export async function analyzeProtocol(
     // Rationalize: convert all chemicals to g/kg/mol
     onProgress?.({ type: 'phase', phase: 2, message: 'Converting quantities...' })
     const allChemicals = parsed.steps.flatMap(step =>
-      step.chemicals.map(c => ({ name: c.name, quantity: c.quantity || '' }))
+      step.chemicals.map((c, chemicalIndex) => ({
+        name: c.name,
+        quantity: c.quantity || '',
+        requestId: `${step.stepNumber}:${chemicalIndex}`,
+      }))
     )
     const batchResult = await batchConvert(allChemicals)
 
     if (batchResult) {
-      // Enrich the parsed chemicals with conversion results
+      // The service may reorder a batch. Associate each response by its returned
+      // identity (and occurrence), never by array position. Unknown aliases are
+      // retained as explicit unresolved inputs instead of being silently copied.
       enrichedChemicals = []
-      let batchIdx = 0
+      const conversionsByRequestId = new Map<string, (typeof batchResult.results)[number]>()
+      const conversionsByIdentity = new Map<string, typeof batchResult.results>()
+      for (const conversion of batchResult.results) {
+        if (conversion.request_id) {
+          conversionsByRequestId.set(conversion.request_id, conversion)
+          continue
+        }
+        // Compatibility path for older services: exact presentation-only identity
+        // matches remain safe, but canonical aliases remain explicitly unresolved.
+        const identity = enrichmentIdentity(conversion.chemical_name || '')
+        if (!identity) continue
+        const queue = conversionsByIdentity.get(identity) ?? []
+        queue.push(conversion)
+        conversionsByIdentity.set(identity, queue)
+      }
       for (const step of parsed.steps) {
-        for (const chem of step.chemicals) {
-          if (batchIdx < batchResult.results.length) {
-            const conv = batchResult.results[batchIdx]
-            // 'error' = the service threw while converting this chemical (e.g. the
-            // June–Aug converter NameError). It must count as unresolved just like
-            // 'not_found', otherwise a fully-broken batch reports zero problems.
-            if (conv.data_source === 'indefinite') {
-              indefiniteChemicals.add(conv.chemical_name || chem.name)
-            } else if (conv.data_source === 'not_found' || conv.data_source === 'error' || conv.warnings.some(w => w.toLowerCase().includes('not found'))) {
-              unresolvedChemicals.add(conv.chemical_name || chem.name)
-            }
-            chem.quantityKg = conv.quantity_kg ?? chem.quantityKg
-            enrichedChemicals.push({
-              ...chem,
-              molecular_weight: conv.molecular_weight ?? undefined,
-              density_g_per_ml: conv.density_g_per_ml ?? undefined,
-              smiles: conv.smiles ?? undefined,
-              molecular_formula: conv.molecular_formula ?? undefined,
-              ghs_hazards: conv.ghs_hazards,
-              green_alternatives: conv.green_alternatives,
-              citations: conv.citations,
-              data_source: conv.data_source,
-            })
+        for (const [chemicalIndex, chem] of step.chemicals.entries()) {
+          const identity = enrichmentIdentity(chem.name)
+          const requestId = `${step.stepNumber}:${chemicalIndex}`
+          const identified = conversionsByRequestId.get(requestId)
+          const conversion = identified && enrichmentIdentity(identified.requested_chemical_name || '') === identity
+            ? identified
+            : conversionsByIdentity.get(identity)?.shift()
+          if (!conversion) {
+            unresolvedChemicals.add(chem.name)
+            continue
           }
-          batchIdx++
+          // 'error' = the service threw while converting this chemical (e.g. the
+          // June–Aug converter NameError). It must count as unresolved just like
+          // 'not_found', otherwise a fully-broken batch reports zero problems.
+          if (conversion.data_source === 'indefinite') {
+            indefiniteChemicals.add(chem.name)
+          } else if (conversion.data_source === 'not_found' || conversion.data_source === 'error' || conversion.warnings.some(w => w.toLowerCase().includes('not found'))) {
+            unresolvedChemicals.add(chem.name)
+          }
+          chem.quantityKg = conversion.quantity_kg ?? chem.quantityKg
+          enrichedChemicals.push({
+            ...chem,
+            canonical_name: conversion.chemical_name,
+            molecular_weight: conversion.molecular_weight ?? undefined,
+            density_g_per_ml: conversion.density_g_per_ml ?? undefined,
+            smiles: conversion.smiles ?? undefined,
+            molecular_formula: conversion.molecular_formula ?? undefined,
+            ghs_hazards: conversion.ghs_hazards,
+            green_alternatives: conversion.green_alternatives,
+            citations: conversion.citations,
+            data_source: conversion.data_source,
+            reference_status: conversion.reference_status,
+            reference_queued: conversion.reference_queued,
+          })
         }
       }
-      if (batchResult.results.length < allChemicals.length) {
-        for (const missing of allChemicals.slice(batchResult.results.length)) {
-          unresolvedChemicals.add(missing.name)
-        }
+      for (const [identity, extras] of conversionsByIdentity) {
+        if (extras.length) console.warn(`[chemistry] ignored unaligned enrichment result for ${identity}`)
       }
-      console.log(`Rationalization complete: ${batchResult.results.length} chemicals enriched`)
+      console.log(`Rationalization complete: ${enrichedChemicals.length}/${allChemicals.length} chemicals identity-aligned`)
     } else {
       // A failed batch must not silently become a score with null quantities.
       for (const chemical of allChemicals) unresolvedChemicals.add(chemical.name)
@@ -1068,25 +1152,27 @@ export async function analyzeProtocol(
       })
       onProgress?.({ type: 'phase', phase: 2, message: 'Scoring against 12 principles...' })
     const localSteps = adaptStepsForLocalHelpers(protocolText, parsed.steps)
-    const scoreChemicals = localSteps.flatMap(step =>
-      step.chemicals.map(c => {
-        const enriched = enrichedChemicals?.find(e => e.name === c.name)
-        const parsedChem = parsed.steps
-          .flatMap(s => s.chemicals)
-          .find(pc => pc.name === c.name)
+    const scoreChemicals = localSteps.flatMap(step => {
+      const parsedStep = parsed.steps.find(candidate => candidate.stepNumber === step.stepNumber)
+      return step.chemicals.map((c, chemicalIndex) => {
+        const parsedChem = parsedStep?.chemicals[chemicalIndex]
+        const enriched = enrichedChemicals?.find(e =>
+          enrichmentIdentity(e.name) === enrichmentIdentity(parsedChem?.name ?? c.name)
+        )
+        const quantityKg = parsedChem?.quantityKg ?? null
         return {
           name: c.name,
           role: c.role,
           quantity: c.quantity,
-          quantity_g: parsedChem?.quantityKg ? parsedChem.quantityKg * 1000 : null,
-          quantity_kg: parsedChem?.quantityKg ?? null,
-          quantity_mol: enriched?.molecular_weight && parsedChem?.quantityKg
-            ? (parsedChem.quantityKg * 1000) / enriched.molecular_weight : null,
+          quantity_g: quantityKg == null ? null : quantityKg * 1000,
+          quantity_kg: quantityKg,
+          quantity_mol: enriched?.molecular_weight && quantityKg != null
+            ? (quantityKg * 1000) / enriched.molecular_weight : null,
           molecular_weight: enriched?.molecular_weight ?? null,
           step_number: step.stepNumber,
         }
       })
-    )
+    })
 
     const scoreResult = await scoreProtocol({
       chemicals: scoreChemicals.length ? scoreChemicals : flattenChemicalsForScore(localSteps),
@@ -1119,57 +1205,35 @@ export async function analyzeProtocol(
     console.warn('[pipeline] Chemistry service unavailable — skipping deterministic scoring')
   }
 
+  // Retrieve bounded candidate evidence before, not after, principle generation.
+  // A score-service reaction representation is reused verbatim; dense matches
+  // remain candidates and are never promoted to reaction precedents here.
+  const reactionMetadata = deterministicScores?.smiles_extraction ?? {}
+  const reactionSmiles = reactionMetadata.validated === true && typeof reactionMetadata.reaction_smiles === 'string'
+    ? reactionMetadata.reaction_smiles
+    : undefined
+  const predecisionQuery = buildPredecisionQuery(parsed.protocolTitle, parsed.steps)
+  let predecisionMatches: LiteratureEvidenceMatch[] = []
+  let predecisionRetrievalStatus: 'completed' | 'unavailable' = 'completed'
+  try {
+    predecisionMatches = await searchLiteratureEvidence({ query: predecisionQuery, limit: 3, threshold: 0.25 })
+  } catch (err) {
+    predecisionRetrievalStatus = 'unavailable'
+    console.warn('[pipeline] predecision literature retrieval unavailable:', err)
+  }
+  const predecisionEvidence = buildPredecisionEvidenceContext({
+    reactionSmiles,
+    reactionSmilesMetadata: reactionMetadata,
+    steps: parsed.steps,
+    matches: predecisionMatches,
+    retrievalStatus: predecisionRetrievalStatus,
+  })
+
   // Phase 2: Evaluate all 12 principles in parallel (LLM qualitative recommendations)
   onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
-  let rawRecommendations = stampRecommendationKinds(
-    await evaluateAllPrinciples(parsed.steps, onProgress, context)
+  const rawRecommendations = stampRecommendationKinds(
+    await evaluateAllPrinciples(parsed.steps, enrichedChemicals, predecisionEvidence, onProgress, context)
   )
-
-  // Local-only: if hazardous inventory remains and Phase 2 emitted zero chemical_swap,
-  // one repair LLM call must produce ≥1 true swap. Fail-closed on repair failure.
-  if (isLocalPipelineEnabled()) {
-    const hazardousInventory = collectHazardousInventory(
-      inventoryRefsFromSteps(parsed.steps),
-      enrichedChemicals,
-    )
-    const swapCountBefore = countChemicalSwaps(rawRecommendations)
-    if (
-      !shouldRepairChemicalSwaps({
-        recommendations: rawRecommendations,
-        hazardousInventory,
-      })
-    ) {
-      console.log(
-        `[swap-repair] skipped swaps=${swapCountBefore} hazardous=${hazardousInventory.length}`,
-      )
-    } else {
-      console.log(
-        `[swap-repair] triggered swaps=${swapCountBefore} hazardous=${hazardousInventory.length}` +
-          ` names=${hazardousInventory.map((h) => h.name).join('|')}`,
-      )
-      onProgress?.({
-        type: 'phase',
-        phase: 2,
-        message: 'Repairing missing chemical substitutions...',
-      })
-      const repaired = await runChemicalSwapRepair({
-        recommendations: rawRecommendations,
-        hazardousInventory,
-        steps: parsed.steps,
-      })
-      if (repaired.status === 'succeeded') {
-        rawRecommendations = repaired.recommendations
-        console.log(
-          `[swap-repair] succeeded added=${repaired.addedSwaps}` +
-            ` total_swaps=${countChemicalSwaps(rawRecommendations)}`,
-        )
-      } else {
-        console.warn(
-          `[swap-repair] failed reason=${repaired.reason ?? 'unknown'}; keeping original tip set`,
-        )
-      }
-    }
-  }
 
   // Phase 2.5: Ground chemical_swap recommendations in literature via Vector Search
   // Process/analytical tips skip literature grounding (fail-closed: no tip→lit poisoning).
@@ -1229,9 +1293,7 @@ export async function analyzeProtocol(
   // Attach evidence to recommendations based on enriched chemical data
   for (const rec of recommendations) {
     const enriched = enrichedChemicals?.find(e => 
-      e.name.toLowerCase() === rec.original.chemical.toLowerCase() ||
-      rec.original.chemical.toLowerCase().includes(e.name.toLowerCase()) ||
-      e.name.toLowerCase().includes(rec.original.chemical.toLowerCase())
+      enrichmentIdentity(e.name) === enrichmentIdentity(rec.original.chemical)
     )
     
     if (enriched) {
@@ -1361,6 +1423,7 @@ export async function analyzeProtocol(
     overallAssessment: assembled.overallAssessment,
     deterministicScores,
     enrichedChemicals,
+    predecisionEvidence,
     analysisMetadata: metadata,
     wasteAnalysis,
     chemistryDataStatus: {

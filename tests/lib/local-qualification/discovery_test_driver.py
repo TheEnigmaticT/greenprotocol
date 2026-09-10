@@ -58,9 +58,17 @@ elif args[0] in ('--race', '--fault'):
         inside.rename(base / 'retained-inside')
         inside.symlink_to(outside, target_is_directory=True)
         observed['replaced'] = True
+    benign_entry_mutated = False
     def opened(name, flags, *a, **kw):
+        global benign_entry_mutated
         if operation == '--race' and mode == 'file' and name == 'fixture.json' and not observed['replaced']:
             replace()
+        # A sibling creation changes a directory's ctime but not its binding.
+        # The existing hardlink must still be reached and rejected before read.
+        if (operation == '--fault' and mode == 'hardlink-with-entry-mutation'
+                and name == 'synthetic-benchmark' and not benign_entry_mutated):
+            (inside / 'benign-entry.txt').write_bytes(b'x')
+            benign_entry_mutated = True
         if operation == '--fault' and mode == 'descriptor' and name == 'fixture.json':
             name = 'alternate.txt'
         fd = real_open(name, flags, *a, **kw)
@@ -104,7 +112,8 @@ elif args[0] in ('--race', '--fault'):
         if mode == 'ancestor-file':
             (base / 'plain').write_bytes(b'x'); h.ROOTS = (str(base / 'plain' / 'tmp'), roots[1])
         if mode == 'missing': h.ROOTS = (str(base / 'missing'), roots[1])
-        if mode == 'hardlink': os.link(inside / 'fixture.json', inside / 'hard.txt')
+        if mode in ('hardlink', 'hardlink-with-entry-mutation'):
+            os.link(inside / 'fixture.json', inside / 'hard.txt')
         if mode == 'descriptor': (inside / 'alternate.txt').write_bytes(b'{}')
     os.open, os.read, os.scandir, os.stat, os.close = opened, read, scan, metadata, closed
     status = h.main()

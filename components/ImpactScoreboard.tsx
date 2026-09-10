@@ -2,8 +2,8 @@
 
 import { useMemo } from 'react'
 import { AnalysisResult, ImpactDelta } from '@/lib/types'
-import { findChemical } from '@/lib/chemicals'
 import { calculateEquivalencies } from '@/lib/equivalencies'
+import { buildUnavailableImpact } from '@/lib/impact-inventory'
 
 function Bar({
   label,
@@ -53,70 +53,7 @@ function Bar({
 }
 
 function calculateAcceptedImpact(analysis: AnalysisResult): ImpactDelta {
-  let co2eSaved = 0
-  let hazWasteSaved = 0
-  const carcinogensEliminated: string[] = []
-  let waterSaved = 0
-  let energySaved = 0
-
-  const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
-
-  for (const rec of accepted) {
-    const originalData = findChemical(rec.original.chemical)
-    const altData = findChemical(rec.alternative.chemical)
-    if (!originalData) continue
-
-    let quantityKg = 0
-    const recNameLower = rec.original.chemical.toLowerCase()
-    for (const step of analysis.steps) {
-      if (step.stepNumber === rec.stepNumber) {
-        for (const chem of step.chemicals) {
-          const chemLower = chem.name.toLowerCase()
-          const isMatch =
-            chemLower === recNameLower ||
-            chemLower.includes(recNameLower) ||
-            recNameLower.includes(chemLower) ||
-            (originalData.synonyms.some(s => chemLower.includes(s.toLowerCase())))
-          if (isMatch) {
-            if (chem.quantityKg) {
-              quantityKg = chem.quantityKg
-            } else if (chem.quantityMl) {
-              quantityKg = (chem.quantityMl / 1000) * originalData.densityKgPerL
-            } else {
-              quantityKg = chem.role === 'solvent' ? 0.5 : 0.1
-            }
-          }
-        }
-      }
-    }
-    if (quantityKg === 0) quantityKg = 0.1
-
-    const origCo2 = quantityKg * originalData.co2ePerKg
-    const altCo2 = altData ? quantityKg * altData.co2ePerKg : 0
-    co2eSaved += origCo2 - altCo2
-
-    const origWater = quantityKg * originalData.waterPerKg
-    const altWater = altData ? quantityKg * altData.waterPerKg : 0
-    waterSaved += origWater - altWater
-
-    const origEnergy = quantityKg * originalData.energyPerKg
-    const altEnergy = altData ? quantityKg * altData.energyPerKg : 0
-    energySaved += origEnergy - altEnergy
-
-    if (originalData.isHazardousWaste) hazWasteSaved += quantityKg
-
-    if (originalData.isSuspectedCarcinogen && !carcinogensEliminated.includes(originalData.name)) {
-      carcinogensEliminated.push(originalData.name)
-    }
-  }
-
-  return {
-    co2eSavedKg: Math.max(0, co2eSaved),
-    hazardousWasteEliminatedKg: Math.max(0, hazWasteSaved),
-    carcinogensEliminated,
-    waterSavedL: Math.max(0, waterSaved),
-    energySavedKwh: Math.max(0, energySaved),
-  }
+  return buildUnavailableImpact(analysis, 'accepted')
 }
 
 export default function ImpactScoreboard({
@@ -135,6 +72,28 @@ export default function ImpactScoreboard({
   const equivalencies = useMemo(() => calculateEquivalencies(impact), [impact])
   const acceptedCount = analysis.recommendations.filter(r => r.isAccepted === true).length
   const totalCount = analysis.recommendations.length
+
+  if (impact.assessment?.level === 'unavailable') {
+    return (
+      <div className="space-y-2">
+        <h2 className="text-2xl font-bold font-[family-name:var(--font-serif)]" style={{ color: '#1C1917' }}>
+          Impact Scoreboard
+        </h2>
+        <p className="text-sm" style={{ color: '#78716C' }}>
+          Impact comparison unavailable until the material boundary is complete.
+        </p>
+        <ul className="list-disc pl-5 text-sm space-y-1" style={{ color: '#78716C' }}>
+          {impact.assessment.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+        </ul>
+        {impact.inventory && (
+          <details className="text-xs" style={{ color: '#78716C' }}>
+            <summary className="cursor-pointer">Inspect submitted-batch inventory ({impact.inventory.baselineRows.length} baseline materials; {impact.inventory.afterRows.length} replacement scenarios)</summary>
+            <p className="mt-1">{impact.inventory.boundary.limitations.join(' ')}</p>
+          </details>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

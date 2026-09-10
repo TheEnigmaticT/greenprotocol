@@ -1,5 +1,5 @@
 import { AnalysisResult, Recommendation } from './types'
-import { isChemicalSwapRecommendation } from './recommendation-kind'
+import { isEvidenceEligibleChemicalSwap } from './recommendation-kind'
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -17,7 +17,7 @@ function applyRecommendation(text: string, rec: Recommendation): string {
 
 function applyAcceptedChemicalSwaps(text: string, recs: Recommendation[]): string {
   return recs
-    .filter(rec => rec.isAccepted === true && isChemicalSwapRecommendation(rec))
+    .filter(rec => rec.isAccepted === true && isEvidenceEligibleChemicalSwap(rec))
     .sort((a, b) => b.original.chemical.length - a.original.chemical.length)
     .reduce((current, rec) => applyRecommendation(current, rec), text)
 }
@@ -37,10 +37,16 @@ export function buildFinalizedProtocol(
   originalProtocol?: string | null
 ): string {
   const accepted = analysis.recommendations.filter(rec => rec.isAccepted === true)
-  const acceptedSwaps = accepted.filter(isChemicalSwapRecommendation)
+  const acceptedSwaps = accepted.filter(isEvidenceEligibleChemicalSwap)
 
-  // When every recommendation is accepted, assemble already incorporated chemical_swaps only.
-  if (accepted.length === analysis.recommendations.length && analysis.revisedProtocol.trim()) {
+  // Reuse assembled text only when every accepted recommendation was eligible
+  // for application. Older analyses may contain a draft that applied a retained
+  // hypothesis, which must not bypass the evidence gate here.
+  if (
+    accepted.length === analysis.recommendations.length
+    && accepted.length === acceptedSwaps.length
+    && analysis.revisedProtocol.trim()
+  ) {
     return analysis.revisedProtocol
   }
 

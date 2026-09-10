@@ -7,6 +7,7 @@ import { buildCitationString, buildBibtexCitation, formatCitationACS } from '@/l
 import PrincipleSection, { humanSource } from './PrincipleSection'
 import AppShell from './AppShell'
 import { buildQuietGradeLine } from '@/lib/quiet-grade'
+import { getScoreCoverage, scoreCoverageDescription } from '@/lib/score-coverage'
 
 const INTERNAL_SOURCE_VALUES = new Set(['cache', 'not_found', 'error', 'unknown', 'none', ''])
 
@@ -166,6 +167,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
   const activePrinciples = getActivePrinciples(analysis)
   const metadata = analysis.analysisMetadata
   const quietGrade = buildQuietGradeLine(analysis)
+  const scoreCoverage = analysis.deterministicScores ? getScoreCoverage(analysis.deterministicScores) : null
 
   const searchParams = useSearchParams()
   const [mode, setMode] = useState<Mode>('principles')
@@ -668,7 +670,13 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                   <div>
                     <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#1C1917' }}>Deterministic Scoring</h4>
                     <p className="text-xs m-0" style={{ color: '#57534E' }}>
-                      {analysis.deterministicScores.scores.length} principles scored · Grade: {analysis.deterministicScores.grade} · Score: {analysis.deterministicScores.total_score}/{analysis.deterministicScores.max_possible}
+                      {scoreCoverage?.hasGrade ? (
+                        <>
+                          Grade: {analysis.deterministicScores.grade} (available subset only; {scoreCoverage.available.length} of 12 principles) · Score: {analysis.deterministicScores.total_score}/{analysis.deterministicScores.max_possible} · {scoreCoverageDescription(scoreCoverage)}
+                        </>
+                      ) : (
+                        <>Grade and total unavailable: no valid principle scores. · {scoreCoverage ? scoreCoverageDescription(scoreCoverage) : '12 unavailable'}</>
+                      )}
                     </p>
                   </div>
                 )}

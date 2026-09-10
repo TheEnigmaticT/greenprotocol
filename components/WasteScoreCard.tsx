@@ -23,6 +23,7 @@ export default function WasteScoreCard({
   analysisId?: string
 }) {
   const { summary } = wasteAnalysis
+  const wasteUnavailable = wasteAnalysis.version !== 'waste-analysis/v2' || wasteAnalysis.availability?.actualWasteMass === 'unavailable' || summary.confidence === 'unavailable' || summary.wasteImpactScore < 0
   const gc = GRADE_COLORS[summary.grade] || GRADE_COLORS.C
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
@@ -45,7 +46,7 @@ export default function WasteScoreCard({
               className="flex items-center justify-center w-14 h-14 rounded-lg text-2xl font-bold shrink-0"
               style={{ background: gc.bg, color: gc.text }}
             >
-              {summary.grade}
+              {wasteUnavailable ? '—' : summary.grade}
             </div>
 
             <div className="min-w-0">
@@ -53,7 +54,7 @@ export default function WasteScoreCard({
                 className="text-sm font-bold uppercase tracking-wider mb-0.5"
                 style={{ color: '#1C1917' }}
               >
-                Waste Impact
+                {wasteUnavailable ? 'Waste estimate unavailable' : 'Waste Impact'}
               </h3>
               <p className="text-xs" style={{ color: '#57534E' }}>
                 {summary.primaryDriver}
@@ -71,7 +72,7 @@ export default function WasteScoreCard({
               className="text-xs px-2.5 py-1 rounded-full font-semibold"
               style={{ background: gc.bg, color: gc.text }}
             >
-              {summary.wasteImpactScore}/10
+              {wasteUnavailable ? 'unavailable' : `${summary.wasteImpactScore}/10`}
             </span>
             <span
               className="text-[10px] px-2 py-0.5 rounded"
@@ -81,6 +82,11 @@ export default function WasteScoreCard({
             </span>
           </div>
         </div>
+        {wasteUnavailable && wasteAnalysis.availability?.reason && (
+          <p className="text-[10px] mt-2" style={{ color: '#78716C' }}>
+            {wasteAnalysis.availability.reason}
+          </p>
+        )}
 
         <div className="flex items-center justify-between mt-3 pt-2 border-t" style={{ borderColor: '#E7E5E4' }}>
           {gcaiVersion ? (

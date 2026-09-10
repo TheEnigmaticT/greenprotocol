@@ -3,6 +3,7 @@ import type { Recommendation } from '@/lib/types'
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
 import {
+  baseChemicalName,
   classifyRecommendationKind,
   kindBadgeLabel,
   recommendationsForAssemble,
@@ -39,6 +40,49 @@ function makeRec(overrides: Partial<Recommendation> = {}): Recommendation {
 }
 
 describe('classifyRecommendationKind', () => {
+  it.each([
+    'Pd(PPh3)4 at 1–2 mol% (0.12–0.23 g)',
+    'Pd(PPh3)4 at 1 mol%',
+    'Pd(PPh3)4 at 0.12 g',
+  ])('excludes same-catalyst numeric dose changes from substitution consumers: %s', (chemical) => {
+    const rec = makeRec({
+      kind: 'chemical_swap',
+      original: { chemical: 'Pd(PPh3)4', issue: 'Excess catalyst' },
+      alternative: { chemical, rationale: 'Use less catalyst', yieldImpact: '', caveats: '', evidenceBasis: '' },
+      applicationEligibility: { status: 'supported', reason: 'Consumer must still check kind' },
+    })
+    expect(classifyRecommendationKind(rec)).toBe('process_change')
+    expect(recommendationsForLiteratureReevaluation([rec])).toEqual([])
+    expect(recommendationsForAssemble([rec])).toEqual([])
+  })
+
+  it('preserves chemical formula groups when comparing distinct replacement identities', () => {
+    expect(baseChemicalName('Zn(OH)2')).toBe('zn(oh)2')
+    const rec = makeRec({
+      original: { chemical: 'Zn(OH)2', issue: 'Different reagent needed' },
+      alternative: { chemical: 'Zn(OAc)2 at 1 mol%', rationale: 'Distinct compound', yieldImpact: '', caveats: '', evidenceBasis: '' },
+    })
+    expect(classifyRecommendationKind(rec)).toBe('chemical_swap')
+  })
+
+  it.each([
+    'add phosphoric acid slowly with continuous stirring and pre-cool the flask to 0–5 °C before addition',
+    'Reduce phenylboronic acid to exact 1:1 stoichiometry (10 mmol, 1.22 g) and K2CO3 to 1–2 equiv (1.38–2.76 g) to minimize inorganic byproduct mass',
+    'Reduce Pd loading to 1–2 mol% or switch to a heterogeneous Pd/C catalyst (with catalyst recycling) to lower the mass of non-product material processed',
+    'Reduced acetic anhydride volume (1.5–2.0 mL, ~1.2–1.5 equiv)',
+    'Slow, portion-wise addition of cold water with stirring',
+    'Crystallization from ethyl acetate/hexane or heptane',
+    'Acetic acid recovery from aqueous waste stream (step 4–5)',
+  ])('keeps live Qwen process instructions out of substitution consumers: %s', (chemical) => {
+    const rec = makeRec({
+      kind: 'process_change',
+      alternative: { chemical, rationale: 'Process optimization', yieldImpact: '', caveats: '', evidenceBasis: '' },
+    })
+    expect(classifyRecommendationKind(rec)).toBe('process_change')
+    expect(recommendationsForLiteratureReevaluation([rec])).toEqual([])
+    expect(recommendationsForAssemble([rec])).toEqual([])
+  })
+
   it('defaults missing kind to chemical_swap for real substitutions', () => {
     expect(classifyRecommendationKind(makeRec({ kind: undefined }))).toBe('chemical_swap')
   })
@@ -175,6 +219,25 @@ describe('classifyRecommendationKind', () => {
     expect(kindBadgeLabel('chemical_swap')).toBe('Substitution')
   })
 
+  it('overrides a declared swap when the alternative is only a dose instruction', () => {
+    expect(classifyRecommendationKind(makeRec({
+      kind: 'chemical_swap',
+      alternative: { chemical: 'reduce catalyst loading', rationale: 'Use less catalyst', yieldImpact: '', caveats: '', evidenceBasis: '' },
+    }))).toBe('process_change')
+  })
+
+  it('keeps a real reagent swap as chemical_swap when its rationale mentions monitoring', () => {
+    expect(classifyRecommendationKind(makeRec({
+      kind: 'analytical',
+      original: { chemical: 'chromium(VI) oxidant', issue: 'toxic oxidant' },
+      alternative: {
+        chemical: 'TEMPO/bleach oxidation',
+        rationale: 'Use real-time monitoring of pH during addition to maintain selective oxidation',
+        yieldImpact: 'requires optimization', caveats: '', evidenceBasis: 'published precedent',
+      },
+    }))).toBe('chemical_swap')
+  })
+
   it('classifies water → water (added slowly…) as process_change', () => {
     const rec = makeRec({
       kind: 'chemical_swap',
@@ -237,9 +300,31 @@ describe('classifyRecommendationKind', () => {
 })
 
 describe('assemble filtering', () => {
+  it('retains an unsupported swap as a hypothesis but excludes it from protocol assembly', () => {
+    const unsupported = makeRec({
+      kind: 'chemical_swap',
+      original: { chemical: 'acetic anhydride', issue: 'corrosive acylating agent' },
+      alternative: {
+        chemical: 'acetic acid',
+        rationale: 'Proposed safer acyl source',
+        yieldImpact: 'Unknown',
+        caveats: 'No matching reaction evidence',
+        evidenceBasis: '',
+      },
+      applicationEligibility: {
+        status: 'hypothesis_only',
+        reason: 'Literature re-evaluation did not support the alternative in this context.',
+      },
+    })
+
+    expect(recommendationsForAssemble([unsupported])).toEqual([])
+    expect(recommendationsForLiteratureReevaluation([unsupported])).toEqual([unsupported])
+  })
+
   it('passes only chemical_swap recommendations into assemble prompt payload', () => {
     const swap = makeRec({
       kind: 'chemical_swap',
+      applicationEligibility: { status: 'supported', reason: 'Applicable literature evidence confirmed this swap.' },
       original: { chemical: 'DCM', issue: 'hazard' },
       alternative: {
         chemical: 'EtOAc',
@@ -276,6 +361,28 @@ describe('assemble filtering', () => {
 })
 
 describe('buildFinalizedProtocol chemical_swap-only apply', () => {
+  it('does not return a preassembled protocol that applied an accepted unsupported hypothesis', () => {
+    const original = 'Dissolve salicylic acid in acetic anhydride and heat.'
+    const analysis = {
+      protocolTitle: 'Aspirin',
+      chemistrySubdomain: 'organic',
+      steps: [],
+      recommendations: [makeRec({
+        kind: 'chemical_swap',
+        isAccepted: true,
+        original: { chemical: 'acetic anhydride', issue: 'corrosive' },
+        alternative: { chemical: 'acetic acid', rationale: 'hypothesis', yieldImpact: '', caveats: '', evidenceBasis: '' },
+        applicationEligibility: { status: 'hypothesis_only', reason: 'No applicable reaction evidence.' },
+      })],
+      revisedProtocol: 'Dissolve salicylic acid in acetic acid and heat.',
+      overallAssessment: {
+        greenPrinciplesViolated: [5], mostImpactfulChange: 'swap', experimentalValidationNeeded: true, disclaimer: 'test',
+      },
+    }
+
+    expect(buildFinalizedProtocol(analysis, original)).toBe(original)
+  })
+
   it('applies accepted chemical swaps but ignores accepted tips', () => {
     const analysis = {
       protocolTitle: 'Aspirin',
@@ -292,6 +399,7 @@ describe('buildFinalizedProtocol chemical_swap-only apply', () => {
         makeRec({
           kind: 'chemical_swap',
           isAccepted: true,
+          applicationEligibility: { status: 'supported', reason: 'Applicable literature evidence confirmed this swap.' },
           stepNumber: 1,
           original: { chemical: 'acetic anhydride', issue: 'corrosive' },
           alternative: {

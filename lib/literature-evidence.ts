@@ -34,7 +34,7 @@ export function buildLiteratureQuery(
   const max = LITERATURE_QUERY_MAX_CHARS
   const orig = (original ?? '').trim()
   const alt = (alternative ?? '').trim()
-  let base = `Green chemistry alternative for ${orig}: ${alt}`
+  const base = `Green chemistry alternative for ${orig}: ${alt}`
   if (base.length > max) {
     return base.slice(0, max)
   }

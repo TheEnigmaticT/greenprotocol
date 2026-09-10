@@ -1,4 +1,4 @@
-import { AnalysisStep } from '@/lib/types'
+import { AnalysisStep, EnrichedChemical } from '@/lib/types'
 import { findChemical } from '@/lib/chemicals'
 
 export interface PrincipleDefinition {
@@ -87,7 +87,55 @@ export const PRINCIPLES: PrincipleDefinition[] = [
  * Build chemical context from our database for a specific principle evaluation.
  * Looks up every chemical in the parsed steps and returns relevant info.
  */
-export function buildChemicalContext(steps: AnalysisStep[]): string {
+const UNAVAILABLE_ENRICHMENT_SOURCES = new Set([
+  'not_found',
+  'error',
+  'indefinite',
+  'queued',
+  'terminal_not_found',
+  'unavailable',
+])
+
+function findEnrichedChemical(
+  name: string,
+  enrichedChemicals?: EnrichedChemical[],
+): EnrichedChemical | undefined {
+  return enrichedChemicals?.find(
+    (chemical) => chemical.name.trim().toLowerCase() === name.trim().toLowerCase(),
+  )
+}
+
+function formatStaticFallback(name: string): string[] {
+  const data = findChemical(name)
+  if (!data) {
+    return [
+      '  Static fallback: unavailable (chemical is not in the local database).',
+      '  Do not infer that this chemical is safe or that hazards are absent.',
+    ]
+  }
+
+  const parts = [
+    `  Static fallback provenance: local chemical database (${data.dataSource}); screening estimates, not hydrated evidence.`,
+    `  CHEM21 class: ${data.chem21Class}`,
+    `  GHS hazards: ${data.ghsHazards.join(', ') || 'none listed in static fallback; absence is not evidence of safety'}`,
+    `  Carcinogen: ${data.isSuspectedCarcinogen ? 'YES (suspected)' : 'No flag in static fallback'}`,
+    `  Hazardous waste: ${data.isHazardousWaste ? 'YES' : 'No flag in static fallback'}`,
+    `  Environmental impact screening estimates: CO2e ${data.co2ePerKg} kg/kg, Water ${data.waterPerKg} L/kg, Energy ${data.energyPerKg} kWh/kg`,
+  ]
+
+  if (data.greenAlternatives.length > 0) {
+    parts.push('  Alternative candidates from static fallback (not validated reaction substitutes):')
+    for (const alt of data.greenAlternatives) {
+      parts.push(`    → ${alt.chemical} (${alt.context}; yield: ${alt.yieldImpact}; source: ${alt.source})`)
+    }
+  }
+  return parts
+}
+
+export function buildChemicalContext(
+  steps: AnalysisStep[],
+  enrichedChemicals?: EnrichedChemical[],
+): string {
   const seen = new Set<string>()
   const entries: string[] = []
 
@@ -97,45 +145,75 @@ export function buildChemicalContext(steps: AnalysisStep[]): string {
       if (seen.has(key)) continue
       seen.add(key)
 
-      const data = findChemical(chem.name)
-      // v2: prefer live enriched data if available, but for the prompt we use what's in buildChemicalContext
-      // The calling pipeline already has enrichedChemicals, but buildChemicalContext doesn't see it yet.
-      // For now, keep using hardcoded DB for the prompt context to ensure stability.
-      if (!data) {
-        entries.push(`- ${chem.name}: Not in our database. Use your chemistry knowledge.`)
+      const enriched = findEnrichedChemical(chem.name, enrichedChemicals)
+      const enrichmentUnavailable = enriched && (
+        UNAVAILABLE_ENRICHMENT_SOURCES.has(enriched.reference_status || '') ||
+        UNAVAILABLE_ENRICHMENT_SOURCES.has(enriched.data_source || '')
+      )
+      if (enriched && !enrichmentUnavailable) {
+        const hazards = enriched.ghs_hazards || []
+        const parts = [
+          `- ${chem.name}`,
+          `  Evidence provenance: hydrated chemistry service (${enriched.data_source || 'source unspecified'}).`,
+          `  Reference status: ${enriched.reference_status || 'not returned by chemistry service (unknown)'}.`,
+          `  Molecular properties: formula ${enriched.molecular_formula || 'not returned'}, SMILES ${enriched.smiles || 'not returned'}, molecular weight ${enriched.molecular_weight ?? 'not returned'} g/mol, density ${enriched.density_g_per_ml ?? 'not returned'} g/mL.`,
+          hazards.length > 0
+            ? `  GHS hazards: ${hazards.map((hazard) => `${hazard.code}${hazard.description ? ` (${hazard.description})` : ''}${hazard.source ? ` [${hazard.source}]` : ''}`).join(', ')}`
+            : '  GHS hazard data: no statements returned by the chemistry service; absence is not evidence of safety.',
+        ]
+        if (enriched.green_alternatives?.length) {
+          parts.push('  Green alternatives reported by hydrated evidence (candidates, not validated reaction substitutes):')
+          for (const alternative of enriched.green_alternatives) {
+            parts.push(`    → ${alternative.chemical} (source: ${alternative.source}; evidence: ${alternative.content})`)
+          }
+        }
+        if (enriched.citations?.length) {
+          parts.push(`  Citations: ${enriched.citations.map((citation) => {
+            const handles = [
+              `source_id=${citation.source_id}`,
+              citation.source_name,
+              citation.citation,
+              citation.doi ? `doi=${citation.doi}` : '',
+              citation.url ? `url=${citation.url}` : '',
+            ].filter(Boolean)
+            return handles.join(' | ')
+          }).join('; ')}`)
+          parts.push('  Citation publication dates: not returned by chemistry service (unknown).')
+        }
+        entries.push(parts.join('\n'))
         continue
       }
 
-      const parts = [
-        `- ${data.name} (CAS: ${data.cas})`,
-        `  CHEM21 class: ${data.chem21Class}`,
-        `  GHS hazards: ${data.ghsHazards.join(', ') || 'none listed'}`,
-        `  Carcinogen: ${data.isSuspectedCarcinogen ? 'YES (suspected)' : 'No'}`,
-        `  Hazardous waste: ${data.isHazardousWaste ? 'YES' : 'No'}`,
-        `  Environmental impact: CO2e ${data.co2ePerKg} kg/kg, Water ${data.waterPerKg} L/kg, Energy ${data.energyPerKg} kWh/kg`,
-      ]
-
-      if (data.greenAlternatives.length > 0) {
-        parts.push(`  Known green alternatives:`)
-        for (const alt of data.greenAlternatives) {
-          parts.push(`    → ${alt.chemical} (${alt.context}; yield: ${alt.yieldImpact}; source: ${alt.source})`)
-        }
-      }
-
-      entries.push(parts.join('\n'))
+      const unavailable = enriched
+        ? `Chemistry service enrichment unavailable (${enriched.reference_status || enriched.data_source || 'unknown'}).`
+        : 'Hydrated chemistry evidence was not supplied for this chemical.'
+      entries.push([
+        `- ${chem.name}`,
+        `  ${unavailable}`,
+        '  Do not infer that this chemical is safe or that hazards are absent.',
+        ...formatStaticFallback(chem.name),
+      ].join('\n'))
     }
   }
 
-  if (entries.length === 0) return 'No chemicals found in our database for this protocol.'
+  if (entries.length === 0) return 'No chemicals were parsed from this protocol.'
   return entries.join('\n\n')
+}
+
+export function buildPrincipleUserMessage(
+  principle: PrincipleDefinition,
+  steps: AnalysisStep[],
+  enrichedChemicals?: EnrichedChemical[],
+  predecisionEvidence?: string,
+): string {
+  return `Analyze these protocol steps against Principle ${principle.number}:\n\n${JSON.stringify(steps, null, 2)}\n\nCHEMISTRY EVIDENCE (hydrated evidence is preferred; static data is labeled fallback):\n${buildChemicalContext(steps, enrichedChemicals)}\n\n${predecisionEvidence ?? 'PREDECISION REACTION EVIDENCE: unavailable; do not claim reaction-specific literature support.'}`
 }
 
 /**
  * Build the full system prompt for a principle evaluation agent.
  */
 export function buildPrinciplePrompt(principle: PrincipleDefinition, steps: AnalysisStep[]): string {
-  const chemContext = buildChemicalContext(steps)
-
+  void steps // Chemical context is supplied in the user message with per-run evidence provenance.
   return `You are a green chemistry expert specializing in Principle ${principle.number}: ${principle.name}.
 
 PRINCIPLE DEFINITION:
@@ -144,18 +222,19 @@ ${principle.description}
 WHAT TO LOOK FOR:
 ${principle.lookFor}
 
-CHEMICAL DATABASE (from our verified database — use this data when available):
-${chemContext}
+CHEMISTRY EVIDENCE:
+The user message contains chemical evidence. Prefer hydrated chemistry-service evidence when available. Static local-database data is explicitly labeled fallback and may contain screening estimates. Missing, unavailable, or empty hazard data is not evidence that a chemical is safe; do not invent values.
 
 INSTRUCTIONS:
 - Analyze the provided protocol steps against Principle ${principle.number} ONLY.
 - Return 0 or more recommendations. If this principle is not violated, return an empty recommendations array.
 - Be CONSERVATIVE — only recommend alternatives with published evidence or well-established precedent.
 - Do NOT hallucinate citations — say "published studies" or "CHEM21 solvent guide" if referencing general knowledge.
-- Use chemical names from our database when referring to alternatives listed above.
+- Use chemical names from the supplied evidence when referring to alternative candidates; do not imply a candidate is a validated reaction substitute.
 - For EACH recommendation, set "kind" to one of: "chemical_swap" (replace one chemical with another), "process_change" (dose/energy/condition tip with no chemical replacement), or "analytical" (monitoring/analysis tip such as TLC, IR, HPLC, inline/real-time).
 - Do NOT encode process or analytical tips as chemical substitutions. If the alternative is not a different chemical, use process_change or analytical.
-- When the protocol uses a hazardous, corrosive, toxic, or highly flammable reagent or solvent (or another clear green-chemistry opportunity to use a different substance), prefer at least one true chemical_swap among recommendations for the relevant principles — a different base chemical name, not only dose/energy/monitoring tips. Keep kind segregation: process tips stay process_change, monitoring stays analytical, true substitutions stay chemical_swap. Do not invent unsafe swaps; do not require a swap when no hazardous chemical or clear substance-level opportunity exists; do not hardcode protocol-specific brand or trademark alternatives. Evidence quality conservatism still applies.
+- Never use "none" or "N/A" as alternative.chemical. For chemical_swap, name a concrete, different replacement substance, not "same chemical", an analytical method, or a dose/monitoring instruction. For process_change or analytical, name the actual process change or analytical method instead.
+- A hazardous signal alone does not establish a supported substitution. Include a true chemical_swap only when the supplied evidence or well-established precedent supports a different base chemical in this reaction context; otherwise return no swap or a non-substitution recommendation where appropriate. Keep kind segregation: process tips stay process_change, monitoring stays analytical, true substitutions stay chemical_swap. Do not invent unsafe swaps or hardcode protocol-specific brand or trademark alternatives.
 - For EACH recommendation, include a "primaryBenefit" field: a short (under 15 words) workflow-relevant reason such as "reduces toxic waste", "cuts liquid cleanup burden", "lowers direct chemical waste", or "reduces purification steps". This must be a concrete benefit, not a restatement of the principle.
 
 Return ONLY valid JSON (no markdown fences, no extra text):

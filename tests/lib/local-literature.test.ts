@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { LOCAL_EMBED_DIMS, searchLocalLiteratureEvidence } from '@/lib/local-literature'
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -34,7 +34,7 @@ describe('searchLocalLiteratureEvidence', () => {
 
     const emb = new Array(dims).fill(0)
     emb[0] = 1
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ embeddings: [emb] }), { status: 200 }))
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ embeddings: [emb] }), { status: 200 }))
 
     const hits = await searchLocalLiteratureEvidence({
       query: 'ethanol water solvent',

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { PrincipleScore, DeterministicScores, ScoreProvenance } from '@/lib/types'
+import { compareScoreCoverage, getScoreCoverage, scoreCoverageDescription } from '@/lib/score-coverage'
 
 // Canonical provenance labels for UI display
 const PROVENANCE_LABELS: Record<ScoreProvenance, string> = {
@@ -45,7 +46,7 @@ const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
 
 function ScoreBar({ score }: { score: PrincipleScore }) {
   const [showDetails, setShowDetails] = useState(false)
-  const isUnavailable = score.score < 0
+  const isUnavailable = score.score < 0 || score.confidence === 'unavailable'
   const pct = isUnavailable ? 0 : (score.score / 10) * 100
 
   // Color: green (low score = good) to red (high score = bad)
@@ -166,10 +167,12 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
   isRegrading?: boolean
   analysisId?: string
 }) {
+  const coverage = getScoreCoverage(scores)
+  const projectedCoverage = projectedScores ? getScoreCoverage(projectedScores) : null
+  const coverageComparison = projectedScores ? compareScoreCoverage(scores, projectedScores) : null
+  const canCompareProjectedScores = coverageComparison?.comparable === true
   const gradeColor = GRADE_COLORS[scores.grade] || GRADE_COLORS.C
   const projGradeColor = projectedScores ? (GRADE_COLORS[projectedScores.grade] || GRADE_COLORS.C) : null
-  const availableScores = scores.scores.filter(s => s.score >= 0)
-  const unavailableScores = scores.scores.filter(s => s.score < 0)
 
   // Build a map of projected scores by principle number for comparison
   const projMap = new Map<number, PrincipleScore>()
@@ -208,7 +211,11 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
             </a>
           )}
         <div className="flex items-center justify-between sm:justify-end gap-3 bg-white/50 p-2 sm:p-0 rounded-lg sm:bg-transparent">
-          {projectedScores && projectedScores.grade !== scores.grade ? (
+          {!coverage.hasGrade ? (
+            <span className="text-sm font-semibold" style={{ color: '#A8A29E' }}>
+              Grade unavailable
+            </span>
+          ) : canCompareProjectedScores && projectedScores && projectedCoverage?.hasGrade && projectedScores.grade !== scores.grade ? (
             <>
               <span className="text-sm" style={{ color: '#A8A29E' }}>
                 <s>{scores.total_score.toFixed(1)}</s> → {projectedScores.total_score.toFixed(1)}/{projectedScores.max_possible.toFixed(0)}
@@ -251,17 +258,17 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
         <span>· * = declared</span>
         <span>· ~ = benchmark-derived</span>
         <span>· ≈ = AI-estimated</span>
-        {projectedScores && <span>· Green delta = projected improvement</span>}
+        {projectedScores && canCompareProjectedScores && <span>· Green delta = projected improvement</span>}
         <span>· Click for details</span>
       </div>
 
       {/* Principle grid - and score bars */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
-        {scores.scores
+        {[...scores.scores]
           .sort((a, b) => a.principle_number - b.principle_number)
           .map(s => {
             const proj = projMap.get(s.principle_number)
-            const improved = proj && proj.score >= 0 && s.score >= 0 && proj.score < s.score
+            const improved = canCompareProjectedScores && proj && proj.score >= 0 && s.score >= 0 && proj.score < s.score
             return (
               <div key={s.principle_number} className="relative">
                 <ScoreBar score={s} />
@@ -279,13 +286,19 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
       {/* Summary footer */}
       <div className="flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-xs pt-4 mt-2 border-t gap-4" style={{ borderColor: '#D6D0C4', color: '#78716C' }}>
         <div className="text-center sm:text-left">
-          {availableScores.length} of 12 principles scored deterministically
-          {unavailableScores.length > 0 && (
-            <span> · {unavailableScores.length} need additional data</span>
+          {coverage.hasGrade ? (
+            <>
+              Grade based only on {coverage.available.length} available principle{coverage.available.length === 1 ? '' : 's'}; not comparable across different coverage.
+              <span> · {scoreCoverageDescription(coverage)}</span>
+            </>
+          ) : (
+            <>No valid principle scores are available; grade and total are unavailable. · {scoreCoverageDescription(coverage)}</>
           )}
-          {projectedScores && (
+          {projectedScores && (canCompareProjectedScores ? (
             <span> · Projected from accepted recommendations</span>
-          )}
+          ) : (
+            <span> · Projected score is not comparable: {coverageComparison?.reason === 'different-provenance' ? 'provenance changed' : 'available principles changed'}.</span>
+          ))}
         </div>
         {onRegrade && projectedScores && (
           <button

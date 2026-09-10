@@ -5,6 +5,7 @@
  */
 import { completeLocalJsonValidated } from '@/lib/local-result-validate'
 import {
+  baseChemicalName,
   isChemicalSwapRecommendation,
   stampRecommendationKinds,
 } from '@/lib/recommendation-kind'
@@ -63,6 +64,21 @@ interface SwapRepairLlmResult {
   recommendations: Recommendation[]
 }
 
+function normalizedInventoryName(value: string): string {
+  return baseChemicalName(value).replace(/^(?:concentrated|conc\.?)\s+/i, '')
+}
+
+/** A repair can only replace a chemical actually identified by the inventory gate. */
+export function isInventoryGroundedChemicalSwap(
+  rec: Pick<Recommendation, 'original' | 'alternative'>,
+  hazardousInventory: HazardousInventoryItem[],
+): boolean {
+  const original = normalizedInventoryName(rec.original?.chemical ?? '')
+  const alternative = normalizedInventoryName(rec.alternative?.chemical ?? '')
+  if (!original || !alternative || original === alternative) return false
+  return hazardousInventory.some((item) => normalizedInventoryName(item.name) === original)
+}
+
 function buildSwapRepairSystemPrompt(hazardous: HazardousInventoryItem[]): string {
   const inventoryLines = hazardous.map((h) => {
     const step = h.stepNumber != null ? `step ${h.stepNumber}` : 'step unknown'
@@ -81,7 +97,7 @@ ${inventoryLines.join('\n')}
 
 TASK:
 - Emit ONE or more recommendations with kind exactly "chemical_swap".
-- Each chemical_swap MUST replace one inventory chemical above with a DIFFERENT base chemical name (not the same substance with a dose/parenthetical tip; not TLC/HPLC/monitoring; not microwave/temperature-only tips).
+- Each chemical_swap MUST replace one inventory chemical above with a DIFFERENT base chemical name (not the same substance with a dose/parenthetical tip; not TLC/HPLC/monitoring; not microwave/temperature-only tips). This includes hazardous reagents and catalysts, not only solvents.
 - Prefer established greener alternatives (CHEM21 solvents, milder acids, supported catalytic systems). Be conservative; do not invent unsafe or fictional reagents.
 - Keep kind segregation: do NOT return process_change or analytical in this repair unless also including ≥1 valid chemical_swap. Prefer returning only chemical_swap items.
 - Set principleNumbers/principleNames appropriately (often P3 Less Hazardous Chemical Syntheses and/or P5 Safer Solvents and Auxiliaries and/or P12 Inherently Safer Chemistry).
@@ -185,7 +201,9 @@ export async function runChemicalSwapRepair(options: {
       : []
     const normalized = normalizeRepairRecs(rawRecs as Recommendation[])
     const stamped = stampRecommendationKinds(normalized)
-    const swaps = stamped.filter(isChemicalSwapRecommendation)
+    const swaps = stamped.filter((rec) =>
+      isChemicalSwapRecommendation(rec) && isInventoryGroundedChemicalSwap(rec, hazardousInventory),
+    )
 
     if (swaps.length === 0) {
       return {

@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { AnalysisResult, ImpactDelta } from '@/lib/types'
 import { calculateEquivalencies } from '@/lib/equivalencies'
+import { impactIsExplicitlyUnavailable } from '@/lib/impact-inventory'
 import { calculateAcceptedImpact } from './ImpactScoreboard'
 import EquivalencyStory from './EquivalencyStory'
 
@@ -32,7 +33,7 @@ export default function ScaleUpProjection({ analysis }: { analysis: AnalysisResu
     return n.toFixed(3)
   }
 
-  if (!hasImpact) return null
+  if (impactIsExplicitlyUnavailable(perRunDelta) || !hasImpact) return null
 
   return (
     <div>

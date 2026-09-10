@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { calculateEquivalencies } from '@/lib/equivalencies'
+import { aggregateClaimableImpact } from '@/lib/impact-inventory'
 import { NextResponse } from 'next/server'
 import { CumulativeImpact, ImpactDelta } from '@/lib/types'
 
@@ -28,26 +29,10 @@ export async function GET(
     .eq('user_id', profile.user_id)
 
   // Aggregate impact
+  const aggregate = aggregateClaimableImpact((analyses || []).map((row) => row.impact_delta as ImpactDelta))
   const cumulative: CumulativeImpact = {
     totalAnalyses: analyses?.length || 0,
-    co2eSavedKg: 0,
-    hazardousWasteEliminatedKg: 0,
-    carcinogensEliminated: [],
-    waterSavedL: 0,
-    energySavedKwh: 0,
-  }
-
-  for (const row of analyses || []) {
-    const d = row.impact_delta as ImpactDelta
-    cumulative.co2eSavedKg += d.co2eSavedKg || 0
-    cumulative.hazardousWasteEliminatedKg += d.hazardousWasteEliminatedKg || 0
-    cumulative.waterSavedL += d.waterSavedL || 0
-    cumulative.energySavedKwh += d.energySavedKwh || 0
-    for (const c of d.carcinogensEliminated || []) {
-      if (!cumulative.carcinogensEliminated.includes(c)) {
-        cumulative.carcinogensEliminated.push(c)
-      }
-    }
+    ...aggregate,
   }
 
   const equivalencies = calculateEquivalencies({

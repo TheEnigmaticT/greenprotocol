@@ -163,6 +163,20 @@ describe('shouldRepairChemicalSwaps gate', () => {
     ).toBe(true)
   })
 
+  it('repairs when a hazardous non-solvent catalyst has only a soft loading tip', () => {
+    const tipsOnly = [makeRec({
+      kind: 'process_change',
+      original: { chemical: 'Pd(PPh3)4', issue: 'precious-metal catalyst' },
+      alternative: {
+        chemical: 'Pd(PPh3)4', rationale: 'Reduce catalyst loading after screening',
+        yieldImpact: 'requires validation', caveats: '', evidenceBasis: 'optimization',
+      },
+    })]
+    const hazardous = collectHazardousInventory([{ name: 'Pd(PPh3)4', role: 'catalyst' }])
+    expect(hazardous[0]).toMatchObject({ name: 'Pd(PPh3)4', role: 'catalyst' })
+    expect(shouldRepairChemicalSwaps({ recommendations: tipsOnly, hazardousInventory: hazardous })).toBe(true)
+  })
+
   it('skips when chemical_swap already present (Suzuki-style)', () => {
     const withSwap = [
       makeRec({

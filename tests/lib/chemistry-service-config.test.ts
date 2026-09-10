@@ -28,12 +28,24 @@ describe('getChemistryServiceConfig', () => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   vi.resetModules()
 })
 
 describe('chemistry service client configuration', () => {
+  it('records a failed scoring HTTP status without logging response bodies or credentials', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('CHEMISTRY_SERVICE_URL', 'https://chemistry.example.test')
+    vi.stubEnv('CHEMISTRY_SERVICE_TOKEN', 'private-test-token')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private-protocol-detail', { status: 500 })))
+    const { scoreProtocol } = await import('@/lib/chemistry-service')
+    await expect(scoreProtocol({ chemicals: [], steps: [], protocol_text: 'private-test-protocol' })).resolves.toBeNull()
+    expect(error).toHaveBeenCalledWith('[chemistry-service] score HTTP failure', { status: 500 })
+    expect(JSON.stringify(error.mock.calls)).not.toContain('private-')
+  })
+
   it('does not attempt a localhost request when the production URL is absent', async () => {
     const fetchMock = vi.fn()
     vi.stubEnv('CHEMISTRY_SERVICE_URL', '')

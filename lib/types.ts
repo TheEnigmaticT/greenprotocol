@@ -67,6 +67,16 @@ export interface Citation {
 
 export type RecommendationKind = 'chemical_swap' | 'process_change' | 'analytical'
 
+/**
+ * Whether a substitution has reaction-applicable evidence sufficient to alter
+ * a drafted or finalized procedure. Hypotheses remain visible but cannot be
+ * applied automatically.
+ */
+export interface RecommendationApplicationEligibility {
+  status: 'supported' | 'hypothesis_only' | 'unavailable'
+  reason: string
+}
+
 export interface Recommendation {
   id?: string
   stepNumber: number
@@ -95,6 +105,7 @@ export interface Recommendation {
   wasteDelta?: Record<string, unknown>
   citationMetadata?: RecommendationCitationMetadata
   evidenceTier?: 'sourced' | 'inferred'
+  applicationEligibility?: RecommendationApplicationEligibility
 }
 
 export interface AnalysisResult {
@@ -124,6 +135,10 @@ export interface AnalysisResult {
   deterministicScores?: DeterministicScores
   enrichedChemicals?: EnrichedChemical[]
   chemistryDataStatus?: ChemistryDataStatus
+  /** Persisted submitted-batch before/after material boundary for impact review. */
+  impactInventory?: ImpactInventorySnapshot
+  /** Bounded reaction/literature context supplied before principle generation. */
+  predecisionEvidence?: string
   // v0.6: waste analysis + citability
   analysisMetadata?: AnalysisMetadata
   wasteAnalysis?: WasteAnalysis
@@ -136,12 +151,54 @@ export interface AnalysisResult {
   }
 }
 
+export type ImpactInventoryQuantity = {
+  state: 'known' | 'unknown'
+  massKg?: number
+  volumeMl?: number
+  declaredText?: string
+}
+
+export interface ImpactInventoryRow {
+  rowId: string
+  scenario: 'baseline' | 'proposed' | 'accepted'
+  stepNumber?: number
+  chemical: string
+  role?: string
+  /** Present only for a replacement row; never used to infer equal mass. */
+  originalChemical?: string
+  quantity: ImpactInventoryQuantity
+  provenance: string[]
+  evidenceEligibility?: RecommendationApplicationEligibility['status']
+}
+
+/**
+ * A bounded submitted-batch material inventory, not a normalized LCA result.
+ * Numeric impact remains unavailable until replacement quantities and
+ * substitution-specific factors are supplied.
+ */
+export interface ImpactInventorySnapshot {
+  version: 'impact-inventory/v1'
+  boundary: {
+    functionalUnit: 'submitted_batch'
+    productOutputStatus: 'unknown'
+    limitations: string[]
+  }
+  baselineRows: ImpactInventoryRow[]
+  afterRows: ImpactInventoryRow[]
+  missingInputs: string[]
+}
+
 export interface ImpactDelta {
   co2eSavedKg: number
   hazardousWasteEliminatedKg: number
   carcinogensEliminated: string[]
   waterSavedL: number
   energySavedKwh: number
+  inventory?: ImpactInventorySnapshot
+  assessment?: {
+    level: 'screening_estimate' | 'full_lca' | 'unavailable'
+    reasons: string[]
+  }
 }
 
 export interface Equivalency {
@@ -214,6 +271,8 @@ export interface DeterministicScores {
 }
 
 export interface EnrichedChemical extends ParsedChemical {
+  /** Service-resolved identity; `name` remains the verbatim parsed protocol name. */
+  canonical_name?: string
   molecular_weight?: number
   density_g_per_ml?: number
   smiles?: string
@@ -222,6 +281,9 @@ export interface EnrichedChemical extends ParsedChemical {
   green_alternatives?: { chemical: string; source: string; content: string }[]
   citations?: Citation[]
   data_source?: string
+  /** Hydration state from the chemistry service; queued/unavailable is not safety evidence. */
+  reference_status?: 'available' | 'queued' | 'terminal_not_found' | 'unavailable' | string
+  reference_queued?: boolean
 }
 
 export interface ChemistryDataStatus {
@@ -244,8 +306,8 @@ export interface AnalysisMetadata {
 }
 
 export interface WasteSummary {
-  wasteImpactScore: number    // 0-10
-  grade: string               // A-F
+  wasteImpactScore: number    // 0-10, or -1 when unavailable
+  grade: string               // A-F, or unavailable
   primaryDriver: string       // one-sentence explanation
   bestNextAction?: string
   confidence: ScoreProvenance
@@ -253,22 +315,39 @@ export interface WasteSummary {
 
 export interface HazardBucket {
   category: string            // toxic, cmr, flammable, corrosive, environmental
-  totalKg: number
+  /** Known input mass only; null when bucket coverage is incomplete. Not waste mass. */
+  totalKg: number | null
   chemicalsCount: number
   chemicals: string[]
+  massCoverage?: 'complete' | 'partial' | 'unavailable'
 }
 
 export interface WasteAnalysis {
+  /** Availability boundary for the versioned waste-analysis payload. */
+  version?: 'waste-analysis/v2'
+  availability?: {
+    actualWasteMass: 'unavailable'
+    liquidDisposition: 'unavailable'
+    reason: string
+  }
   summary: WasteSummary
+  /** Declared/converted non-product inputs, not a waste total or mass balance. */
+  observedInputInventory?: {
+    knownInputMassKg: number | null
+    knownMassChemicalCount: number
+    chemicalsWithUnknownMassCount: number
+    massCoverage: 'complete' | 'partial' | 'unavailable'
+  }
+  /** Legacy field names retained for payload compatibility; v2 sets all to null. */
   directWaste: {
-    totalWasteKg: number
-    solventWasteKg: number
-    nonSolventWasteKg: number
+    totalWasteKg: number | null
+    solventWasteKg: number | null
+    nonSolventWasteKg: number | null
   }
   hazardSegments: HazardBucket[]
   liquidBurden: {
-    totalLiquidHandledKg: number
-    totalLiquidDiscardedKg: number
+    totalLiquidHandledKg: number | null
+    totalLiquidDiscardedKg: number | null
   }
   processBurden: {
     transferCount: number
@@ -338,6 +417,9 @@ export interface RecommendationCitationMetadata {
 
 export interface CumulativeImpact {
   totalAnalyses: number
+  /** Rows explicitly marked unavailable are excluded from all savings claims. */
+  claimedAnalyses: number
+  unavailableAnalyses: number
   co2eSavedKg: number
   hazardousWasteEliminatedKg: number
   carcinogensEliminated: string[]

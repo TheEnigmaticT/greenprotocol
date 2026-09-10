@@ -4,6 +4,7 @@ import { AnalysisResult, Recommendation } from '@/lib/types'
 import { kindBadgeLabel, resolveRecommendationKind } from '@/lib/recommendation-kind'
 import { RecommendationApprovalReceipt, TalkAboutThis } from './TalkAboutThis'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
+import { RecommendationApplicationNotice, recommendationApplicationStatus } from './recommendation-application-status'
 
 function KindBadge({ rec }: { rec: Recommendation }) {
   const kind = resolveRecommendationKind(rec)
@@ -65,6 +66,7 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
   recommendationIndex: number
 }) {
   const tier = evidenceLabel(rec)
+  const applicationStatus = recommendationApplicationStatus(rec)
   const evidenceState = tier === 'Sourced' ? 'sourced' : 'inferred'
   const whyLine = skimWhyLine(rec)
 
@@ -139,15 +141,19 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
         </p>
       )}
 
+      <RecommendationApplicationNotice rec={rec} />
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-auto">
-        <button
-          type="button"
-          onClick={onAccept}
-          className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em] cursor-pointer"
-          style={{ background: '#1C3822', color: '#F6F3EB', border: '1px solid #1C3822' }}
-        >
-          Accept
-        </button>
+        {!applicationStatus.isWithheld && (
+          <button
+            type="button"
+            onClick={onAccept}
+            className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em] cursor-pointer"
+            style={{ background: '#1C3822', color: '#F6F3EB', border: '1px solid #1C3822' }}
+          >
+            Accept
+          </button>
+        )}
         <button
           type="button"
           onClick={onDecline}
@@ -188,12 +194,14 @@ export default function FinalizedProtocol({
 }) {
   const total = analysis.recommendations.length
   const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
+  const acceptedApplicableSwaps = accepted.filter(rec => recommendationApplicationStatus(rec).isEligible)
+  const withheldAccepted = accepted.filter(rec => recommendationApplicationStatus(rec).isWithheld)
   const declined = analysis.recommendations.filter(r => r.isAccepted === false)
   const pending = analysis.recommendations.filter(r => r.isAccepted === undefined || r.isAccepted === null)
   const reviewed = accepted.length + declined.length
   const shouldShowFinalizedProtocol = reviewed > 0 || total === 0
   const finalizedProtocol = buildFinalizedProtocol(analysis, originalProtocol)
-  const procedureTitle = pending.length > 0 ? 'Current Lab Procedure Draft' : 'Finished Lab Procedure'
+  const procedureTitle = pending.length > 0 || withheldAccepted.length > 0 ? 'Current Lab Procedure Draft' : 'Finished Lab Procedure'
 
   const setRecAccepted = (index: number, value: boolean) => {
     if (!onUpdateAnalysis) return
@@ -260,16 +268,21 @@ export default function FinalizedProtocol({
               className="m-0 mb-3 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]"
               style={{ color: '#9D8026' }}
             >
-              Accepted · {accepted.length}
+              Accepted review decisions · {accepted.length}
             </p>
             <div className="space-y-3">
               {accepted.map((rec) => {
+                const applicationStatus = recommendationApplicationStatus(rec)
                 const globalIndex = analysis.recommendations.indexOf(rec)
                 return (
                   <div key={globalIndex}>
                     <div
                       className="flex flex-wrap items-baseline gap-x-4 gap-y-2 px-4 py-3 rounded-lg cursor-pointer"
-                      style={{ background: '#F5F0E8', border: '1px solid #D6D0C4', color: '#78716C' }}
+                      style={{
+                        background: applicationStatus.isWithheld ? '#FEF3C7' : '#F5F0E8',
+                        border: `1px solid ${applicationStatus.isWithheld ? '#FDE68A' : '#D6D0C4'}`,
+                        color: '#78716C',
+                      }}
                       onClick={() => toggleAccepted(globalIndex)}
                     >
                       <span className="text-xs font-bold uppercase tracking-wider font-[family-name:var(--font-mono)]" style={{ color: '#1C1917' }}>
@@ -279,7 +292,7 @@ export default function FinalizedProtocol({
                       <p className="m-0 flex flex-wrap items-baseline gap-x-3 font-[family-name:var(--font-mono)] text-sm font-medium">
                         <span style={{ color: '#A8A29E', textDecoration: 'line-through' }}>{rec.original.chemical}</span>
                         <span>→</span>
-                        <span style={{ color: '#006D15' }}>{rec.alternative.chemical}</span>
+                        <span style={{ color: applicationStatus.isWithheld ? '#78716C' : '#006D15' }}>{rec.alternative.chemical}</span>
                       </p>
                       {rec.id && (
                         <div className="shrink-0" onClick={event => event.stopPropagation()}>
@@ -295,11 +308,12 @@ export default function FinalizedProtocol({
                       )}
                       <span
                         className="ml-auto font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.16em]"
-                        style={{ color: '#006D15' }}
+                        style={{ color: applicationStatus.isWithheld ? '#92400E' : '#006D15' }}
                       >
-                        Accepted
+                        {applicationStatus.isWithheld ? 'Withheld — not adopted' : 'Accepted'}
                       </span>
                     </div>
+                    <RecommendationApplicationNotice rec={rec} />
                   </div>
                 )
               })}
@@ -355,12 +369,12 @@ export default function FinalizedProtocol({
             <h3 className="text-sm font-semibold mb-2 font-[family-name:var(--font-serif)]" style={{ color: '#1C3822' }}>
               {procedureTitle}
             </h3>
-            {pending.length > 0 && (
+            {(pending.length > 0 || withheldAccepted.length > 0) && (
               <p className="text-sm mb-3 font-[family-name:var(--font-sans)]" style={{ color: '#1C1917' }}>
-                Draft reflects accepted changes only. Pending items remain as written.
+                Draft reflects evidence-eligible accepted substitutions only. Pending items and withheld substitutions remain as written.
               </p>
             )}
-            {accepted.length > 0 && (
+            {acceptedApplicableSwaps.length > 0 && (
               <button
                 onClick={() => window.print()}
                 className="print:hidden text-xs px-4 py-2 mb-3 rounded border transition-colors"

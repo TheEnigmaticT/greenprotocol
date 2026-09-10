@@ -8,6 +8,7 @@ import Link from 'next/link'
 import WasteScoreCard from './WasteScoreCard'
 import { TalkAboutThis } from './TalkAboutThis'
 import { buildCitationString } from '@/lib/citation'
+import { RecommendationApplicationNotice, recommendationApplicationStatus } from './recommendation-application-status'
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -139,16 +140,18 @@ function RecommendationCard({
   analysisId?: string;
   recommendationIndex: number;
 }) {
+  const applicationStatus = recommendationApplicationStatus(rec)
   const isAccepted = !!rec.isAccepted
+  const isApplied = isAccepted && !applicationStatus.isWithheld
   const [showEvidence, setShowEvidence] = useState(false)
 
   return (
     <div
-      className={`p-4 rounded-lg border space-y-3 transition-all ${isAccepted ? 'ring-2' : ''}`}
+      className={`p-4 rounded-lg border space-y-3 transition-all ${isApplied ? 'ring-2' : ''}`}
       style={{ 
-        background: isAccepted ? '#F0FDF4' : '#FAFAF8', 
-        borderColor: isAccepted ? '#16a34a' : '#D6D0C4',
-        boxShadow: isAccepted ? '0 0 15px rgba(22, 163, 74, 0.1)' : 'none'
+        background: isApplied ? '#F0FDF4' : '#FAFAF8',
+        borderColor: isApplied ? '#16a34a' : '#D6D0C4',
+        boxShadow: isApplied ? '0 0 15px rgba(22, 163, 74, 0.1)' : 'none'
       }}
     >
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -178,16 +181,27 @@ function RecommendationCard({
             title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
             evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
           />
-          <button
-            onClick={onToggleAccept}
-            className={`text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border ${
-              isAccepted
-                ? 'bg-[#16a34a] text-white border-[#16a34a]'
-                : 'bg-white text-[#78716C] border-[#D6D0C4] hover:border-[#16a34a] hover:text-[#16a34a]'
-            }`}
-          >
-            {isAccepted ? '✓ Accepted' : 'Accept Solution'}
-          </button>
+          {applicationStatus.isWithheld ? (
+            isAccepted && (
+              <button
+                onClick={onToggleAccept}
+                className="text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border bg-white text-[#78716C] border-[#D6D0C4]"
+              >
+                Clear review
+              </button>
+            )
+          ) : (
+            <button
+              onClick={onToggleAccept}
+              className={`text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider transition-colors border ${
+                isAccepted
+                  ? 'bg-[#16a34a] text-white border-[#16a34a]'
+                  : 'bg-white text-[#78716C] border-[#D6D0C4] hover:border-[#16a34a] hover:text-[#16a34a]'
+              }`}
+            >
+              {isAccepted ? '✓ Accepted' : 'Accept Solution'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -202,7 +216,7 @@ function RecommendationCard({
         </div>
 
         {/* Alternative */}
-        <div className="p-3 rounded" style={{ background: isAccepted ? '#DCFCE7' : '#F0FDF4' }}>
+        <div className="p-3 rounded" style={{ background: isApplied ? '#DCFCE7' : '#F0FDF4' }}>
           <div className="text-xs font-semibold mb-1" style={{ color: '#16a34a' }}>RECOMMENDED</div>
           <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#1C1917' }}>
             {rec.alternative.chemical}
@@ -223,6 +237,8 @@ function RecommendationCard({
           )}
         </div>
       </div>
+
+      <RecommendationApplicationNotice rec={rec} />
 
       {showEvidence && rec.evidence && (
         <EvidenceView
@@ -266,7 +282,7 @@ export default function AnalysisResults({
 
   const recCounts = useMemo(() => ({
     high:           analysis.recommendations.filter(r => r.severity === 'high').length,
-    highUnaccepted: analysis.recommendations.filter(r => r.severity === 'high' && !r.isAccepted).length,
+    highUnaccepted: analysis.recommendations.filter(r => r.severity === 'high' && !r.isAccepted && !recommendationApplicationStatus(r).isWithheld).length,
     medium:         analysis.recommendations.filter(r => r.severity === 'medium').length,
     low:            analysis.recommendations.filter(r => r.severity === 'low').length,
     unreviewed:     analysis.recommendations.filter(r => !r.isAccepted).length,
@@ -275,7 +291,7 @@ export default function AnalysisResults({
   const handleAcceptAllHigh = useCallback(() => {
     if (!onUpdateAnalysis) return
     const updated = analysis.recommendations.map(rec =>
-      rec.severity === 'high' ? { ...rec, isAccepted: true } : rec
+      rec.severity === 'high' && !recommendationApplicationStatus(rec).isWithheld ? { ...rec, isAccepted: true } : rec
     )
     onUpdateAnalysis({ ...analysis, recommendations: updated })
   }, [analysis, onUpdateAnalysis])
@@ -343,7 +359,7 @@ export default function AnalysisResults({
       )}
 
       {viewMode === 'quick' ? (
-        <QuickWins recommendations={analysis.recommendations} />
+        <QuickWins recommendations={analysis.recommendations.filter(rec => recommendationApplicationStatus(rec).isEligible)} />
       ) : (
         <>
           {/* Protocol comparison */}

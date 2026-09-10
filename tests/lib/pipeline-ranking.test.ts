@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => ({
   anthropicCreate: vi.fn(),
   evidenceSearch: vi.fn(),
   isLocalPipeline: vi.fn(() => false),
+  batchConvert: vi.fn(),
+  scoreProtocol: vi.fn(),
+  isServiceAvailable: vi.fn().mockResolvedValue(false),
 }))
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -14,9 +17,9 @@ vi.mock('@anthropic-ai/sdk', () => ({
 }))
 
 vi.mock('@/lib/chemistry-service', () => ({
-  batchConvert: vi.fn(),
-  scoreProtocol: vi.fn(),
-  isServiceAvailable: vi.fn().mockResolvedValue(false),
+  batchConvert: mocks.batchConvert,
+  scoreProtocol: mocks.scoreProtocol,
+  isServiceAvailable: mocks.isServiceAvailable,
 }))
 
 vi.mock('@/lib/literature-evidence', async () => {
@@ -101,6 +104,9 @@ beforeEach(() => {
   mocks.anthropicCreate.mockReset()
   mocks.evidenceSearch.mockReset().mockResolvedValue([])
   mocks.isLocalPipeline.mockReset().mockReturnValue(false)
+  mocks.batchConvert.mockReset()
+  mocks.scoreProtocol.mockReset()
+  mocks.isServiceAvailable.mockReset().mockResolvedValue(false)
 })
 
 describe('deriveEvidenceTier', () => {
@@ -212,6 +218,10 @@ describe('Phase 2.5 evidence grounding', () => {
         content: expect.stringContaining('Candidate evidence'),
       }),
     )
+    expect(result.recommendations[0].applicationEligibility).toMatchObject({
+      status: 'hypothesis_only',
+    })
+    expect(result.revisedProtocol).toBe('Extract with dichloromethane.')
   })
 })
 
@@ -277,3 +287,51 @@ describe.each(['confirm', 'suppress'] as const)(
     })
   },
 )
+
+describe('predecision evidence sequencing', () => {
+  it('puts score-service reaction evidence in principle requests before generation', async () => {
+    mocks.isServiceAvailable.mockResolvedValue(true)
+    mocks.batchConvert.mockResolvedValue({ results: [{ chemical_name: 'ethanol', smiles: 'CCO', molecular_formula: 'C2H6O', molecular_weight: 46.07, density_g_per_ml: 0.789, quantity_g: 46.07, quantity_kg: 0.04607, quantity_mol: 1, ghs_hazards: [], green_alternatives: [], citations: [], data_source: 'pubchem', cached: true, warnings: [], error: null }] })
+    mocks.scoreProtocol.mockResolvedValue({ scores: [], total_score: 0, max_possible: 0, grade: 'C', smiles_extraction: { reaction_smiles: 'CCO>>CC=O', validated: true, source: 'chemistry-service' }, yield_extraction: {} })
+    mocks.evidenceSearch.mockResolvedValue([{ ...candidateMatch('predecision-unit'), quote: 'Ethanol oxidation was described under different reaction conditions.' }])
+    const principleUsers: string[] = []
+    mocks.anthropicCreate
+      .mockResolvedValueOnce(anthropicResponse({ protocolTitle: 'Oxidation', chemistrySubdomain: 'Organic synthesis', steps: [{ stepNumber: 1, description: 'Oxidize ethanol.', chemicals: [{ name: 'ethanol', role: 'reactant', quantity: '1 mol' }], conditions: {} }] }))
+      .mockImplementation(({ system, messages }: { system: string; messages: Array<{ content: string }> }) => {
+        if (system.includes('protocol writer')) return Promise.resolve(anthropicResponse({ revisedProtocol: 'Oxidize ethanol.', overallAssessment: { greenPrinciplesViolated: [], mostImpactfulChange: 'None', experimentalValidationNeeded: true, disclaimer: 'Validate.' } }))
+        principleUsers.push(messages[0].content)
+        return Promise.resolve(anthropicResponse({ principleNumber: 1, recommendations: [] }))
+      })
+
+    const result = await analyzeProtocol('Oxidize ethanol to acetaldehyde.')
+
+    expect(principleUsers).toHaveLength(12)
+    expect(mocks.evidenceSearch.mock.invocationCallOrder[0]).toBeLessThan(mocks.anthropicCreate.mock.invocationCallOrder[1])
+    for (const message of principleUsers) {
+      expect(message).toContain('Validated reaction representation: CCO>>CC=O')
+      expect(message).toContain('source_id=predecision-unit')
+    }
+    expect(result.predecisionEvidence).toContain('No applicable reaction precedent is established')
+  })
+
+  it('does not attach another compound’s hazards through a substring name match', async () => {
+    mocks.isServiceAvailable.mockResolvedValue(true)
+    mocks.batchConvert.mockResolvedValue({ results: ['ethanolamine', 'ethanol'].map((name, i) => ({
+      chemical_name: name, smiles: i === 0 ? 'NCCO' : 'CCO', quantity_g: 1, quantity_kg: 0.001,
+      ghs_hazards: [{ code: i === 0 ? 'H314' : 'H225', description: name, source: 'test fixture' }],
+      green_alternatives: [], citations: [], data_source: 'cache', cached: true, warnings: [], error: null,
+    })) })
+    mocks.scoreProtocol.mockResolvedValue(null)
+    mocks.anthropicCreate.mockResolvedValueOnce(anthropicResponse({
+      protocolTitle: 'Identity fixture', chemistrySubdomain: 'Organic synthesis',
+      steps: [{ stepNumber: 1, description: 'Handle ethanolamine and ethanol separately.',
+        chemicals: ['ethanolamine', 'ethanol'].map(name => ({ name, role: 'solvent', quantity: '1 g' })), conditions: {} }],
+    })).mockImplementation(({ system }: { system: string }) => Promise.resolve(anthropicResponse({
+      principleNumber: 5,
+      recommendations: system.includes('Principle 5') ? [makeRec({ original: { chemical: 'ethanol', issue: 'flammability' } })] : [],
+    })))
+    const result = await analyzeProtocol('Handle ethanolamine and ethanol separately.')
+    const flagged = result.recommendations[0].evidence?.why_flagged
+    expect(flagged).toEqual([expect.objectContaining({ content: 'H225: ethanol' })])
+  })
+})

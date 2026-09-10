@@ -4,6 +4,7 @@ import type { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical, S
 import { kindBadgeLabel, resolveRecommendationKind } from '@/lib/recommendation-kind'
 import { buildRecommendationCitationString, formatCitationACS } from '@/lib/citation'
 import { TalkAboutThis } from './TalkAboutThis'
+import { RecommendationApplicationNotice, recommendationApplicationStatus } from './recommendation-application-status'
 
 const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
   A: { bg: '#DCFCE7', text: '#166534' },
@@ -182,6 +183,7 @@ export default function PrincipleSection({
   analysisId,
 }: PrincipleSectionProps) {
   const anchorId = `p${principleNumber}`
+  const wasteUnavailable = wasteAnalysis?.version !== 'waste-analysis/v2' || wasteAnalysis?.availability?.actualWasteMass === 'unavailable' || wasteAnalysis?.summary.confidence === 'unavailable' || (wasteAnalysis?.summary.wasteImpactScore ?? 0) < 0
 
   return (
     <section id={anchorId} className="scroll-mt-20">
@@ -220,7 +222,38 @@ export default function PrincipleSection({
       {/* P1-specific: Waste analysis detail */}
       {principleNumber === 1 && wasteAnalysis && (
         <div className="mb-6 space-y-4">
-          {/* Waste grade card */}
+          {wasteUnavailable ? (
+            <div className="p-4 rounded-lg" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
+              <p className="text-sm font-semibold" style={{ color: '#1C1917' }}>Waste estimate unavailable</p>
+              <p className="text-xs mt-1" style={{ color: '#57534E' }}>{wasteAnalysis.summary.primaryDriver}</p>
+              <p className="text-[10px] italic mt-1" style={{ color: '#A8A29E' }}>{wasteAnalysis.availability?.reason}</p>
+
+              <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E7E5E4' }}>
+                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#78716C' }}>Observed input inventory</p>
+                {wasteAnalysis.observedInputInventory?.knownInputMassKg != null ? (
+                  <p className="text-sm font-bold mt-1">{wasteAnalysis.observedInputInventory.knownInputMassKg.toFixed(3)} kg</p>
+                ) : (
+                  <p className="text-xs mt-1" style={{ color: '#57534E' }}>No input mass was available.</p>
+                )}
+                <p className="text-[10px] italic mt-1" style={{ color: '#A8A29E' }}>Input inventory is not a waste total or mass balance.</p>
+              </div>
+
+              {wasteAnalysis.hazardSegments.length > 0 && (
+                <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E7E5E4' }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#7C2D36' }}>Hazard flags (not waste quantities)</p>
+                  {wasteAnalysis.hazardSegments.map((seg) => (
+                    <p key={seg.category} className="text-xs" style={{ color: '#57534E' }}>
+                      {seg.category} ({seg.chemicalsCount}) — {seg.chemicals.join(', ')}{seg.totalKg == null ? ' · mass unavailable' : ` · ${seg.totalKg.toFixed(3)} kg observed input`}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-[10px] italic mt-3" style={{ color: '#A8A29E' }}>
+                Process counts and regulatory signals remain context only; they do not quantify waste.
+              </p>
+            </div>
+          ) : (
           <div className="p-4 rounded-lg" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
             <div className="flex items-center gap-4 mb-3">
               <div
@@ -243,15 +276,15 @@ export default function PrincipleSection({
             {/* Direct waste */}
             <div className="grid grid-cols-3 gap-3 text-center mb-3">
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.directWaste.totalWasteKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{(wasteAnalysis.directWaste.totalWasteKg ?? 0).toFixed(3)}</div>
                 <div className="text-[9px] uppercase text-stone-500">Total kg</div>
               </div>
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.directWaste.solventWasteKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{(wasteAnalysis.directWaste.solventWasteKg ?? 0).toFixed(3)}</div>
                 <div className="text-[9px] uppercase text-stone-500">Solvent kg</div>
               </div>
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.directWaste.nonSolventWasteKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{(wasteAnalysis.directWaste.nonSolventWasteKg ?? 0).toFixed(3)}</div>
                 <div className="text-[9px] uppercase text-stone-500">Non-solvent kg</div>
               </div>
             </div>
@@ -273,7 +306,7 @@ export default function PrincipleSection({
                           </span>
                         )}
                       </span>
-                      <span className="font-semibold" style={{ color: '#1C1917' }}>{seg.totalKg.toFixed(3)} kg</span>
+                      <span className="font-semibold" style={{ color: '#1C1917' }}>{seg.totalKg == null ? 'Mass unavailable' : `${seg.totalKg.toFixed(3)} kg`}</span>
                     </div>
                   ))}
                 </div>
@@ -283,11 +316,11 @@ export default function PrincipleSection({
             {/* Liquid burden */}
             <div className="grid grid-cols-2 gap-3 text-center mb-3">
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidHandledKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{(wasteAnalysis.liquidBurden.totalLiquidHandledKg ?? 0).toFixed(3)}</div>
                 <div className="text-[9px] uppercase text-stone-500">Liquid handled kg</div>
               </div>
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidDiscardedKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{(wasteAnalysis.liquidBurden.totalLiquidDiscardedKg ?? 0).toFixed(3)}</div>
                 <div className="text-[9px] uppercase text-stone-500">Liquid discarded kg</div>
               </div>
             </div>
@@ -312,6 +345,7 @@ export default function PrincipleSection({
               </div>
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -353,14 +387,17 @@ export default function PrincipleSection({
             Recommendations ({recommendations.length})
           </h4>
           <p className="text-[10px] italic mb-2" style={{ color: '#A8A29E' }}>
-            Recommendations across principles may suggest alternative paths. Each is independently evidence-backed — choose based on your experimental constraints.
+            Recommendations may suggest alternative paths. Application eligibility and supporting evidence are shown for each recommendation; a candidate benefit is not a confirmed protocol change.
           </p>
           <div className="space-y-2">
-            {recommendations.map((rec, i) => (
+            {recommendations.map((rec, i) => {
+              const applicationStatus = recommendationApplicationStatus(rec)
+              const isApplied = rec.isAccepted && !applicationStatus.isWithheld
+              return (
               <div
                 key={i}
                 className="p-3 rounded-lg border"
-                style={{ background: rec.isAccepted ? '#F0FDF4' : '#FAFAF8', borderColor: rec.isAccepted ? '#BBF7D0' : '#E7E5E4' }}
+                style={{ background: isApplied ? '#F0FDF4' : '#FAFAF8', borderColor: isApplied ? '#BBF7D0' : '#E7E5E4' }}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs font-semibold" style={{ color: '#1C1917' }}>Step {rec.stepNumber}</span>
@@ -374,13 +411,13 @@ export default function PrincipleSection({
                     {rec.severity}
                   </span>
                   {rec.primaryBenefit && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: '#D1FAE5', color: '#065F46' }}>
-                      {rec.primaryBenefit}
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: applicationStatus.isWithheld ? '#FEF3C7' : '#D1FAE5', color: applicationStatus.isWithheld ? '#92400E' : '#065F46' }}>
+                      {applicationStatus.isWithheld ? `Candidate benefit (unconfirmed): ${rec.primaryBenefit}` : rec.primaryBenefit}
                     </span>
                   )}
                   {rec.isAccepted && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: '#16a34a', color: 'white' }}>
-                      Accepted
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: applicationStatus.isWithheld ? '#FEF3C7' : '#16a34a', color: applicationStatus.isWithheld ? '#92400E' : 'white' }}>
+                      {applicationStatus.isWithheld ? 'Withheld — not adopted' : 'Accepted'}
                     </span>
                   )}
                   <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: '#F0EBE1', color: '#44403C' }}>
@@ -423,6 +460,8 @@ export default function PrincipleSection({
                     {rec.alternative.rationale}
                   </p>
                 )}
+
+                <RecommendationApplicationNotice rec={rec} />
 
                 {/* Evidence */}
                 {rec.evidence && (rec.evidence.citations.length > 0 || (rec.evidence.sdsReferences?.length ?? 0) > 0) && (
@@ -482,7 +521,8 @@ export default function PrincipleSection({
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

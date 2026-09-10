@@ -67,6 +67,71 @@ describe('analysis endpoint provider-independent bookkeeping', () => {
     expect(mocks.writes.find(w => w.table === 'gpc_analyses')?.value.protocol_text).toBe(source)
   })
 
+  it('persists unavailable impact rather than inventing same-mass substitution savings', async () => {
+    mocks.analyze.mockResolvedValue({
+      protocolTitle: 'Synthetic impact test',
+      steps: [{
+        stepNumber: 1,
+        description: 'Extract with dichloromethane.',
+        chemicals: [{ name: 'dichloromethane', role: 'solvent', quantityKg: 1, quantityMl: null }],
+      }],
+      recommendations: [{
+        stepNumber: 1,
+        principleNumbers: [5],
+        principleNames: ['Safer Solvents'],
+        severity: 'high',
+        kind: 'chemical_swap',
+        original: { chemical: 'dichloromethane', issue: 'hazardous solvent' },
+        alternative: { chemical: 'ethyl acetate', rationale: 'candidate', yieldImpact: '', caveats: '', evidenceBasis: '' },
+        confidenceLevel: 'medium',
+        applicationEligibility: { status: 'supported', reason: 'Synthetic supported fixture.' },
+      }],
+    })
+
+    await (await POST(request())).text()
+
+    const impact = mocks.writes.find(w => w.table === 'gpc_analyses')?.value.impact_delta as Record<string, unknown>
+    expect(impact.assessment).toMatchObject({ level: 'unavailable' })
+    expect(impact.co2eSavedKg).toBe(0)
+    const inventory = impact.inventory as { version: string; baselineRows: unknown[]; afterRows: unknown[] }
+    expect(inventory.version).toBe('impact-inventory/v1')
+    expect(inventory.baselineRows).toMatchObject([
+      { chemical: 'dichloromethane', quantity: { state: 'known', massKg: 1 } },
+    ])
+    expect(inventory.afterRows).toMatchObject([
+      { chemical: 'ethyl acetate', quantity: { state: 'unknown' }, originalChemical: 'dichloromethane' },
+    ])
+    expect((impact.assessment as { reasons: string[] }).reasons).toContain(
+      'Replacement quantity for dichloromethane → ethyl acetate has not been provided; original mass was not reused.',
+    )
+    expect(mocks.writes.find(w => w.table === 'gpc_analyses')?.value.analysis_result).toMatchObject({
+      impactInventory: { version: 'impact-inventory/v1' },
+    })
+  })
+
+  it('persists only model-extracted inventory quantities rather than a later density conversion', async () => {
+    mocks.analyze.mockResolvedValue({
+      protocolTitle: 'Synthetic volume-only impact test',
+      steps: [{
+        stepNumber: 1,
+        description: 'Extract with dichloromethane.',
+        chemicals: [{ name: 'dichloromethane', role: 'solvent', quantity: '25 mL', quantityKg: null, quantityMl: 25 }],
+      }],
+      recommendations: [],
+    })
+
+    await (await POST(request())).text()
+
+    const impact = mocks.writes.find(w => w.table === 'gpc_analyses')?.value.impact_delta as {
+      inventory: { baselineRows: { quantity: { massKg?: number; volumeMl?: number }; provenance: string[] }[] }
+    }
+    expect(impact.inventory.baselineRows[0]).toMatchObject({
+      quantity: { state: 'known', volumeMl: 25 },
+      provenance: expect.arrayContaining(['model_extracted_protocol']),
+    })
+    expect(impact.inventory.baselineRows[0].quantity.massKg).toBeUndefined()
+  })
+
   it('keeps authentication ahead of analysis and bookkeeping', async () => {
     mocks.user = null
     expect((await POST(request())).status).toBe(401)

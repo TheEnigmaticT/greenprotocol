@@ -62,21 +62,38 @@ export default function WasteDetailsPanel({ wasteAnalysis }: { wasteAnalysis: Wa
   } = wasteAnalysis
   const reg = regulatoryContext
   const hasReg = !!reg && reg.chemicals.length > 0
+  const wasteUnavailable = wasteAnalysis.version !== 'waste-analysis/v2' || wasteAnalysis.availability?.actualWasteMass === 'unavailable' || wasteAnalysis.summary.confidence === 'unavailable' || wasteAnalysis.summary.wasteImpactScore < 0
 
   return (
     <div className="px-4 pb-4">
-      {/* Direct waste */}
-      <Section label="Direct waste">
-        <div className="grid grid-cols-3 gap-3">
-          <Metric label="Total" value={kg(directWaste.totalWasteKg)} />
-          <Metric label="Solvent" value={kg(directWaste.solventWasteKg)} />
-          <Metric label="Non-solvent" value={kg(directWaste.nonSolventWasteKg)} />
-        </div>
-      </Section>
+      {wasteUnavailable ? (
+        <>
+          <Section label="Waste estimate">
+            <p className="text-[11px]" style={{ color: '#57534E' }}>Actual waste generation is unknown.</p>
+            <p className="text-[10px] italic mt-1" style={{ color: '#A8A29E' }}>{wasteAnalysis.availability?.reason}</p>
+          </Section>
+          <Section label="Observed input inventory">
+            {wasteAnalysis.observedInputInventory?.knownInputMassKg != null ? (
+              <Metric label={`Known input mass · ${wasteAnalysis.observedInputInventory.massCoverage} coverage`} value={`${wasteAnalysis.observedInputInventory.knownInputMassKg.toFixed(3)} kg`} />
+            ) : (
+              <p className="text-[11px]" style={{ color: '#57534E' }}>No input mass was available.</p>
+            )}
+            <p className="text-[10px] italic mt-1" style={{ color: '#A8A29E' }}>Input inventory is not a waste total or mass balance.</p>
+          </Section>
+        </>
+      ) : (
+        <Section label="Direct waste">
+          <div className="grid grid-cols-3 gap-3">
+            <Metric label="Total" value={kg(directWaste.totalWasteKg ?? 0)} />
+            <Metric label="Solvent" value={kg(directWaste.solventWasteKg ?? 0)} />
+            <Metric label="Non-solvent" value={kg(directWaste.nonSolventWasteKg ?? 0)} />
+          </div>
+        </Section>
+      )}
 
       {/* Hazard segments */}
       {hazardSegments.length > 0 && (
-        <Section label="Hazard-segmented waste">
+        <Section label={wasteUnavailable ? 'Hazard flags (not waste quantities)' : 'Hazard-segmented waste'}>
           <ul className="space-y-2">
             {hazardSegments.map((seg) => (
               <li key={seg.category} className="flex items-start justify-between gap-3">
@@ -95,7 +112,7 @@ export default function WasteDetailsPanel({ wasteAnalysis }: { wasteAnalysis: Wa
                   className="text-sm font-semibold shrink-0"
                   style={{ color: '#1C1917', fontFamily: 'var(--font-mono)' }}
                 >
-                  {kg(seg.totalKg)}
+                  {seg.totalKg == null ? 'Mass unavailable' : wasteUnavailable ? `${kg(seg.totalKg)} input` : kg(seg.totalKg)}
                 </span>
               </li>
             ))}
@@ -103,13 +120,14 @@ export default function WasteDetailsPanel({ wasteAnalysis }: { wasteAnalysis: Wa
         </Section>
       )}
 
-      {/* Liquid burden */}
-      <Section label="Liquid burden">
-        <div className="grid grid-cols-2 gap-3">
-          <Metric label="Handled" value={kg(liquidBurden.totalLiquidHandledKg)} />
-          <Metric label="Discarded (est.)" value={kg(liquidBurden.totalLiquidDiscardedKg)} />
-        </div>
-      </Section>
+      {!wasteUnavailable && (
+        <Section label="Liquid burden">
+          <div className="grid grid-cols-2 gap-3">
+            <Metric label="Handled" value={kg(liquidBurden.totalLiquidHandledKg ?? 0)} />
+            <Metric label="Discarded (est.)" value={kg(liquidBurden.totalLiquidDiscardedKg ?? 0)} />
+          </div>
+        </Section>
+      )}
 
       {/* Process burden */}
       <Section label="Process burden">
@@ -120,6 +138,7 @@ export default function WasteDetailsPanel({ wasteAnalysis }: { wasteAnalysis: Wa
           <Metric label="Wash steps" value={String(processBurden.washStepCount)} />
           <Metric label="Complexity" value={String(processBurden.workflowComplexity)} />
         </div>
+        {wasteUnavailable && <p className="text-[10px] italic mt-2" style={{ color: '#A8A29E' }}>Observed workflow indicators; they do not quantify waste.</p>}
       </Section>
 
       {/* Regulatory context — US RCRA (compliance context, not scoring) */}

@@ -170,6 +170,7 @@ async function main(): Promise<void> {
     alternativeChemical: r.alternative?.chemical ?? '',
     confidenceLevel: r.confidenceLevel ?? null,
     primaryBenefit: r.primaryBenefit ?? null,
+    applicationEligibility: r.applicationEligibility ?? null,
   }))
   console.log('\n=== RECOMMENDATION PREVIEWS ===')
   for (const [i, p] of recommendationPreviews.entries()) {
@@ -223,6 +224,7 @@ async function main(): Promise<void> {
     recommendationPreviews,
     confidenceBreakdown: confidenceCounts,
     revisedProtocolLength: revisedLen,
+    revisedProtocolMatchesInput: result.revisedProtocol === PROTOCOL,
     assembleFailedNote: assembleFailed
       ? 'revisedProtocol empty while chemical_swap recommendations exist — assemble likely failed (graceful degradation)'
       : revisedLen === 0

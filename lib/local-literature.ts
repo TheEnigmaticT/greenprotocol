@@ -32,6 +32,7 @@ interface DenseMeta {
 }
 
 export interface LocalLiteratureEnv {
+  [key: string]: string | undefined
   GCAI_LOCAL_PIPELINE?: string
   GCAI_LOCAL_PARSE?: string
   GCAI_LOCAL_EVIDENCE_INDEX?: string

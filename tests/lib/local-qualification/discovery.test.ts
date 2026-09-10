@@ -73,7 +73,10 @@ describe('private discovery: synthetic fixtures only', () => {
     const { root, api } = await fixture()
     for (let i = 0; i < 2049; i++) fs.writeFileSync(join(root, String(i) + '.json'), '{}')
     expect(() => api.discoverLocalCorpus(true)).toThrow(/^DISCOVERY_LIMIT$/)
-  })
+    // This exercises real filesystem I/O, not a latency contract. Creating and
+    // scanning 2049 files exceeded 8s under parallel load; keep the exact limit
+    // assertion while allowing the fixture to complete on a busy machine.
+  }, 20_000)
   it('bounds directory depth', async () => {
     const { root, api } = await fixture()
     fs.mkdirSync(join(root, ...Array(17).fill('nested')), { recursive: true })

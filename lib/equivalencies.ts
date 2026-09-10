@@ -1,4 +1,5 @@
 import { ImpactDelta, Equivalency } from './types'
+import { impactIsExplicitlyUnavailable } from './impact-inventory'
 
 // EPA GHG Equivalencies Calculator conversion factors
 // Per 1 metric ton (1000 kg) CO2e
@@ -33,6 +34,7 @@ function fmt(n: number): string {
 }
 
 export function calculateEquivalencies(delta: ImpactDelta): Equivalency[] {
+  if (impactIsExplicitlyUnavailable(delta)) return []
   const results: Equivalency[] = []
   const co2e = delta.co2eSavedKg
   const epa = scaleEpa(co2e)

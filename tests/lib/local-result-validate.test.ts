@@ -120,6 +120,21 @@ describe('validatePrincipleResult', () => {
     expect(v.ok).toBe(true)
     if (v.ok) expect(v.result.recommendations).toHaveLength(1)
   })
+
+  it('rejects hollow alternatives and chemical_swap records that actually name an analytical method', () => {
+    expect(validatePrincipleResult(okPrinciple({
+      recommendations: [{
+        ...okPrinciple().recommendations[0],
+        alternative: { chemical: 'none', rationale: 'No replacement identified' },
+      }],
+    }))).toEqual({ ok: false, reason: 'rec_0_alternative_chemical_hollow' })
+    expect(validatePrincipleResult(okPrinciple({
+      recommendations: [{
+        ...okPrinciple().recommendations[0], kind: 'chemical_swap',
+        alternative: { chemical: 'HPLC', rationale: 'Monitor conversion by HPLC' },
+      }],
+    }))).toEqual({ ok: false, reason: 'rec_0_chemical_swap_not_substitution' })
+  })
 })
 
 describe('validateAssembleResult', () => {
@@ -170,6 +185,8 @@ describe('selectLocalResultValidator / repair addendum', () => {
   it('mentions the validation reason in repair addenda', () => {
     expect(buildLocalRepairAddendum('recommendations_not_array', 'principle-1'))
       .toContain('recommendations_not_array')
+    expect(buildLocalRepairAddendum('rec_0_chemical_swap_not_substitution', 'principle-1'))
+      .toContain('concrete, different chemical')
     expect(buildLocalRepairAddendum('disclaimer', 'assemble')).toContain('disclaimer')
   })
 })

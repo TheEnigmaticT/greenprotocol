@@ -29,7 +29,7 @@ function okPayload(overrides: Record<string, unknown> = {}) {
 }
 
 function mockOllama(content: unknown, model = MODEL) {
-  return vi.fn(async () => new Response(JSON.stringify({
+  return vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
     model,
     done: true,
     done_reason: 'stop',
@@ -76,6 +76,18 @@ describe('validateLocalParseResult', () => {
     const good = validateLocalParseResult(TEXT, okPayload())
     expect(good.ok).toBe(true)
     if (good.ok) expect(good.result.steps[0].chemicals[0].role).toBe('solvent')
+  })
+
+  it('rejects a non-aspirin chemical assigned to a step where it is not verbatim', () => {
+    const protocol = 'Charge aryl bromide and boronic acid. Add Pd(PPh3)4, then heat.'
+    const payload = okPayload({
+      protocolTitle: 'Suzuki coupling',
+      steps: [
+        { stepNumber: 1, description: 'Charge aryl bromide and boronic acid.', chemicals: [{ name: 'Pd(PPh3)4', role: 'catalyst', quantity: '' }], conditions: {} },
+        { stepNumber: 2, description: 'Add Pd(PPh3)4, then heat.', chemicals: [{ name: 'Pd(PPh3)4', role: 'catalyst', quantity: '' }], conditions: {} },
+      ],
+    })
+    expect(validateLocalParseResult(protocol, payload)).toEqual({ ok: false, reason: 'step_0_chem_name' })
   })
 
   it('drops string-null and unanchored conditions instead of failing the parse', () => {
@@ -153,7 +165,7 @@ describe('parseProtocolLocal', () => {
         conditions: {},
       }],
     })
-    const fetchImpl = vi.fn()
+    const fetchImpl = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         model: MODEL, done: true, done_reason: 'stop',
         message: { role: 'assistant', content: JSON.stringify(bad) },
@@ -198,8 +210,8 @@ describe('score adapters', () => {
     const steps = adaptStepsForLocalHelpers(TEXT, [{
       stepNumber: 1,
       description: TEXT,
-      chemicals: [{ name: 'ethanol', role: 'workup', quantity: '5 mL' }],
-      conditions: {},
+      chemicals: [{ name: 'ethanol', role: 'workup', quantity: '5 mL', quantityMl: null, quantityKg: null }],
+      conditions: { temperature: null, duration: null, atmosphere: null },
     }])
     expect(steps[0].chemicals[0].role).toBe('unknown')
     expect(flattenChemicalsForScore(steps)).toEqual([

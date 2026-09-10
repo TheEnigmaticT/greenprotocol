@@ -88,7 +88,7 @@ describe('resolveLocalReasoningEffort / think / budget', () => {
 
 describe('completeLocalJson', () => {
   it('posts to loopback Ollama with schema format', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
       model: MODEL,
       done: true,
       done_reason: 'stop',
@@ -115,7 +115,7 @@ describe('completeLocalJson', () => {
   })
 
   it('fails closed on identity mismatch without Anthropic fallback', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
       model: 'wrong',
       done: true,
       done_reason: 'stop',
@@ -131,7 +131,7 @@ describe('completeLocalJson', () => {
 
 describe('usage mapping + degraded flag', () => {
   it('posts Ollama with think=false and unscaled budget when env disables reasoning', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
       model: MODEL,
       done: true,
       done_reason: 'stop',
@@ -159,7 +159,7 @@ describe('usage mapping + degraded flag', () => {
   })
 
   it('maps Ollama prompt_eval_count/eval_count into usage', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
       model: MODEL,
       done: true,
       done_reason: 'stop',
@@ -186,7 +186,7 @@ describe('usage mapping + degraded flag', () => {
   })
 
   it('returns zero usage when Ollama omits eval counts', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
       model: MODEL,
       done: true,
       done_reason: 'stop',
@@ -209,7 +209,7 @@ describe('usage mapping + degraded flag', () => {
   })
 
   it('maps OpenRouter usage including reasoning_tokens', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
       provider: 'TestProvider',
       choices: [{
         finish_reason: 'stop',
@@ -250,7 +250,7 @@ describe('usage mapping + degraded flag', () => {
   })
 
   it('honors GCAI_LOCAL_REASONING_EFFORT=low without budget scale when think=0', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
       provider: 'TestProvider',
       choices: [{
         finish_reason: 'stop',
@@ -297,7 +297,7 @@ describe('usage mapping + degraded flag', () => {
         total_tokens: 55,
       },
     }
-    const fetchImpl = vi.fn()
+    const fetchImpl = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify(hollow), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(recovered), { status: 200 }))
 

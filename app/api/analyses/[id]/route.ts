@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { calculateEquivalencies } from '@/lib/equivalencies'
+import { buildUnavailableImpact, isImpactInventoryCompatibleAnalysisResult } from '@/lib/impact-inventory'
 
 export async function GET(
   _request: Request,
@@ -55,17 +56,19 @@ export async function PATCH(
   }
   const { analysis_result, expected_revision_number } = body
 
-  if (!analysis_result || typeof expected_revision_number !== 'number' || !Number.isInteger(expected_revision_number) || expected_revision_number < 1) {
+  if (!isImpactInventoryCompatibleAnalysisResult(analysis_result) || typeof expected_revision_number !== 'number' || !Number.isInteger(expected_revision_number) || expected_revision_number < 1) {
     return NextResponse.json({ error: 'analysis_result and expected_revision_number are required' }, { status: 400 })
   }
 
   const expectedRevisionNumber = expected_revision_number
+  const acceptedImpact = buildUnavailableImpact(analysis_result, 'accepted')
 
   // Update analysis — user_id check ensures ownership
   const { data, error } = await supabase
     .from('gpc_analyses')
     .update({
       analysis_result,
+      impact_delta: acceptedImpact,
       revision_number: expectedRevisionNumber + 1,
     })
     .eq('id', id)

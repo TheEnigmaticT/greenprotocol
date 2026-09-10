@@ -296,6 +296,7 @@ describe('accepted recommendation receipt access', () => {
         },
         confidenceLevel: 'high',
         evidenceTier: 'sourced',
+        applicationEligibility: { status: 'supported', reason: 'Reaction-applicable evidence supports this substitution.' },
         isAccepted: true,
       }],
     } as AnalysisResult
@@ -309,7 +310,7 @@ describe('accepted recommendation receipt access', () => {
       analysisId: 'analysis-1',
     }))
 
-    expect(markup).toContain('Accepted · 1')
+    expect(markup).toContain('Accepted review decisions · 1')
     expect(markup).toContain('aria-label="Ask. Direct evidence is included in this discussion."')
     expect(missingIdMarkup).not.toContain('aria-label="Ask.')
   })

@@ -7,6 +7,7 @@ import { analyzeProtocol, NotChemistryError } from '@/lib/pipeline'
 import { getAnalysisMetadata } from '@/lib/version'
 import { buildCanonicalScoringSnapshot, protocolFingerprint } from '@/lib/scoring-snapshot'
 import { notifyAnalysis } from '@/lib/operational-alerts'
+import { buildImpactInventory, buildUnavailableImpact } from '@/lib/impact-inventory'
 
 export const maxDuration = 300
 
@@ -138,6 +139,10 @@ export async function POST(request: Request) {
       console.log(`[pipeline ${elapsed()}s] analyzeProtocol complete`)
       analysisName = analysisResult.protocolTitle || null
 
+      // Capture source inventory before any display/scoring enrichment can derive
+      // a density-based mass. These are model-extracted protocol quantities, not measurements.
+      const sourceImpactInventory = buildImpactInventory(analysisResult, 'proposed')
+
       // Enrich chemicals with hardcoded data
       for (const step of analysisResult.steps) {
         for (const chem of step.chemicals) {
@@ -150,8 +155,10 @@ export async function POST(request: Request) {
         }
       }
 
-      // Calculate impact delta
-      const impactDelta = calculateImpactDelta(analysisResult)
+      // Persist a bounded before/after material inventory. Its missing inputs
+      // deliberately keep numeric impacts unavailable rather than assuming an equal mass.
+      const impactDelta = calculateImpactDelta(analysisResult, sourceImpactInventory)
+      analysisResult.impactInventory = impactDelta.inventory
 
       // Generate equivalencies
       const equivalencies = calculateEquivalencies(impactDelta)
@@ -289,71 +296,6 @@ export async function POST(request: Request) {
   })
 }
 
-function calculateImpactDelta(result: AnalysisResult): ImpactDelta {
-  let co2eSavedKg = 0
-  let hazardousWasteEliminatedKg = 0
-  const carcinogensEliminated: string[] = []
-  let waterSavedL = 0
-  let energySavedKwh = 0
-
-  for (const rec of result.recommendations) {
-    const originalData = findChemical(rec.original.chemical)
-    const altData = findChemical(rec.alternative.chemical)
-
-    if (!originalData) continue
-
-    let quantityKg = 0
-    const recNameLower = rec.original.chemical.toLowerCase()
-    for (const step of result.steps) {
-      if (step.stepNumber === rec.stepNumber) {
-        for (const chem of step.chemicals) {
-          const chemLower = chem.name.toLowerCase()
-          const isMatch =
-            chemLower === recNameLower ||
-            chemLower.includes(recNameLower) ||
-            recNameLower.includes(chemLower) ||
-            (originalData.synonyms.some(s => chemLower.includes(s.toLowerCase())))
-          if (isMatch) {
-            if (chem.quantityKg) {
-              quantityKg = chem.quantityKg
-            } else if (chem.quantityMl) {
-              quantityKg = (chem.quantityMl / 1000) * originalData.densityKgPerL
-            } else {
-              quantityKg = chem.role === 'solvent' ? 0.5 : 0.1
-            }
-          }
-        }
-      }
-    }
-
-    if (quantityKg === 0) quantityKg = 0.1
-
-    const originalCo2e = quantityKg * originalData.co2ePerKg
-    const altCo2e = altData ? quantityKg * altData.co2ePerKg : 0
-    co2eSavedKg += originalCo2e - altCo2e
-
-    const originalWater = quantityKg * originalData.waterPerKg
-    const altWater = altData ? quantityKg * altData.waterPerKg : 0
-    waterSavedL += originalWater - altWater
-
-    const originalEnergy = quantityKg * originalData.energyPerKg
-    const altEnergy = altData ? quantityKg * altData.energyPerKg : 0
-    energySavedKwh += originalEnergy - altEnergy
-
-    if (originalData.isHazardousWaste) {
-      hazardousWasteEliminatedKg += quantityKg
-    }
-
-    if (originalData.isSuspectedCarcinogen && !carcinogensEliminated.includes(originalData.name)) {
-      carcinogensEliminated.push(originalData.name)
-    }
-  }
-
-  return {
-    co2eSavedKg: Math.max(0, co2eSavedKg),
-    hazardousWasteEliminatedKg: Math.max(0, hazardousWasteEliminatedKg),
-    carcinogensEliminated,
-    waterSavedL: Math.max(0, waterSavedL),
-    energySavedKwh: Math.max(0, energySavedKwh),
-  }
+function calculateImpactDelta(result: AnalysisResult, inventory = buildImpactInventory(result, 'proposed')): ImpactDelta {
+  return buildUnavailableImpact(result, 'proposed', inventory)
 }

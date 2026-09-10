@@ -8,6 +8,12 @@ import {
   type LocalJsonCompletionOptions,
   type LocalJsonCompletionResult,
 } from '@/lib/local-llm'
+import {
+  baseChemicalName,
+  classifyRecommendationKind,
+  isSameChemicalTip,
+} from '@/lib/recommendation-kind'
+import type { Recommendation } from '@/lib/types'
 
 export type LocalValidation<T> =
   | { ok: true; result: T }
@@ -31,6 +37,11 @@ function isConfidence(value: unknown): value is 'high' | 'medium' | 'low' {
 
 function isKind(value: unknown): value is 'chemical_swap' | 'process_change' | 'analytical' {
   return value === 'chemical_swap' || value === 'process_change' || value === 'analytical'
+}
+
+function isHollowAlternativeChemical(value: string): boolean {
+  return /^(?:none|n\/?a|na|null|undefined|no\s+(?:alternative|replacement)|not\s+applicable|-)$/i
+    .test(value.trim())
 }
 
 /** Shape used downstream after principle scoring (dedup, lit query, ranking). */
@@ -102,6 +113,9 @@ function validateRecommendation(
   if (!isNonEmptyString(raw.alternative.chemical)) {
     return { ok: false, reason: `rec_${index}_alternative_chemical` }
   }
+  if (isHollowAlternativeChemical(raw.alternative.chemical) || !baseChemicalName(raw.alternative.chemical)) {
+    return { ok: false, reason: `rec_${index}_alternative_chemical_hollow` }
+  }
   if (!isNonEmptyString(raw.alternative.rationale)) {
     return { ok: false, reason: `rec_${index}_alternative_rationale` }
   }
@@ -111,6 +125,12 @@ function validateRecommendation(
   }
   if (raw.kind !== undefined && raw.kind !== null && !isKind(raw.kind)) {
     return { ok: false, reason: `rec_${index}_kind` }
+  }
+  if (raw.kind === 'chemical_swap') {
+    const rec = raw as unknown as Recommendation
+    if (isSameChemicalTip(rec) || classifyRecommendationKind(rec) !== 'chemical_swap') {
+      return { ok: false, reason: `rec_${index}_chemical_swap_not_substitution` }
+    }
   }
   if (
     raw.principleNumbers !== undefined
@@ -265,6 +285,7 @@ export function buildLocalRepairAddendum(reason: string, label: string): string 
       + 'Each recommendation MUST include stepNumber, severity (high|medium|low), '
       + 'confidenceLevel (high|medium|low), original.{chemical,issue}, '
       + 'and alternative.{chemical,rationale} as non-empty strings. '
+      + 'For chemical_swap, alternative.chemical MUST be a concrete, different chemical, not none, a dose tip, or an analytical method. '
       + 'Use [] when there are no recommendations. Return ONLY JSON.'
     )
   }

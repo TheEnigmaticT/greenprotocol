@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 // Faults now execute at Python descriptor primitives on test-owned fixtures.
 // Original check expectations are unchanged; no node:fs mocks claim IPC proof.
 let sandbox: string | undefined
-type Fault = 'symlink' | 'ancestor-file' | 'missing' | 'permission' | 'unknown' | 'hardlink' | 'descriptor' | 'mutation' | 'short-read' | 'directory-mutation'
+type Fault = 'symlink' | 'ancestor-file' | 'missing' | 'permission' | 'unknown' | 'hardlink' | 'hardlink-with-entry-mutation' | 'descriptor' | 'mutation' | 'short-read' | 'directory-mutation'
 async function fixture(fault: Fault) {
   sandbox = fs.mkdtempSync(join(fs.realpathSync(tmpdir()), 'discovery-checks-'))
   const roots = [join(sandbox, '0'), join(sandbox, '1')]
@@ -31,7 +31,7 @@ describe('discovery check attribution without private I/O', () => {
   it.each([
     ['symlink', 'SYMLINK_COMPONENT'], ['ancestor-file', 'NON_DIRECTORY_COMPONENT'],
     ['missing', 'PATH_MISSING'], ['permission', 'ACCESS_DENIED'], ['unknown', 'FILESYSTEM_ERROR'],
-    ['hardlink', 'NON_REGULAR_OR_MULTILINK'], ['descriptor', 'OPEN_IDENTITY_CHANGED'],
+    ['hardlink', 'NON_REGULAR_OR_MULTILINK'], ['hardlink-with-entry-mutation', 'NON_REGULAR_OR_MULTILINK'], ['descriptor', 'OPEN_IDENTITY_CHANGED'],
     ['mutation', 'FILE_CHANGED'], ['short-read', 'READ_LENGTH_CHANGED'],
     ['directory-mutation', 'DIRECTORY_CHANGED'],
   ] as const)('%s preserves rejection and reports only %s', async (fault, check) => {

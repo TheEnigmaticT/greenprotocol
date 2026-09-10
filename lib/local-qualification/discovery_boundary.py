@@ -69,7 +69,14 @@ def identity(s):
 
 
 def directory_identity(s):
-    return s.st_dev, s.st_ino, s.st_mode, s.st_mtime_ns, s.st_ctime_ns
+    # Directory contents legitimately update mtime/ctime (including a sibling
+    # fixture created by a parallel test).  Binding checks need the directory's
+    # object and type/mode, not its mutable contents timestamps.
+    return s.st_dev, s.st_ino, s.st_mode
+
+
+def directory_contents_identity(s):
+    return directory_identity(s) + (s.st_mtime_ns, s.st_ctime_ns)
 
 
 def directory(parent, name, stack, expected='NON_DIRECTORY_COMPONENT'):
@@ -83,10 +90,14 @@ def directory(parent, name, stack, expected='NON_DIRECTORY_COMPONENT'):
     return fd, before
 
 
-def check_directory(parent, name, fd, before):
+def check_directory(parent, name, fd, before, contents=False):
     # Relative binding recheck detects replacement; confinement itself is the fd.
     for s in (metadata(parent, name), os.fstat(fd)):
         if not stat.S_ISDIR(s.st_mode) or directory_identity(s) != directory_identity(before):
+            raise Rejected('DIRECTORY_CHANGED')
+        # A traversed directory must not change after enumeration, but ancestors
+        # only need binding checks: their timestamps change for benign sibling I/O.
+        if contents and directory_contents_identity(s) != directory_contents_identity(before):
             raise Rejected('DIRECTORY_CHANGED')
 
 
@@ -139,7 +150,7 @@ def discover(out):
                     with ExitStack() as stack:
                         child, initial = directory(fd, name, stack, 'EXPECTED_DIRECTORY')
                         walk(child, root_index, depth + 1, False)
-                        check_directory(fd, name, child, initial)
+                        check_directory(fd, name, child, initial, contents=True)
                 elif not selecting and name.endswith('.json'):
                     files += 1
                     if files > MAX_FILES:

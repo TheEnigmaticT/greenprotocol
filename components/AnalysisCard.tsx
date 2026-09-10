@@ -1,6 +1,7 @@
 'use client'
 
 import { AnalysisSummary } from '@/lib/types'
+import { impactIsExplicitlyUnavailable } from '@/lib/impact-inventory'
 
 function fmt(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
@@ -58,12 +59,16 @@ export default function AnalysisCard({ analysis }: { analysis: AnalysisSummary }
       )}
 
       <div className="flex items-center gap-4 text-xs" style={{ color: '#2D6A4F' }}>
+        {impactIsExplicitlyUnavailable(impact_delta) ? (
+          <span style={{ color: '#78716C' }}>Impact comparison unavailable</span>
+        ) : <>
         {impact_delta.co2eSavedKg > 0 && (
           <span title="CO2e saved">-{fmt(impact_delta.co2eSavedKg)} kg CO2e</span>
         )}
         {impact_delta.hazardousWasteEliminatedKg > 0 && (
           <span title="Hazardous waste eliminated">-{fmt(impact_delta.hazardousWasteEliminatedKg)} kg waste</span>
         )}
+        </>}
       </div>
 
       <p className="text-xs mt-3" style={{ color: '#A8A29E' }}>{date}</p>

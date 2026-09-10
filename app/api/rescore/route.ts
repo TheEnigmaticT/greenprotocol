@@ -2,6 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { scoreProtocol, batchConvert, isServiceAvailable } from '@/lib/chemistry-service'
 import { AnalysisResult } from '@/lib/types'
+import { isEvidenceEligibleChemicalSwap } from '@/lib/recommendation-kind'
+
+function identity(value: string | undefined): string {
+  return (value || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+}
 
 export async function POST(request: Request) {
   // Auth check
@@ -27,34 +32,57 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  // Build the chemical list with accepted swaps applied
-  const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
-  const swapMap = new Map<string, string>() // step + original → alternative chemical name
-  for (const rec of accepted) {
-    swapMap.set(`${rec.stepNumber}:${rec.original.chemical.toLowerCase()}`, rec.alternative.chemical)
+  // The current recommendation contract does not carry a validated replacement
+  // quantity. Do not reuse original mass/volume to invent a swap scenario.
+  const applicableSwaps = analysis.recommendations.filter(
+    recommendation => recommendation.isAccepted === true && isEvidenceEligibleChemicalSwap(recommendation),
+  )
+  if (applicableSwaps.length) {
+    return NextResponse.json(
+      { error: 'Replacement scenario quantities are required before rescoring' },
+      { status: 422 },
+    )
   }
 
-  // Collect all chemicals, applying swaps
-  const allChemicals: Array<{ name: string; quantity: string }> = []
+  // Baseline rescoring retains the submitted protocol verbatim. Unsupported
+  // hypotheses and non-substitution tips must never change its inventory.
+  const allChemicals: Array<{ name: string; quantity: string; requestId: string }> = []
   for (const step of analysis.steps) {
-    for (const chem of step.chemicals) {
-      const swappedName = swapMap.get(`${step.stepNumber}:${chem.name.toLowerCase()}`) || chem.name
-      allChemicals.push({ name: swappedName, quantity: chem.quantity || '' })
+    for (const [chemicalIndex, chem] of step.chemicals.entries()) {
+      allChemicals.push({ name: chem.name, quantity: chem.quantity || '', requestId: `${step.stepNumber}:${chemicalIndex}` })
     }
   }
 
   // Batch convert to get molecular data
   const batchResult = await batchConvert(allChemicals)
 
-  // Build scoring payload
+  const conversionsByRequestId = new Map(
+    (batchResult?.results || [])
+      .filter(conversion => Boolean(conversion.request_id))
+      .map(conversion => [conversion.request_id!, conversion]),
+  )
+  const legacyConversionsByIdentity = new Map<string, NonNullable<typeof batchResult>['results']>()
+  for (const conversion of batchResult?.results || []) {
+    if (conversion.request_id) continue
+    const key = identity(conversion.chemical_name)
+    if (!key) continue
+    const queue = legacyConversionsByIdentity.get(key) || []
+    queue.push(conversion)
+    legacyConversionsByIdentity.set(key, queue)
+  }
+
+  // Build scoring payload. The id is an occurrence association, so reordered
+  // aliases and duplicate materials cannot inherit a neighbor's quantity.
   const scoreChemicals = []
-  let batchIdx = 0
   for (const step of analysis.steps) {
-    for (const chem of step.chemicals) {
-      const swappedName = swapMap.get(`${step.stepNumber}:${chem.name.toLowerCase()}`) || chem.name
-      const conv = batchResult?.results?.[batchIdx]
+    for (const [chemicalIndex, chem] of step.chemicals.entries()) {
+      const requestId = `${step.stepNumber}:${chemicalIndex}`
+      const identified = conversionsByRequestId.get(requestId)
+      const conv = identified && identity(identified.requested_chemical_name) === identity(chem.name)
+        ? identified
+        : legacyConversionsByIdentity.get(identity(chem.name))?.shift()
       scoreChemicals.push({
-        name: swappedName,
+        name: chem.name,
         role: chem.role,
         quantity_g: conv?.quantity_g ?? (chem.quantityKg ? chem.quantityKg * 1000 : null),
         quantity_kg: conv?.quantity_kg ?? chem.quantityKg,
@@ -62,17 +90,13 @@ export async function POST(request: Request) {
         molecular_weight: conv?.molecular_weight ?? null,
         step_number: step.stepNumber,
       })
-      batchIdx++
     }
   }
 
-  // Build protocol text with swaps for the LLM-based scorers
+  // LLM-assisted scorers receive the same unmodified baseline inventory.
   let protocolText = ''
   for (const step of analysis.steps) {
-    const chems = step.chemicals.map(c => {
-      const swapped = swapMap.get(`${step.stepNumber}:${c.name.toLowerCase()}`)
-      return swapped || c.name
-    }).join(', ')
+    const chems = step.chemicals.map(c => c.name).join(', ')
     protocolText += `Step ${step.stepNumber}: ${step.description} [${chems}]\n`
   }
 
@@ -82,7 +106,7 @@ export async function POST(request: Request) {
       stepNumber: s.stepNumber,
       description: s.description,
       chemicals: s.chemicals.map(c => ({
-        name: swapMap.get(`${s.stepNumber}:${c.name.toLowerCase()}`) || c.name,
+        name: c.name,
         role: c.role,
       })),
       conditions: s.conditions,

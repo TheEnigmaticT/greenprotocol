@@ -32,6 +32,7 @@ export interface LocalParseResult {
 }
 
 export interface LocalParseEnv {
+  [key: string]: string | undefined
   GCAI_LOCAL_PARSE?: string
   GCAI_LOCAL_PIPELINE?: string
   GCAI_LOCAL_PARSE_MODEL?: string
@@ -186,7 +187,7 @@ export function validateLocalParseResult(
     const chemicals = []
     for (const chem of raw.chemicals) {
       if (!isPlainObject(chem)) return { ok: false, reason: `step_${i}_chem_type` }
-      if (typeof chem.name !== 'string' || !chem.name.trim() || !protocolText.includes(chem.name)) {
+      if (typeof chem.name !== 'string' || !chem.name.trim() || !raw.description.includes(chem.name)) {
         return { ok: false, reason: `step_${i}_chem_name` }
       }
       const quantity = typeof chem.quantity === 'string' ? chem.quantity : ''

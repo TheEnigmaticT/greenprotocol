@@ -19,8 +19,16 @@ export function baseChemicalName(raw: string | undefined | null): string {
   if (typeof raw !== 'string') return ''
   let s = raw.trim()
   if (!s) return ''
-  // Drop parenthetical tips / qualifiers: "(added slowly...)", "(sulfonic acid resin)", "(reduced quantity...)"
-  s = s.replace(/\([^)]*\)/g, ' ')
+  // Drop separated prose qualifiers, never groups within a chemical formula:
+  // Zn(OH)2 and Zn(OAc)2 must remain distinct identities.
+  s = s.replace(/\s+\([^)]*\)/g, ' ')
+  // Compare substance identity separately from an explicit numeric dose suffix.
+  // This only makes an instruction a same-chemical tip if the original matches;
+  // a different catalyst at a stated dose remains a distinct replacement.
+  s = s.replace(
+    /\s+at\s+[~≈<>≤≥]?\s*\d+(?:\.\d+)?(?:\s*[-–—]\s*\d+(?:\.\d+)?)?\s*(?:mol\s*%|wt\s*%|%|equiv(?:alents?)?|mmol|mol|mg|kg|g|mL|L)(?=\s|$|\().*$/i,
+    '',
+  )
   // Trailing reduced-quantity / addition-style suffixes without parentheses
   s = s.replace(
     /\s*[,:;–—-]?\s*(reduced\s+quantity.*|reduced\s+dose.*|added\s+slowly.*|with\s+stirring.*)$/i,
@@ -69,16 +77,22 @@ function hasAnalyticalCues(
 ): boolean {
   const alt = rec.alternative?.chemical ?? ''
   const rationale = rec.alternative?.rationale ?? ''
+  const caveats = rec.alternative?.caveats ?? ''
   return (
     ANALYTICAL_RE.test(alt) ||
     ANALYTICAL_RE.test(rationale) ||
-    ANALYTICAL_RE.test(tipCorpus(rec))
+    ANALYTICAL_RE.test(caveats)
   )
 }
 
 /** True when the alternative string itself reads as a process tip (microwave, ambient temp, …). */
 function alternativeLooksLikeProcessTip(alt: string): boolean {
-  return PROCESS_RE.test(alt)
+  // An imperative operation is not a concrete replacement substance. In
+  // particular, do not turn correct model process labels into swaps merely
+  // because the instruction differs textually from the original name.
+  const operation = /^\s*(?:add(?:ition)?|reduc(?:e|ed|tion)|decreas(?:e|ed)|increas(?:e|ed)|adjust(?:ed|ment)?|limit|optimi[sz](?:e|ed|ation)|cool|pre[- ]?cool|heat|stir|(?:re)?crystalli[sz]ation|distillation|filtration)\b/i
+  const operatingDetail = /\b(?:addition|portion[- ]wise|dropwise|stoichiometr(?:y|ic)|loading|recovery\s+from)\b/i
+  return PROCESS_RE.test(alt) || operation.test(alt) || operatingDetail.test(alt)
 }
 
 /** Heuristic tip signal only — null means no tip override. */
@@ -115,8 +129,8 @@ export function classifyRecommendationKind(
   const modelKind = normalizeKind(rec.kind)
   const alt = rec.alternative?.chemical ?? ''
 
-  // 1. Analytical overrides when monitoring cues are present.
-  if (hasAnalyticalCues(rec)) {
+  // 1. An analytical method cannot be a replacement chemical.
+  if (ANALYTICAL_RE.test(alt)) {
     return 'analytical'
   }
 
@@ -135,9 +149,15 @@ export function classifyRecommendationKind(
   // 3. Different substance names → chemical_swap, even if model said process_change.
   //    Do not let corpus words like "energy" / "resin" / "catalyst" keep a false Process label.
   //    Exception: alternative itself is a process phrase (microwave heating, ambient temperature).
-  if (hasDistinctChemicals(rec) && !alternativeLooksLikeProcessTip(alt)) {
+  if (alternativeLooksLikeProcessTip(alt)) return 'process_change'
+  if (hasDistinctChemicals(rec)) {
     return 'chemical_swap'
   }
+
+  // An otherwise non-substitution recommendation can still be analytical when
+  // its rationale is about monitoring. Deliberately after real swaps: a valid
+  // reagent/catalyst swap may include a monitoring caveat.
+  if (hasAnalyticalCues(rec)) return 'analytical'
 
   // 4. Trust model kind when present; else process-tip heuristic; else chemical_swap.
   if (modelKind) return modelKind
@@ -169,9 +189,18 @@ export function isChemicalSwapRecommendation(rec: Recommendation): boolean {
   return resolveRecommendationKind(rec) === 'chemical_swap'
 }
 
-/** Assemble / revised-protocol path: chemical substitutions only. */
+/**
+ * A retained substitution hypothesis is not an instruction to edit a
+ * procedure. Only a chemical swap explicitly marked supported by the
+ * re-evaluation evidence gate may reach assembly/finalization.
+ */
+export function isEvidenceEligibleChemicalSwap(rec: Recommendation): boolean {
+  return isChemicalSwapRecommendation(rec) && rec.applicationEligibility?.status === 'supported'
+}
+
+/** Assemble / revised-protocol path: evidence-supported chemical substitutions only. */
 export function recommendationsForAssemble(recs: Recommendation[]): Recommendation[] {
-  return recs.filter(isChemicalSwapRecommendation)
+  return recs.filter(isEvidenceEligibleChemicalSwap)
 }
 
 /** Literature grounding + Phase 2.7 reevaluation: chemical_swap only. */

@@ -7,6 +7,11 @@ import { getChemistryServiceConfig } from '@/lib/chemistry-service-config'
 const TIMEOUT_MS = 240_000
 
 interface ConvertResult {
+  /** Caller-generated stable occurrence key echoed by /batch. */
+  request_id?: string
+  /** Verbatim requested identity, before the service resolves a known alias. */
+  requested_chemical_name?: string
+  /** Service-resolved canonical identity. */
   chemical_name: string
   smiles: string | null
   molecular_formula: string | null
@@ -20,6 +25,8 @@ interface ConvertResult {
   citations: Array<{ source_id: string; source_name: string; citation: string; url?: string; doi?: string }>
   data_source: string
   cached: boolean
+  reference_status?: 'available' | 'queued' | 'terminal_not_found' | 'unavailable'
+  reference_queued?: boolean
   warnings: string[]
   error: string | null
 }
@@ -87,7 +94,7 @@ export async function isServiceAvailable(): Promise<boolean> {
  * Batch convert all chemicals to standardized units (g, kg, mol).
  */
 export async function batchConvert(
-  chemicals: Array<{ name: string; quantity: string }>
+  chemicals: Array<{ name: string; quantity: string; requestId?: string }>
 ): Promise<BatchResult | null> {
   try {
     const { url, token } = getChemistryServiceConfig()
@@ -97,6 +104,7 @@ export async function batchConvert(
       body: JSON.stringify({ chemicals: chemicals.map(c => ({
         chemical_name: c.name,
         quantity: c.quantity,
+        request_id: c.requestId,
       })) }),
     })
     if (!resp.ok) return null
@@ -131,7 +139,11 @@ export async function scoreProtocol(params: {
       headers: serviceHeaders(token, { 'Content-Type': 'application/json' }),
       body: JSON.stringify(params),
     })
-    if (!resp.ok) return null
+    if (!resp.ok) {
+      // Preserve the failure category without exposing protocol data or tokens.
+      console.error('[chemistry-service] score HTTP failure', { status: resp.status })
+      return null
+    }
     return await resp.json()
   } catch (err) {
     console.error('[chemistry-service] score failed:', err)

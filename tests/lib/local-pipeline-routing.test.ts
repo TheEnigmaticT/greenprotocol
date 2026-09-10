@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   completeLocal: vi.fn(),
   isLocalPipeline: vi.fn(),
   requirePipelineModel: vi.fn(),
+  swapRepair: vi.fn(),
 }))
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -29,6 +30,7 @@ vi.mock('@/lib/literature-evidence', async () => {
   }
 })
 vi.mock('@/lib/trace', () => ({ logLLMTrace: vi.fn(), logDedupTrace: vi.fn() }))
+vi.mock('@/lib/chemical-swap-repair', () => ({ runChemicalSwapRepair: mocks.swapRepair }))
 vi.mock('@/lib/local-parse', async () => {
   const actual = await vi.importActual<typeof import('@/lib/local-parse')>('@/lib/local-parse')
   return {
@@ -106,6 +108,7 @@ beforeEach(() => {
     }
     return {}
   })
+  mocks.swapRepair.mockResolvedValue({ status: 'succeeded', addedSwaps: 1, recommendations: [] })
 })
 
 describe('full local pipeline routing', () => {
@@ -121,6 +124,12 @@ describe('full local pipeline routing', () => {
           typeof l === 'string' && /^principle-\d+$/.test(l),
       )
     expect(principleLabels.length).toBe(12)
+  })
+
+  it('preserves a valid zero-substitution local result without invoking swap repair', async () => {
+    await analyzeProtocol('Add ethanol (5 mL). Monitor by TLC.')
+
+    expect(mocks.swapRepair).not.toHaveBeenCalled()
   })
 
   it('keeps a principle rejected when local validation fails closed (no empty success)', async () => {

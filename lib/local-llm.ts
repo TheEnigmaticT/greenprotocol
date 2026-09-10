@@ -15,8 +15,10 @@ export const LOCAL_OLLAMA_MODELS = OLLAMA_PILOT_MODELS
 export const OPENROUTER_LOCAL_QUALITY_MODELS = Object.freeze([
   "google/gemma-4-31b-it",
   "qwen/qwen3.8-27b",
+  "qwen/qwen3.8-flash",
   "qwen/qwen3.6-35b-a3b",
   "qwen/qwen3.6-27b",
+  "openai/gpt-oss-120b",
 ] as const)
 
 export const LOCAL_PIPELINE_MODELS = Object.freeze([
@@ -27,6 +29,7 @@ export const LOCAL_PIPELINE_MODELS = Object.freeze([
 export type LocalProvider = "ollama" | "openrouter"
 
 export interface LocalPipelineEnv {
+  [key: string]: string | undefined
   GCAI_LOCAL_PIPELINE?: string
   GCAI_LOCAL_PARSE?: string
   GCAI_LOCAL_MODEL?: string
