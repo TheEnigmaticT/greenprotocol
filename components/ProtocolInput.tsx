@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { EXAMPLE_PROTOCOLS } from '@/lib/prompts'
 import { ProgressEvent } from '@/lib/types'
+import { AnalysisStreamRecovery } from '@/components/AnalysisStreamRecovery'
 
 const EXAMPLES = [
   { label: 'Organic Extraction', key: 'organicExtraction' as const },
@@ -144,6 +145,7 @@ export default function ProtocolInput() {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [streamInterrupted, setStreamInterrupted] = useState(false)
   const [completed, setCompleted] = useState(0)
   const [total, setTotal] = useState(0)
   const router = useRouter()
@@ -156,6 +158,7 @@ export default function ProtocolInput() {
 
     setLoading(true)
     setError(null)
+    setStreamInterrupted(false)
     setCompleted(0)
     setTotal(14)
 
@@ -236,11 +239,10 @@ export default function ProtocolInput() {
         }
       }
 
-      setError('Analysis stream ended unexpectedly. Please try again.')
+      setStreamInterrupted(true)
       setLoading(false)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error'
-      setError(`Request failed: ${msg}`)
+    } catch {
+      setStreamInterrupted(true)
       setLoading(false)
     }
   }
@@ -273,6 +275,10 @@ export default function ProtocolInput() {
         onBlur={(e) => (e.currentTarget.style.borderColor = '#D6D0C4')}
         disabled={loading}
       />
+
+      {streamInterrupted && (
+        <AnalysisStreamRecovery onOpenDashboard={() => router.push('/dashboard')} />
+      )}
 
       {error && (
         <p className="text-sm" style={{ color: '#EF4444' }}>{error}</p>
