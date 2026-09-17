@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildEvidenceBackedCandidates } from '@/lib/recommendation-candidates'
+import {
+  buildEvidenceBackedCandidates,
+  buildHypothesisRecommendation,
+  isEligibleToReviseProcedure,
+  screenSolventCompatibility,
+} from '@/lib/recommendation-candidates'
 import type { AnalysisStep, EnrichedChemical, LiteratureEvidenceMatch } from '@/lib/types'
 
 const steps: AnalysisStep[] = [
@@ -36,7 +41,7 @@ function evidence(overrides: Partial<LiteratureEvidenceMatch> = {}): LiteratureE
     quote: 'Ethyl acetate replaced dichloromethane during extraction.',
     evidenceType: 'comparison',
     applicability: 'Extraction solvent replacement',
-    limitations: 'Optimize phase ratio.',
+    limitations: undefined,
     candidateStatus: 'adjudicated_direct',
     similarity: 0.9,
     ...overrides,
@@ -44,7 +49,7 @@ function evidence(overrides: Partial<LiteratureEvidenceMatch> = {}): LiteratureE
 }
 
 describe('buildEvidenceBackedCandidates', () => {
-  it('builds an application-eligible solvent intervention only from direct evidence bound to the exact occurrence', () => {
+  it('emits supported_applicable for direct solvent-context evidence with SMILES and no hard conflicts', () => {
     const [candidate] = buildEvidenceBackedCandidates({
       steps,
       enrichedChemicals: enriched,
@@ -56,15 +61,16 @@ describe('buildEvidenceBackedCandidates', () => {
       target: { stepNumber: 1, occurrenceId: '0:0', sourceChemical: 'Dichloromethane', role: 'solvent' },
       proposedAlternative: 'Ethyl acetate',
       evidenceAssessment: {
-        state: 'direct-supported',
+        disposition: 'supported_applicable',
         eligibleForApplication: true,
         applicability: 'strong',
         directness: 'direct',
       },
     })
+    expect(isEligibleToReviseProcedure(candidate.evidenceAssessment)).toBe(true)
   })
 
-  it('keeps a CHEM21 candidate visible but ineligible when no direct reaction evidence is available', () => {
+  it('keeps CHEM21-only candidates as insufficient_evidence and not application-eligible', () => {
     const [candidate] = buildEvidenceBackedCandidates({
       steps,
       enrichedChemicals: enriched,
@@ -72,7 +78,7 @@ describe('buildEvidenceBackedCandidates', () => {
     })
 
     expect(candidate.evidenceAssessment).toMatchObject({
-      state: 'no-direct-evidence',
+      disposition: 'insufficient_evidence',
       eligibleForApplication: false,
       directness: 'none',
     })
@@ -90,35 +96,88 @@ describe('buildEvidenceBackedCandidates', () => {
       }],
       evidenceByCandidate: new Map([['0:1:ethyl acetate', [evidence()]]]),
     })
-
     expect(candidates).toEqual([])
   })
 
-  it('does not permit candidate-only literature to become application-eligible', () => {
+  it('maps candidate-only literature to analogous_only', () => {
     const [candidate] = buildEvidenceBackedCandidates({
       steps,
       enrichedChemicals: enriched,
       evidenceByCandidate: new Map([['0:0:ethyl acetate', [evidence({ candidateStatus: 'candidate_pending_adjudication' })]]]),
     })
-
     expect(candidate.evidenceAssessment).toMatchObject({
-      state: 'candidate-only',
+      disposition: 'analogous_only',
       eligibleForApplication: false,
       directness: 'indirect',
     })
+    const hypothesis = buildHypothesisRecommendation(candidate)
+    expect(hypothesis?.evidenceAssessment?.disposition).toBe('analogous_only')
+    expect(hypothesis?.confidenceLevel).toBe('low')
   })
 
-  it('allows no-SMILES, text-anchored evidence candidates but marks applicability partial', () => {
+  it('marks no-SMILES direct evidence as supported_with_constraints', () => {
     const [candidate] = buildEvidenceBackedCandidates({
       steps,
       enrichedChemicals: [{ ...enriched[0], smiles: undefined }],
       evidenceByCandidate: new Map([['0:0:ethyl acetate', [evidence()]]]),
     })
-
     expect(candidate.evidenceAssessment).toMatchObject({
-      state: 'direct-supported',
-      eligibleForApplication: true,
-      applicability: 'partial',
+      disposition: 'supported_with_constraints',
+      eligibleForApplication: false,
     })
+  })
+
+  it('suppresses contradicted_or_inapplicable from hypothesis phrasing', () => {
+    const [candidate] = buildEvidenceBackedCandidates({
+      steps,
+      enrichedChemicals: enriched,
+      evidenceByCandidate: new Map([['0:0:ethyl acetate', [evidence({
+        candidateStatus: 'contradicted',
+        applicability: 'Incompatible with this procedure',
+        quote: 'Ethyl acetate is incompatible with this catalyst system.',
+      })]]]),
+    })
+    expect(candidate.evidenceAssessment.disposition).toBe('contradicted_or_inapplicable')
+    expect(buildHypothesisRecommendation(candidate)).toBeNull()
+  })
+
+  it('fail-closes deferred retrieval to insufficient_evidence', () => {
+    const [candidate] = buildEvidenceBackedCandidates({
+      steps,
+      enrichedChemicals: enriched,
+      evidenceByCandidate: new Map(),
+      deferredCandidateKeys: new Set(['0:0:ethyl acetate']),
+    })
+    expect(candidate.evidenceAssessment).toMatchObject({
+      disposition: 'insufficient_evidence',
+      eligibleForApplication: false,
+    })
+  })
+})
+
+describe('screenSolventCompatibility', () => {
+  it('flags inert-atmosphere constraints when the step omits atmosphere', () => {
+    const result = screenSolventCompatibility(steps[0], [evidence({
+      limitations: 'Requires inert atmosphere (nitrogen or argon).',
+    })])
+    expect(result.contradicted).toBe(false)
+    expect(result.constraints.some(c => /inert atmosphere/i.test(c))).toBe(true)
+  })
+})
+
+describe('assembly eligibility gate', () => {
+  it('only supported_applicable may revise the assembled procedure automatically', () => {
+    const applicable = buildEvidenceBackedCandidates({
+      steps,
+      enrichedChemicals: enriched,
+      evidenceByCandidate: new Map([['0:0:ethyl acetate', [evidence()]]]),
+    })[0]
+    const chem21Only = buildEvidenceBackedCandidates({
+      steps,
+      enrichedChemicals: enriched,
+      evidenceByCandidate: new Map([['0:0:ethyl acetate', []]]),
+    })[0]
+    expect(isEligibleToReviseProcedure(applicable.evidenceAssessment)).toBe(true)
+    expect(isEligibleToReviseProcedure(chem21Only.evidenceAssessment)).toBe(false)
   })
 })

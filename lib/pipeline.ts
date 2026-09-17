@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { boundLiteratureQuery } from './literature-query'
 import { QWEN_MODEL, callQwen } from '@/lib/qwen-adapter'
 import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type LiteratureEvidenceMatch, type EvidenceBackedCandidate } from '@/lib/types'
-import { buildEvidenceBackedCandidates, evidenceCandidateKey } from '@/lib/recommendation-candidates'
+import { buildEvidenceBackedCandidates, buildHypothesisRecommendation, evidenceCandidateKey, isPhraseableDisposition, isEligibleToReviseProcedure } from '@/lib/recommendation-candidates'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
 import { prepareChemicalInputs } from '@/lib/chemical-inputs'
 import { groundDeclaredProducts } from '@/lib/declared-products'
@@ -13,7 +13,6 @@ import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/li
 import { buildAssemblePrompt } from '@/lib/prompts/assemble'
 import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
 import { buildSdsReferences } from '@/lib/sds'
-import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
 import { logLLMTrace, logDedupTrace } from '@/lib/trace'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -323,7 +322,7 @@ async function evaluatePrinciple(
 
   return callClaude<PrincipleResult>(
     systemPrompt,
-    `Analyze these protocol steps against Principle ${principleNumber}. You may only phrase one of the supplied application-eligible candidates; do not invent targets, alternatives, or conditions.\n\nProtocol steps:\n${stepsJson}\n\nEligible candidates:\n${candidateJson}`,
+    `Analyze these protocol steps against Principle ${principleNumber}. You may only phrase one of the supplied evidence-backed candidates; do not invent targets, alternatives, or conditions. Preserve constraints when the candidate is constrained.\n\nProtocol steps:\n${stepsJson}\n\nEligible candidates:\n${candidateJson}`,
     PRINCIPLE_SCHEMA,
     `principle-${principleNumber}`,
     SONNET,
@@ -347,20 +346,22 @@ async function evaluateAllPrinciples(
   onProgress?: (event: ProgressEvent) => void,
   context?: CallContext
 ): Promise<Recommendation[]> {
-  const eligible = candidates.filter(candidate => candidate.evidenceAssessment.eligibleForApplication)
+  // Phrase only dispositions that can become actionable or constrained cards.
+  // analogous_only / insufficient_evidence are attached as deterministic hypotheses later.
+  const phraseable = candidates.filter(candidate => isPhraseableDisposition(candidate.evidenceAssessment.disposition))
   const candidatesByPrinciple = new Map(PRINCIPLES.map(principle => [
     principle.number,
-    eligible.filter(candidate => principleNumbersForCandidate(candidate).includes(principle.number)),
+    phraseable.filter(candidate => principleNumbersForCandidate(candidate).includes(principle.number)),
   ]))
   const activePrinciples = PRINCIPLES.filter(principle => (candidatesByPrinciple.get(principle.number)?.length ?? 0) > 0)
 
   if (activePrinciples.length === 0) {
-    console.info('[pipeline] No direct, role-bounded evidence candidates are eligible for application.')
+    console.info('[pipeline] No phraseable evidence-backed solvent candidates for model wording.')
     return []
   }
 
   const batchSize = process.env.GCAI_ENGINE_CANDIDATE === '1' ? 2 : activePrinciples.length
-  console.log(`Phase 2: Phrasing ${eligible.length} evidence-backed candidates across ${activePrinciples.length} principles...`)
+  console.log(`Phase 2: Phrasing ${phraseable.length} evidence-backed candidates across ${activePrinciples.length} principles...`)
   const batches: PrincipleDefinition[][] = []
   for (let index = 0; index < activePrinciples.length; index += batchSize) {
     batches.push(activePrinciples.slice(index, index + batchSize))
@@ -492,163 +493,7 @@ export function rankRecommendations(recs: Recommendation[]): Recommendation[] {
   })
 }
 
-// ─── Phase 2.7: Re-evaluation ───────────────────────────────────
-
-interface ReevaluationResult {
-  action: 'confirm' | 'downgrade' | 'suppress'
-  revisedConfidence: 'high' | 'medium' | 'low'
-  revisedSeverity?: 'high' | 'medium' | 'low'
-  revisedRationale: string
-  evidenceAssessment: {
-    supportsOriginalIssue: boolean
-    supportsAlternative: boolean
-    contextMatch: 'strong' | 'partial' | 'weak' | 'none'
-    quantitativeData: boolean
-  }
-  concerns: string[]
-  suppressionReason?: string
-}
-
-async function reevaluateRecommendation(
-  recommendation: Recommendation,
-  literatureEvidence: LiteratureEvidenceMatch[]
-): Promise<ReevaluationResult | null> {
-  try {
-    const systemPrompt = buildReevaluatePrompt(recommendation, literatureEvidence)
-    const result = await callClaude<ReevaluationResult>(
-      systemPrompt,
-      'Re-evaluate this recommendation based on the retrieved literature evidence.',
-      REEVALUATE_SCHEMA as unknown as InputSchema,
-      `reevaluate-step${recommendation.stepNumber}-${recommendation.original.chemical.substring(0, 15)}`
-    )
-    return result
-  } catch (err) {
-    console.warn(`[pipeline] Re-evaluation failed for ${recommendation.original.chemical}:`, err)
-    return null
-  }
-}
-
-function isCandidateOnlyEvidence(matches: LiteratureEvidenceMatch[]): boolean {
-  return matches.length > 0 && matches.every(
-    match => match.candidateStatus === 'candidate_pending_adjudication'
-  )
-}
-
-function enforceCandidateOnlyReevaluation(
-  reevaluation: ReevaluationResult,
-  matches: LiteratureEvidenceMatch[],
-): ReevaluationResult {
-  if (!isCandidateOnlyEvidence(matches) || reevaluation.action === 'downgrade') {
-    return reevaluation
-  }
-
-  return {
-    ...reevaluation,
-    action: 'downgrade',
-    revisedConfidence: 'low',
-    concerns: [
-      ...reevaluation.concerns,
-      'Candidate-only evidence cannot independently confirm or suppress this intervention.',
-    ],
-    suppressionReason: undefined,
-  }
-}
-
-async function reevaluateAllRecommendations(
-  recommendations: Recommendation[],
-  onProgress?: (event: ProgressEvent) => void
-): Promise<{ recommendations: Recommendation[]; stats: { confirmed: number; downgraded: number; suppressed: number; failed: number } }> {
-  console.log(`Phase 2.7: Re-evaluating ${recommendations.length} recommendations against literature...`)
-  onProgress?.({ type: 'phase', phase: 2, message: `Re-evaluating ${recommendations.length} recommendations...` })
-
-  const stats = { confirmed: 0, downgraded: 0, suppressed: 0, failed: 0 }
-  const keepRecommendations: Recommendation[] = []
-
-  // Re-evaluate each recommendation sequentially (to avoid rate limits)
-  for (let i = 0; i < recommendations.length; i++) {
-    const rec = recommendations[i]
-    const chemName = rec.original.chemical
-    
-    console.log(`Phase 2.7: [${i + 1}/${recommendations.length}] Re-evaluating ${chemName}...`)
-
-    // Retrieve literature for this specific recommendation
-    const query = `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
-    let literatureEvidence: LiteratureEvidenceMatch[] = []
-    
-    try {
-      literatureEvidence = await searchLiteratureEvidence({
-        query: boundLiteratureQuery(query),
-        limit: 5,
-        threshold: 0.25,
-      })
-      console.log(`Phase 2.7: Found ${literatureEvidence.length} literature matches for ${chemName}`)
-    } catch (err) {
-      console.warn(`Phase 2.7: Literature retrieval failed for ${chemName}:`, err)
-    }
-
-    // Re-evaluate with LLM
-    const reevaluationResult = await reevaluateRecommendation(rec, literatureEvidence)
-    const reevaluation = reevaluationResult
-      ? enforceCandidateOnlyReevaluation(reevaluationResult, literatureEvidence)
-      : null
-
-    if (!reevaluation) {
-      stats.failed++
-      // Keep the original recommendation if re-evaluation fails
-      keepRecommendations.push(rec)
-      continue
-    }
-
-    // Apply re-evaluation results
-    if (reevaluation.action === 'suppress') {
-      stats.suppressed++
-      console.log(`Phase 2.7: SUPPRESSED ${chemName} — ${reevaluation.suppressionReason}`)
-      // Don't add to keepRecommendations
-      continue
-    }
-
-    // Update recommendation based on re-evaluation
-    const updatedRec = { ...rec }
-    updatedRec.confidenceLevel = reevaluation.revisedConfidence
-    
-    if (reevaluation.revisedSeverity) {
-      updatedRec.severity = reevaluation.revisedSeverity
-    }
-
-    // Append concerns to caveats if they exist
-    if (reevaluation.concerns.length > 0) {
-      const concernsText = reevaluation.concerns.join('; ')
-      updatedRec.alternative.caveats = updatedRec.alternative.caveats
-        ? `${updatedRec.alternative.caveats}; ${concernsText}`
-        : concernsText
-    }
-
-    // Update rationale with revised version
-    updatedRec.alternative.rationale = reevaluation.revisedRationale
-
-    // Store evidence assessment metadata
-    if (!updatedRec.evidence) {
-      updatedRec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
-    }
-    // @ts-expect-error — adding non-standard field for evidence assessment metadata
-    updatedRec.evidence.reevaluationMeta = reevaluation.evidenceAssessment
-
-    if (reevaluation.action === 'confirm') {
-      stats.confirmed++
-      console.log(`Phase 2.7: CONFIRMED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
-    } else if (reevaluation.action === 'downgrade') {
-      stats.downgraded++
-      console.log(`Phase 2.7: DOWNGRADED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
-    }
-
-    keepRecommendations.push(updatedRec)
-  }
-
-  console.log(`Phase 2.7 complete: ${stats.confirmed} confirmed, ${stats.downgraded} downgraded, ${stats.suppressed} suppressed, ${stats.failed} failed`)
-  onProgress?.({ type: 'phase', phase: 2, message: `Re-evaluation complete: ${stats.suppressed} recommendations suppressed` })
-
-  return { recommendations: keepRecommendations, stats }
-}
+// Phase 2.7 model re-evaluation removed: eligibility is decided before wording and fail-closed.
 
 // ─── Deduplication ───────────────────────────────────────────────
 
@@ -927,12 +772,20 @@ export async function analyzeProtocol(
     }
   }
 
+  // Deterministic hypothesis cards for analogous_only / insufficient_evidence (visible, not applicable).
+  const hypothesisRecommendations = evidenceCandidates
+    .map(buildHypothesisRecommendation)
+    .filter((rec): rec is Recommendation => rec !== null)
+
   // Recommendations are already evidence-bounded. Do not use a second retrieval
   // or model re-evaluation to rehabilitate an unsupported model-generated swap.
 
   // Deduplicate: merge recommendations for the same chemical in the same step
-  const { deduped: recommendations } = deduplicateRecommendations(rawRecommendations, context)
-  console.log(`Deduplication: ${rawRecommendations.length} raw → ${recommendations.length} merged`)
+  const { deduped: recommendations } = deduplicateRecommendations(
+    [...rawRecommendations, ...hypothesisRecommendations],
+    context,
+  )
+  console.log(`Deduplication: ${rawRecommendations.length} phrased + ${hypothesisRecommendations.length} hypotheses → ${recommendations.length} merged`)
   onProgress?.({ type: 'phase', phase: 2, message: `Found ${recommendations.length} recommendations` })
 
   // Attach evidence to recommendations based on enriched chemical data
@@ -1020,9 +873,13 @@ export async function analyzeProtocol(
     }
   }
 
-  // Phase 3: Assemble revised protocol
+  // Phase 3: Assemble revised protocol from application-eligible interventions only (fail-closed).
   onProgress?.({ type: 'phase', phase: 3, message: 'Assembling revised protocol...' })
-  const assembled = await assembleResult(protocolText, parsed.steps, finalRecommendations)
+  const recommendationsForAssemble = finalRecommendations.filter(rec =>
+    isEligibleToReviseProcedure(rec.evidenceAssessment),
+  )
+  console.log(`Phase 3: Assembling from ${recommendationsForAssemble.length}/${finalRecommendations.length} application-eligible recommendations`)
+  const assembled = await assembleResult(protocolText, parsed.steps, recommendationsForAssemble)
 
   // Attach process complexity from deterministic scores
   const complexityScore = deterministicScores?.scores.find(s => s.principle_number === 13)

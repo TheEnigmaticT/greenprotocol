@@ -369,13 +369,29 @@ export interface LiteratureEvidenceMatch {
 /** A bounded proposed procedure change, evaluated before recommendation wording. */
 export type InterventionKind = 'substitution' | 'condition-reduction' | 'operation-reduction'
 
+/** Hermes solvent-slice dispositions (Trevor acceptance 2026-09-17). */
+export type RecommendationDisposition =
+  | 'supported_applicable'
+  | 'supported_with_constraints'
+  | 'analogous_only'
+  | 'contradicted_or_inapplicable'
+  | 'insufficient_evidence'
+
 export interface RecommendationEvidenceAssessment {
-  state: 'direct-supported' | 'candidate-only' | 'no-direct-evidence' | 'deferred' | 'ineligible'
+  /** Durable decision outcome for this occurrence-bounded intervention. */
+  disposition: RecommendationDisposition
   directness: 'direct' | 'indirect' | 'none'
   supportingReferenceCount: number
   applicability: 'strong' | 'partial' | 'weak' | 'none'
+  /**
+   * Fail-closed application gate: true only for supported_applicable.
+   * CHEM21/PubChem hazard guidance alone never sets this.
+   */
   eligibleForApplication: boolean
   eligibilityReason: string
+  /** Procedure constraints that must be validated in the lab when disposition requires it. */
+  constraints?: string[]
+  limitingFactors?: string[]
 }
 
 export interface EvidenceBackedCandidate {
