@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { boundLiteratureQuery } from './literature-query'
 import { QWEN_MODEL, callQwen } from '@/lib/qwen-adapter'
-import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type LiteratureEvidenceMatch } from '@/lib/types'
+import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type LiteratureEvidenceMatch, type EvidenceBackedCandidate } from '@/lib/types'
+import { buildEvidenceBackedCandidates, evidenceCandidateKey } from '@/lib/recommendation-candidates'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
 import { prepareChemicalInputs } from '@/lib/chemical-inputs'
 import { groundDeclaredProducts } from '@/lib/declared-products'
@@ -305,25 +306,64 @@ interface PrincipleResult {
 async function evaluatePrinciple(
   principleNumber: number,
   steps: AnalysisStep[],
+  candidates: EvidenceBackedCandidate[],
   context?: CallContext
 ): Promise<PrincipleResult> {
   const principle = PRINCIPLES.find(p => p.number === principleNumber)!
   const systemPrompt = buildPrinciplePrompt(principle, steps)
   const stepsJson = JSON.stringify(steps, null, 2)
+  const candidateJson = JSON.stringify(candidates.map(candidate => ({
+    id: candidate.id,
+    kind: candidate.kind,
+    target: candidate.target,
+    proposedAlternative: candidate.proposedAlternative,
+    evidenceIds: candidate.evidence.map(evidence => evidence.id),
+    eligibility: candidate.evidenceAssessment,
+  })), null, 2)
 
-  return callClaude<PrincipleResult>(systemPrompt, `Analyze these protocol steps against Principle ${principleNumber}:\n\n${stepsJson}`, PRINCIPLE_SCHEMA, `principle-${principleNumber}`)
+  return callClaude<PrincipleResult>(
+    systemPrompt,
+    `Analyze these protocol steps against Principle ${principleNumber}. You may only phrase one of the supplied application-eligible candidates; do not invent targets, alternatives, or conditions.\n\nProtocol steps:\n${stepsJson}\n\nEligible candidates:\n${candidateJson}`,
+    PRINCIPLE_SCHEMA,
+    `principle-${principleNumber}`,
+    SONNET,
+    context,
+  )
+}
+
+function principleNumbersForCandidate(candidate: EvidenceBackedCandidate): number[] {
+  return candidate.kind === 'substitution' && candidate.target.role?.toLowerCase() === 'solvent' ? [5] : []
+}
+
+function candidateMatchesRecommendation(candidate: EvidenceBackedCandidate, recommendation: Recommendation): boolean {
+  return candidate.target.stepNumber === recommendation.stepNumber
+    && candidate.target.sourceChemical?.trim().toLowerCase() === recommendation.original.chemical.trim().toLowerCase()
+    && candidate.proposedAlternative?.trim().toLowerCase() === recommendation.alternative.chemical.trim().toLowerCase()
 }
 
 async function evaluateAllPrinciples(
   steps: AnalysisStep[],
+  candidates: EvidenceBackedCandidate[],
   onProgress?: (event: ProgressEvent) => void,
   context?: CallContext
 ): Promise<Recommendation[]> {
-  const batchSize = process.env.GCAI_ENGINE_CANDIDATE === '1' ? 2 : PRINCIPLES.length
-  console.log(`Phase 2: Evaluating 12 principles in batches of ${batchSize}...`)
+  const eligible = candidates.filter(candidate => candidate.evidenceAssessment.eligibleForApplication)
+  const candidatesByPrinciple = new Map(PRINCIPLES.map(principle => [
+    principle.number,
+    eligible.filter(candidate => principleNumbersForCandidate(candidate).includes(principle.number)),
+  ]))
+  const activePrinciples = PRINCIPLES.filter(principle => (candidatesByPrinciple.get(principle.number)?.length ?? 0) > 0)
+
+  if (activePrinciples.length === 0) {
+    console.info('[pipeline] No direct, role-bounded evidence candidates are eligible for application.')
+    return []
+  }
+
+  const batchSize = process.env.GCAI_ENGINE_CANDIDATE === '1' ? 2 : activePrinciples.length
+  console.log(`Phase 2: Phrasing ${eligible.length} evidence-backed candidates across ${activePrinciples.length} principles...`)
   const batches: PrincipleDefinition[][] = []
-  for (let index = 0; index < PRINCIPLES.length; index += batchSize) {
-    batches.push(PRINCIPLES.slice(index, index + batchSize))
+  for (let index = 0; index < activePrinciples.length; index += batchSize) {
+    batches.push(activePrinciples.slice(index, index + batchSize))
   }
 
   const allRecommendations: Recommendation[] = []
@@ -331,53 +371,35 @@ async function evaluateAllPrinciples(
 
   for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
     const batch = batches[batchIdx]
-    const batchNums = batch.map(p => p.number).join(',')
-    console.log(`Phase 2: starting batch ${batchIdx + 1}/${batches.length} (principles ${batchNums})`)
+    for (const p of batch) onProgress?.({ type: 'principle', number: p.number, name: p.name, status: 'evaluating' })
 
-    // Signal each principle in the batch as evaluating
-    for (const p of batch) {
-      onProgress?.({ type: 'principle', number: p.number, name: p.name, status: 'evaluating' })
-    }
-
-    const batchStart = Date.now()
     const batchResults = await Promise.allSettled(
-      batch.map(p => evaluatePrinciple(p.number, steps, context))
+      batch.map(p => evaluatePrinciple(p.number, steps, candidatesByPrinciple.get(p.number) ?? [], context))
     )
-    console.log(`Phase 2: batch ${batchIdx + 1} completed in ${((Date.now() - batchStart) / 1000).toFixed(1)}s`)
 
     for (let j = 0; j < batchResults.length; j++) {
       const result = batchResults[j]
       const principle = batch[j]
-
-      if (result.status === 'fulfilled') {
-        succeeded++
-        const rawRecs = result.value.recommendations || []
-        // Guard against malformed recs (strings instead of objects)
-        const recs = rawRecs.filter((r: unknown): r is Record<string, unknown> => typeof r === 'object' && r !== null)
-        for (let i = 0; i < recs.length; i++) {
-    const rec = recs[i]
-          if (!Array.isArray(rec.principleNumbers) || rec.principleNumbers.length === 0) {
-            rec.principleNumbers = [principle.number]
-          }
-          if (!Array.isArray(rec.principleNames) || rec.principleNames.length === 0) {
-            rec.principleNames = [principle.name]
-          }
-        }
-        allRecommendations.push(...recs)
-        onProgress?.({ type: 'principle', number: principle.number, name: principle.name, status: 'complete', recommendations: recs.length })
-      } else {
+      if (result.status !== 'fulfilled') {
         console.warn(`Principle ${principle.number} evaluation failed:`, result.reason)
         onProgress?.({ type: 'principle', number: principle.number, name: principle.name, status: 'failed' })
+        continue
       }
+      succeeded++
+      const allowed = candidatesByPrinciple.get(principle.number) ?? []
+      const recs = (result.value.recommendations ?? [])
+        .filter((rec: unknown): rec is Recommendation => typeof rec === 'object' && rec !== null)
+        .filter(rec => allowed.some(candidate => candidateMatchesRecommendation(candidate, rec)))
+      for (const rec of recs) {
+        if (!Array.isArray(rec.principleNumbers) || rec.principleNumbers.length === 0) rec.principleNumbers = [principle.number]
+        if (!Array.isArray(rec.principleNames) || rec.principleNames.length === 0) rec.principleNames = [principle.name]
+      }
+      allRecommendations.push(...recs)
+      onProgress?.({ type: 'principle', number: principle.number, name: principle.name, status: 'complete', recommendations: recs.length })
     }
   }
 
-  console.log(`Phase 2 complete: ${succeeded}/12 principles evaluated, ${allRecommendations.length} recommendations`)
-
-  if (succeeded === 0) {
-    throw new Error('All 12 principle evaluations failed')
-  }
-
+  if (succeeded === 0) throw new Error('All evidence-backed recommendation evaluations failed')
   return allRecommendations
 }
 
@@ -852,57 +874,61 @@ export async function analyzeProtocol(
     console.warn('[pipeline] Chemistry service unavailable — skipping deterministic scoring')
   }
 
-  // Phase 2: Evaluate all 12 principles in parallel (LLM qualitative recommendations)
-  onProgress?.({ type: 'phase', phase: 2, message: 'Evaluating 12 Green Chemistry Principles...' })
-  const rawRecommendations = await evaluateAllPrinciples(parsed.steps, onProgress, context)
-
-  // Phase 2.5: Ground recommendations in literature via Vector Search
-  onProgress?.({ type: 'phase', phase: 2, message: 'Grounding recommendations in literature...' })
-  try {
-    // Build all query strings first, then batch-retrieve
-    const queries = rawRecommendations.map(rec =>
-      `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
-    )
-
-    const results = await Promise.allSettled(
-      rawRecommendations.map((rec, i) =>
-        searchLiteratureEvidence({
-          query: boundLiteratureQuery(queries[i]),
-          limit: 3,
-          threshold: 0.25,
-        })
-      )
-    )
-
-    for (let i = 0; i < rawRecommendations.length; i++) {
-      const result = results[i]
-      if (result.status === 'rejected') {
-        console.warn(`[pipeline] Phase 2.5 retrieval failed for ${rawRecommendations[i].original.chemical}:`, result.reason)
-        continue
-      }
-      const matches = result.value
-      if (matches.length === 0) continue
-
-      const rec = rawRecommendations[i]
-      if (!rec.evidence) {
-        rec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
-      }
-      const seenEvidenceIds = new Set(rec.evidence.citations.map(citation => citation.source_id))
-      for (const match of matches) {
-        if (seenEvidenceIds.has(match.id)) continue
-
-        seenEvidenceIds.add(match.id)
-        rec.evidence.citations.push(citationFromEvidenceMatch(match))
-        rec.evidence.why_replacement.push({
-          chemical: rec.alternative.chemical,
-          source: match.title,
-          content: `${match.candidateStatus === 'candidate_pending_adjudication' ? 'Candidate evidence — ' : ''}${match.quote}`,
-        })
-      }
+  // Evidence retrieval precedes wording. A result can be useful with zero eligible
+  // changes, but an unsupported model suggestion is never an application candidate.
+  onProgress?.({ type: 'phase', phase: 2, message: 'Finding evidence-backed intervention candidates...' })
+  const seedCandidates = buildEvidenceBackedCandidates({
+    steps: parsed.steps,
+    enrichedChemicals: enrichedChemicals ?? [],
+    evidenceByCandidate: new Map(),
+  })
+  const evidenceByCandidate = new Map<string, LiteratureEvidenceMatch[]>()
+  const deferredCandidateKeys = new Set<string>()
+  await Promise.all(seedCandidates.map(async candidate => {
+    const alternative = candidate.proposedAlternative
+    const source = candidate.target.sourceChemical
+    if (!alternative || !source) return
+    const key = evidenceCandidateKey(candidate.target.occurrenceId, alternative)
+    const step = parsed.steps.find(item => item.stepNumber === candidate.target.stepNumber)
+    try {
+      evidenceByCandidate.set(key, await searchLiteratureEvidence({
+        query: boundLiteratureQuery(`Solvent substitution from ${source} to ${alternative}; role ${candidate.target.role}; procedure context ${step?.description ?? ''}`),
+        limit: 5,
+        threshold: 0.25,
+      }))
+    } catch (error) {
+      console.warn(`[pipeline] Evidence retrieval deferred for ${key}:`, error)
+      deferredCandidateKeys.add(key)
     }
-  } catch (err) {
-    console.warn('[pipeline] Phase 2.5 skipped due to error:', err)
+  }))
+  const evidenceCandidates = buildEvidenceBackedCandidates({
+    steps: parsed.steps,
+    enrichedChemicals: enrichedChemicals ?? [],
+    evidenceByCandidate,
+    deferredCandidateKeys,
+  })
+
+  // Phase 2: phrase only direct, role- and occurrence-bounded candidates.
+  const rawRecommendations = await evaluateAllPrinciples(parsed.steps, evidenceCandidates, onProgress, context)
+  for (const recommendation of rawRecommendations) {
+    const candidate = evidenceCandidates.find(item => candidateMatchesRecommendation(item, recommendation))
+    if (!candidate) continue
+    recommendation.evidenceCandidateId = candidate.id
+    recommendation.evidenceAssessment = candidate.evidenceAssessment
+    recommendation.evidence = {
+      why_flagged: [],
+      why_replacement: candidate.evidence.map(match => ({
+        chemical: recommendation.alternative.chemical,
+        source: match.title,
+        content: match.quote,
+      })),
+      citations: candidate.evidence.map(citationFromEvidenceMatch),
+      sdsReferences: buildSdsReferences(recommendation.original.chemical),
+    }
   }
+
+  // Recommendations are already evidence-bounded. Do not use a second retrieval
+  // or model re-evaluation to rehabilitate an unsupported model-generated swap.
 
   // Deduplicate: merge recommendations for the same chemical in the same step
   const { deduped: recommendations } = deduplicateRecommendations(rawRecommendations, context)
@@ -949,31 +975,18 @@ export async function analyzeProtocol(
     }
   }
 
-  // Phase 2.7: Re-evaluate recommendations against literature evidence
-  // This is the two-pass pipeline: generate recommendations (Phase 2), then re-evaluate them (Phase 2.7)
-  let reevaluationStats = { confirmed: 0, downgraded: 0, suppressed: 0, failed: 0 }
-  let finalRecommendations = recommendations
-  
-  try {
-    const reevalResult = await reevaluateAllRecommendations(recommendations, onProgress)
-    finalRecommendations = reevalResult.recommendations
-    reevaluationStats = reevalResult.stats
-  } catch (err) {
-    console.warn('[pipeline] Phase 2.7 re-evaluation skipped due to error:', err)
-  }
+  // Legacy stats remain additive for persisted-result compatibility. Evidence
+  // eligibility is established before wording and is never changed by an LLM.
+  const reevaluationStats = { confirmed: 0, downgraded: 0, suppressed: 0, failed: 0 }
+  const finalRecommendations = recommendations
 
   // v0.6: Derive evidence tier and rerank
   for (const rec of finalRecommendations) {
     rec.evidenceTier = deriveEvidenceTier(rec)
   }
-  finalRecommendations.sort((a, b) => {
-    const scoreA = (SEVERITY_WEIGHT[a.severity] ?? 1) * (TIER_MULTIPLIER[a.evidenceTier ?? 'inferred'] ?? 1)
-    const scoreB = (SEVERITY_WEIGHT[b.severity] ?? 1) * (TIER_MULTIPLIER[b.evidenceTier ?? 'inferred'] ?? 1)
-    if (scoreB !== scoreA) return scoreB - scoreA
-    if (a.evidenceTier === 'sourced' && b.evidenceTier !== 'sourced') return -1
-    if (b.evidenceTier === 'sourced' && a.evidenceTier !== 'sourced') return 1
-    return 0
-  })
+  finalRecommendations.sort((a, b) =>
+    a.stepNumber - b.stepNumber || (SEVERITY_WEIGHT[b.severity] ?? 1) - (SEVERITY_WEIGHT[a.severity] ?? 1)
+  )
 
   // v0.6: Derive primaryBenefit if the LLM didn't provide one
   for (const rec of finalRecommendations) {

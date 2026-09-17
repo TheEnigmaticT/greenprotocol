@@ -83,6 +83,9 @@ export interface Recommendation {
     evidenceBasis: string
   }
   evidence?: Evidence
+  /** Eligibility is decided before wording; legacy recommendations omit this. */
+  evidenceAssessment?: RecommendationEvidenceAssessment
+  evidenceCandidateId?: string
   confidenceLevel: 'high' | 'medium' | 'low'
   isAccepted?: boolean
   // v0.6: waste + citability
@@ -361,4 +364,31 @@ export interface LiteratureEvidenceMatch {
   limitations?: string
   candidateStatus: string
   similarity: number
+}
+
+/** A bounded proposed procedure change, evaluated before recommendation wording. */
+export type InterventionKind = 'substitution' | 'condition-reduction' | 'operation-reduction'
+
+export interface RecommendationEvidenceAssessment {
+  state: 'direct-supported' | 'candidate-only' | 'no-direct-evidence' | 'deferred' | 'ineligible'
+  directness: 'direct' | 'indirect' | 'none'
+  supportingReferenceCount: number
+  applicability: 'strong' | 'partial' | 'weak' | 'none'
+  eligibleForApplication: boolean
+  eligibilityReason: string
+}
+
+export interface EvidenceBackedCandidate {
+  id: string
+  kind: InterventionKind
+  target: {
+    stepNumber: number
+    occurrenceId: string
+    sourceChemical?: string
+    role?: string
+  }
+  proposedAlternative?: string
+  anchor: 'chem21' | 'literature'
+  evidence: LiteratureEvidenceMatch[]
+  evidenceAssessment: RecommendationEvidenceAssessment
 }
