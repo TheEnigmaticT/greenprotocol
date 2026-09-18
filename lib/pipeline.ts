@@ -431,19 +431,25 @@ async function assembleResult(
   protocolText: string,
   steps: AnalysisStep[],
   recommendations: Recommendation[],
-  context?: CallContext
+  context?: CallContext,
+  withheldCount = 0,
 ): Promise<AssembleResult> {
   console.log('Phase 3: Assembling revised protocol...')
 
-  // If no recommendations, skip the API call
+  // If no application-eligible recommendations, do not invent a green claim.
   if (recommendations.length === 0) {
+    const withheld = withheldCount > 0
     return {
-      revisedProtocol: protocolText, // unchanged
+      revisedProtocol: protocolText,
       overallAssessment: {
         greenPrinciplesViolated: [],
-        mostImpactfulChange: 'No changes needed — this protocol already follows green chemistry principles.',
-        experimentalValidationNeeded: false,
-        disclaimer: 'This protocol was evaluated against all 12 Principles of Green Chemistry and no significant improvements were identified.',
+        mostImpactfulChange: withheld
+          ? 'No application-eligible change. Visible hypotheses were not applied.'
+          : 'No evidence-backed change was identified. That is not a claim the protocol is already green.',
+        experimentalValidationNeeded: withheld,
+        disclaimer: withheld
+          ? 'CHEM21 guidance and literature that is only analogous or deferred do not establish a reaction-safe substitution. The original protocol is unchanged.'
+          : 'No solvent intervention cleared the evidence gate. Hazardous materials may still be present. The original protocol is unchanged.',
       },
     }
   }
@@ -879,7 +885,13 @@ export async function analyzeProtocol(
     isEligibleToReviseProcedure(rec.evidenceAssessment),
   )
   console.log(`Phase 3: Assembling from ${recommendationsForAssemble.length}/${finalRecommendations.length} application-eligible recommendations`)
-  const assembled = await assembleResult(protocolText, parsed.steps, recommendationsForAssemble)
+  const assembled = await assembleResult(
+    protocolText,
+    parsed.steps,
+    recommendationsForAssemble,
+    context,
+    finalRecommendations.length - recommendationsForAssemble.length,
+  )
 
   // Attach process complexity from deterministic scores
   const complexityScore = deterministicScores?.scores.find(s => s.principle_number === 13)
