@@ -275,6 +275,21 @@ export function isAllowedCandidateRequest(config: CandidateRunConfig, request: C
     return true
   }
 
+  if (
+    process.env.GCAI_LOCAL_EVIDENCE_INDEX?.trim() &&
+    method === 'POST' &&
+    url.protocol === 'http:' &&
+    url.hostname === '127.0.0.1' &&
+    url.port === '11434' &&
+    url.pathname === '/api/embed' &&
+    !url.search &&
+    !url.hash &&
+    !url.username &&
+    !url.password
+  ) {
+    return true
+  }
+
   if (url.origin !== CHEMISTRY_ORIGIN || url.search || url.hash || url.username || url.password) return false
   if (method === 'GET' && url.pathname === '/health') return true
   return method === 'POST' && (url.pathname === '/batch' || url.pathname === '/score')
