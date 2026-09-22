@@ -28,8 +28,12 @@ IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NA
 if IMAGE_DIGEST="$("$GCLOUD" artifacts docker images describe "$IMAGE" --project "$PROJECT_ID" --format='value(image_summary.digest)' 2>/dev/null)" && [[ -n "$IMAGE_DIGEST" ]]; then
   printf 'Reusing existing immutable candidate image.\n' >&2
 else
+  # gcloud prints both the API builds/UUID URL and a console URL with ?project=.
+  # Keep only the first UUID so the second line cannot poison BUILD_ID.
   BUILD_ID="$("$GCLOUD" builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE" --async \
-    | sed -n 's#.*builds/\([^]]*\)].*#\1#p')"
+    | grep -oE 'builds/[0-9a-f-]{36}' \
+    | head -n 1 \
+    | cut -d/ -f2)"
   [[ "$BUILD_ID" =~ ^[0-9a-f-]{36}$ ]] || fail "Cloud Build did not return a build ID."
 
   for _ in $(seq 1 120); do
