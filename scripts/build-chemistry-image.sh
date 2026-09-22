@@ -28,13 +28,18 @@ IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NA
 if IMAGE_DIGEST="$("$GCLOUD" artifacts docker images describe "$IMAGE" --project "$PROJECT_ID" --format='value(image_summary.digest)' 2>/dev/null)" && [[ -n "$IMAGE_DIGEST" ]]; then
   printf 'Reusing existing immutable candidate image.\n' >&2
 else
-  # gcloud prints both the API builds/UUID URL and a console URL with ?project=.
-  # Keep only the first UUID so the second line cannot poison BUILD_ID.
-  BUILD_ID="$("$GCLOUD" builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE" --async \
-    | grep -oE 'builds/[0-9a-f-]{36}' \
-    | head -n 1 \
-    | cut -d/ -f2)"
-  [[ "$BUILD_ID" =~ ^[0-9a-f-]{36}$ ]] || fail "Cloud Build did not return a build ID."
+  # Capture submit text first. Do not parse through head in a pipefail
+  # pipeline: head closing early can abort the script before BUILD_ID is set.
+  # gcloud also prints a console builds/URL?project= line; BASH_REMATCH keeps
+  # the first UUID only.
+  SUBMIT_OUT="$("$GCLOUD" builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE" --async" 2>&1)" \
+    || fail "Cloud Build submit failed."
+  printf '%s\n' "$SUBMIT_OUT" >&2
+  if [[ "$SUBMIT_OUT" =~ builds/([0-9a-f-]{36}) ]]; then
+    BUILD_ID="${BASH_REMATCH[1]}"
+  else
+    fail "Cloud Build did not return a build ID."
+  fi
 
   for _ in $(seq 1 120); do
     BUILD_STATUS="$("$GCLOUD" builds describe "$BUILD_ID" --project "$PROJECT_ID" --format='value(status)')"
