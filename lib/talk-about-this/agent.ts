@@ -15,7 +15,15 @@ import type { Citation, EvidenceSignalGroup, LiteratureEvidenceMatch } from '@/l
 
 export const MAX_TOOL_ROUNDS = 4
 export const MAX_TOOL_CALLS_PER_TURN = 3
-const TOOL_CALL_TIMEOUT_MS = 10_000
+/** Per-tool dispatch cap. PubChem/GHS lookups routinely approach this. */
+export const TOOL_CALL_TIMEOUT_MS = 10_000
+/**
+ * Whole-turn budget for provider rounds + tool waves.
+ * Must stay meaningfully above TOOL_CALL_TIMEOUT_MS: a single 10s tool used to
+ * leave only ~2s for the final answer under the old 12s loop, which aborted the
+ * response and surfaced sibling local tools (e.g. solvent hazard) as unavailable.
+ */
+export const TOOL_LOOP_TIMEOUT_MS = 60_000
 
 /** Node AbortSignal.timeout rejects non-integer delays (ERR_OUT_OF_RANGE). */
 export function integerTimeoutMs(ms: number): number {
@@ -23,7 +31,6 @@ export function integerTimeoutMs(ms: number): number {
   return Math.floor(ms)
 }
 
-const TOOL_LOOP_TIMEOUT_MS = 12_000
 export type ChatLifecycleEvent = 'activity' | 'delta' | 'tool-start' | 'tool-complete' | 'tool-failed'
 
 export interface ScopedToolChatRequest {
@@ -36,6 +43,8 @@ export interface ScopedToolChatRequest {
   turnId?: string
   onToolRun?: (input: Omit<CreateToolRunInput, 'conversationId' | 'userMessageId'>) => Promise<void>
   now?: () => number
+  /** Test-only override for the whole-turn AbortSignal budget. */
+  loopTimeoutMs?: number
 }
 
 export interface ChatRunResult {
@@ -433,14 +442,16 @@ export async function runScopedToolChat({
   turnId = '',
   onToolRun,
   now = performance.now.bind(performance),
+  loopTimeoutMs = TOOL_LOOP_TIMEOUT_MS,
 }: ScopedToolChatRequest): Promise<ChatRunResult> {
   const conversation = [...messages]
   const canonicalSmilesByChemical = new Map<string, string>()
-  const toolLoopDeadline = performance.now() + TOOL_LOOP_TIMEOUT_MS
+  const turnBudgetMs = integerTimeoutMs(loopTimeoutMs) || TOOL_LOOP_TIMEOUT_MS
+  const toolLoopDeadline = performance.now() + turnBudgetMs
   // The request budget applies to provider passes as well as tool calls. Without
   // this signal, a stalled streamed model response can outlive the tool budget
   // and wait for an infrastructure timeout measured in minutes.
-  const deadlineSignal = AbortSignal.timeout(TOOL_LOOP_TIMEOUT_MS)
+  const deadlineSignal = AbortSignal.timeout(turnBudgetMs)
   const requestSignal = signal ? AbortSignal.any([signal, deadlineSignal]) : deadlineSignal
   const citationsById = new Map<string, Citation>()
   const evidenceById = new Map<string, LiteratureEvidenceMatch>()

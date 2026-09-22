@@ -18,6 +18,7 @@ import { approveScopedRecommendation, isExplicitScopedApprovalRequest } from '@/
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 
 const MAX_RETRIEVAL_ATTEMPTS = 5
 const TERMINAL_DIAGNOSTIC_SETTLEMENT_MS = 250
