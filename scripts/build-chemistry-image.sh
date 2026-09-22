@@ -32,7 +32,7 @@ else
   # pipeline: head closing early can abort the script before BUILD_ID is set.
   # gcloud also prints a console builds/URL?project= line; BASH_REMATCH keeps
   # the first UUID only.
-  SUBMIT_OUT="$("$GCLOUD" builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE" --async" 2>&1)" \
+  SUBMIT_OUT="$("$GCLOUD" builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE" --async 2>&1)" \
     || fail "Cloud Build submit failed."
   printf '%s\n' "$SUBMIT_OUT" >&2
   if [[ "$SUBMIT_OUT" =~ builds/([0-9a-f-]{36}) ]]; then
