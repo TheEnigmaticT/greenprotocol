@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { AnalysisResult, AnalysisStep, Citation, PrincipleScore, Recommendation } from '@/lib/types'
+import type { AnalysisResult, AnalysisStep, ChemistryDataStatus, Citation, PrincipleScore, Recommendation } from '@/lib/types'
 import { parseTalkAboutScope, type TalkAboutScope } from '@/lib/talk-about-this/scope'
 
 export type { TalkAboutScope } from '@/lib/talk-about-this/scope'
@@ -10,6 +10,14 @@ const MAX_PROTOCOL_CHARACTERS = 12_000
 
 export interface ContextCitation extends Citation {
   id: string
+}
+
+export interface TalkAboutChemistryDataStatus {
+  pending: boolean
+  deterministicScoringAvailable: boolean
+  unresolvedChemicals: string[]
+  indefiniteChemicals: string[]
+  message: string
 }
 
 export interface TalkAboutContext {
@@ -23,6 +31,7 @@ export interface TalkAboutContext {
   scores: PrincipleScore[]
   citations: ContextCitation[]
   noDirectEvidence: boolean
+  chemistryDataStatus?: TalkAboutChemistryDataStatus
   contextHash: string
 }
 
@@ -44,7 +53,22 @@ function snapshotRecommendation(recommendation: Recommendation): Recommendation 
   return snapshot
 }
 
+function snapshotChemistryDataStatus(status: ChemistryDataStatus | undefined): TalkAboutChemistryDataStatus | undefined {
+  if (!status) return undefined
+  return {
+    pending: status.pending,
+    deterministicScoringAvailable: status.deterministicScoringAvailable,
+    unresolvedChemicals: [...status.unresolvedChemicals],
+    indefiniteChemicals: [...(status.indefiniteChemicals ?? [])],
+    message: status.message,
+  }
+}
+
 function resolveRecommendations(analysis: AnalysisResult, scope: TalkAboutScope): Recommendation[] {
+  if (scope.kind === 'no-recommendations') {
+    return []
+  }
+
   if (scope.kind === 'recommendation') {
     const matches = 'recommendationId' in scope
       ? analysis.recommendations.filter(item => item.id === scope.recommendationId)
@@ -66,12 +90,23 @@ function resolveRecommendations(analysis: AnalysisResult, scope: TalkAboutScope)
     .map(snapshotRecommendation)
 }
 
-function relevantSteps(analysis: AnalysisResult, recommendations: Recommendation[]): AnalysisStep[] {
+function relevantSteps(
+  analysis: AnalysisResult,
+  scope: TalkAboutScope,
+  recommendations: Recommendation[],
+): AnalysisStep[] {
+  if (scope.kind === 'no-recommendations') {
+    return analysis.steps
+  }
   const stepNumbers = new Set(recommendations.map(item => item.stepNumber))
   return analysis.steps.filter(step => stepNumbers.has(step.stepNumber))
 }
 
 function relevantScores(analysis: AnalysisResult, scope: TalkAboutScope, recommendations: Recommendation[]): PrincipleScore[] {
+  if (scope.kind === 'no-recommendations') {
+    return analysis.deterministicScores?.scores ?? []
+  }
+
   const principleNumbers = scope.kind === 'principle'
     ? [scope.principleNumber]
     : [...new Set(recommendations.flatMap(item => item.principleNumbers))]
@@ -100,17 +135,22 @@ function hashContext(context: Omit<TalkAboutContext, 'contextHash'>): string {
 
 export function buildTalkAboutContext(input: BuildTalkAboutContextInput): TalkAboutContext {
   const recommendations = resolveRecommendations(input.analysis, input.scope)
+  const chemistryDataStatus = input.scope.kind === 'no-recommendations'
+    ? snapshotChemistryDataStatus(input.analysis.chemistryDataStatus)
+    : undefined
+
   const contextWithoutHash = {
     schemaVersion: CONTEXT_SCHEMA_VERSION,
     analysisId: input.analysisId,
     scope: input.scope,
     protocolTitle: input.analysis.protocolTitle,
     protocolText: truncateProtocol(input.protocolText),
-    steps: relevantSteps(input.analysis, recommendations),
+    steps: relevantSteps(input.analysis, input.scope, recommendations),
     recommendations,
     scores: relevantScores(input.analysis, input.scope, recommendations),
     citations: collectCitations(recommendations),
     noDirectEvidence: recommendations.every(item => (item.evidence?.citations.length ?? 0) === 0),
+    ...(chemistryDataStatus ? { chemistryDataStatus } : {}),
   }
 
   return {

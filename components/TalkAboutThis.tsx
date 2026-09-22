@@ -162,13 +162,15 @@ export function parseOpenConversationResponse(
   }
 
   const scopesMatch = scope.kind === responseScope.kind
-    && (scope.kind === 'principle'
-      ? scope.principleNumber === (responseScope as Extract<TalkAboutScope, { kind: 'principle' }>).principleNumber
-      : 'recommendationId' in scope && 'recommendationId' in responseScope
-        ? scope.recommendationId === responseScope.recommendationId
-        : 'recommendationIndex' in scope && 'recommendationIndex' in responseScope
-          ? scope.recommendationIndex === responseScope.recommendationIndex
-          : false)
+    && (scope.kind === 'no-recommendations'
+      ? true
+      : scope.kind === 'principle'
+        ? scope.principleNumber === (responseScope as Extract<TalkAboutScope, { kind: 'principle' }>).principleNumber
+        : 'recommendationId' in scope && 'recommendationId' in responseScope
+          ? scope.recommendationId === responseScope.recommendationId
+          : 'recommendationIndex' in scope && 'recommendationIndex' in responseScope
+            ? scope.recommendationIndex === responseScope.recommendationIndex
+            : false)
 
   if (
     typeof response.conversationId !== 'string'

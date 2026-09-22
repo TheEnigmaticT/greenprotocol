@@ -63,3 +63,25 @@ describe('buildTalkAboutSystemPrompt', () => {
     expect(prompt).toContain('State whether a claim comes from the immutable scoped analysis or a completed tool result')
     expect(prompt).toContain('Do not cite or imply verification from unavailable tool results')
   })
+
+describe('buildTalkAboutSystemPrompt no-recommendations', () => {
+  it('instructs fail-closed coaching for no-recommendations scope', () => {
+    const emptyContext: TalkAboutContext = {
+      ...context,
+      scope: { kind: 'no-recommendations' },
+      recommendations: [],
+      chemistryDataStatus: {
+        pending: false,
+        deterministicScoringAvailable: false,
+        unresolvedChemicals: ['brine'],
+        indefiniteChemicals: [],
+        message: 'Scoring unavailable.',
+      },
+    }
+    const prompt = buildTalkAboutSystemPrompt(emptyContext)
+    expect(prompt).toContain('fail-closed')
+    expect(prompt).toContain('chemistryDataStatus')
+    expect(prompt).toContain('Do NOT propose protocol-revising Accept swaps')
+    expect(prompt).toContain('brine')
+  })
+})

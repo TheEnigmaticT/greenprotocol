@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { AnalysisResult, Recommendation } from '@/lib/types'
 import { RecommendationApprovalReceipt, TalkAboutThis } from './TalkAboutThis'
+import { buildNoRecommendationsBullets } from '@/lib/no-recommendations-summary'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -379,7 +380,31 @@ export default function FinalizedProtocol({
         )}
 
         {total === 0 && (
-          <p className="text-sm" style={{ color: '#78716C' }}>No recommendations for this protocol.</p>
+          <div
+            className="rounded-lg border p-4 sm:p-5"
+            style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}
+          >
+            <p
+              className="m-0 mb-2 font-[family-name:var(--font-sans)] font-medium text-[16px] sm:text-[17px] leading-snug"
+              style={{ color: '#0D1F16' }}
+            >
+              No recommendations for this protocol.
+            </p>
+            <ul className="m-0 mb-4 pl-5 space-y-1 font-[family-name:var(--font-sans)] text-sm leading-snug" style={{ color: '#57534E' }}>
+              {buildNoRecommendationsBullets(analysis.chemistryDataStatus).map(bullet => (
+                <li key={bullet}>{bullet}</li>
+              ))}
+            </ul>
+            <TalkAboutThis
+              analysisId={analysisId}
+              scope={{ kind: 'no-recommendations' }}
+              title="Why no recommendations?"
+              evidenceState="inferred"
+              buttonLabel="Ask"
+              className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em]"
+              buttonStyle={{ background: '#F6F3EB', color: '#1C3822', border: '1px solid #ECB815', borderRadius: 0 }}
+            />
+          </div>
         )}
       </div>
       )}

@@ -110,4 +110,39 @@ describe('buildTalkAboutContext', () => {
       scope: { kind: 'recommendation', recommendationId: 'rec-missing' },
     })).toThrow('Recommendation scope does not match exactly one recommendation in this analysis')
   })
+
+  it('parses and builds a no-recommendations scope with chemistryDataStatus', () => {
+    expect(parseTalkAboutScope({ kind: 'no-recommendations' })).toEqual({ kind: 'no-recommendations' })
+
+    const emptyAnalysis = {
+      ...analysis,
+      recommendations: [],
+      chemistryDataStatus: {
+        pending: false,
+        deterministicScoringAvailable: true,
+        unresolvedChemicals: ['brine'],
+        indefiniteChemicals: ['aq. workup'],
+        message: 'Some materials could not be scored.',
+      },
+    }
+
+    const context = buildTalkAboutContext({
+      analysisId: 'analysis-empty',
+      protocolText: 'Wash with brine.',
+      analysis: emptyAnalysis,
+      scope: { kind: 'no-recommendations' },
+    })
+
+    expect(context.scope).toEqual({ kind: 'no-recommendations' })
+    expect(context.recommendations).toEqual([])
+    expect(context.steps).toEqual(emptyAnalysis.steps)
+    expect(context.chemistryDataStatus).toEqual({
+      pending: false,
+      deterministicScoringAvailable: true,
+      unresolvedChemicals: ['brine'],
+      indefiniteChemicals: ['aq. workup'],
+      message: 'Some materials could not be scored.',
+    })
+    expect(context.contextHash).toMatch(/^[a-f0-9]{64}$/)
+  })
 })
