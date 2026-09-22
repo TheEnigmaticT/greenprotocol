@@ -75,7 +75,7 @@ def test_indefinite_material_is_not_sent_to_pubchem_or_marked_missing(monkeypatc
         raise AssertionError("indefinite materials must not be sent to PubChem")
 
     monkeypatch.setattr(converter, "lookup_chemical", fail_lookup)
-    for material in ("brine", "cellulose acetate"):
+    for material in ("brine", "cellulose acetate", "diazonium salt solution", "diazonium salt"):
         result = asyncio.run(converter.convert(material, "100 mL"))
 
         assert result.chemical_name == material

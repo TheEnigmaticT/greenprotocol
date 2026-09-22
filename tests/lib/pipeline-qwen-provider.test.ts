@@ -72,7 +72,7 @@ describe('pipeline Qwen opt-in', () => {
     )
   })
 
-  it('limits candidate principle calls while completing every principle', async () => {
+  it('skips principle calls when no evidence-backed intervention is eligible', async () => {
     vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
     let active = 0
     let peak = 0
@@ -98,8 +98,8 @@ describe('pipeline Qwen opt-in', () => {
     })
     const progress = vi.fn()
     const result = await analyzeProtocol('Wash with water.', progress)
-    expect(peak).toBeLessThanOrEqual(2)
-    expect(progress.mock.calls.filter(([event]) => event.type === 'principle' && event.status === 'complete')).toHaveLength(12)
+    expect(peak).toBe(0)
+    expect(progress.mock.calls.filter(([event]) => event.type === 'principle' && event.status === 'complete')).toHaveLength(0)
     expect(result.revisedProtocol).toBe('Wash with water.')
     expect(result.steps[0].chemicals[0].quantityKg).toBeNull()
     expect(result.steps[0].chemicals[0].quantityMl).toBeNull()
@@ -136,8 +136,7 @@ describe('pipeline Qwen opt-in', () => {
     expect(scoreRequest.chemicals.filter((c: { role: string }) => c.role === 'product')).toHaveLength(productCount)
     expect(scoreRequest.steps.flatMap((s: { chemicals: { role: string }[] }) => s.chemicals).filter((c: { role: string }) => c.role === 'product')).toHaveLength(productCount)
     const principleCalls = mocks.qwenCall.mock.calls.filter(([call]) => call.label.startsWith('principle-'))
-    expect(principleCalls).toHaveLength(12)
-    for (const [call] of principleCalls) expect(call.userContent.includes(product)).toBe(productCount === 1)
+    expect(principleCalls).toHaveLength(0)
     expect(result.inputWarnings?.length).toBe(candidate ? (explicitlyNamed ? 0 : 1) : undefined)
     expect(result.revisedProtocol).toBe(source)
   })

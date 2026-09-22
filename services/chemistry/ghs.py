@@ -1,9 +1,26 @@
 """GHS hazard code lookups from PubChem and scoring utilities."""
 
 import re
+from contextvars import ContextVar
+
 import cache as chem_cache
 from local_chem_data import lookup_local_hcodes
 from pubchem import fetch_pubchem_json
+
+# "confirmed" means PubChem returned a GHS document, or the local table has codes.
+# "failed" means the fetch did not succeed. An empty list is not a clean bill of health.
+_last_ghs_status: ContextVar[str] = ContextVar("last_ghs_status", default="confirmed")
+
+
+def last_ghs_status() -> str:
+    return _last_ghs_status.get()
+
+
+def _local_hazard_details(cid: int) -> list[dict]:
+    return [
+        {"code": code, "description": "", "source": "local H-code table"}
+        for code in lookup_local_hcodes(cid)
+    ]
 
 TIMEOUT = 15.0
 
@@ -50,43 +67,82 @@ PHYSICAL_HAZARD_CODES = {
 }
 
 
-def parse_hcodes_with_details(data: dict) -> list[dict[str, str]]:
-    """Parse structured PubChem GHS hazard statements without fetching."""
+def _walk_sections(sections: list | None):
+    for section in sections or []:
+        yield section
+        yield from _walk_sections(section.get("Section"))
+
+
+def _statements_from_section(section: dict) -> list[dict[str, str]]:
     hazards: list[dict[str, str]] = []
     seen_codes: set[str] = set()
-    sections = data.get("Record", {}).get("Section", [])
-    for section in sections:
-        for subsection in section.get("Section", []):
-            if "GHS Classification" not in subsection.get("TOCHeading", ""):
-                continue
-            for info in subsection.get("Information", []):
-                if info.get("Name") != "GHS Hazard Statements":
-                    continue
-                for value in info.get("Value", {}).get("StringWithMarkup", []):
-                    match = re.match(r"(H\d{3}[A-Za-z]*)[^:]*:\s*(.*)", value.get("String", ""))
-                    if match and match.group(1) not in seen_codes:
-                        code, description = match.groups()
-                        hazards.append({
-                            "code": code,
-                            "description": description.strip(),
-                            "source": "PubChem GHS Classification",
-                        })
-                        seen_codes.add(code)
+    for info in section.get("Information", []):
+        if info.get("Name") != "GHS Hazard Statements":
+            continue
+        for value in info.get("Value", {}).get("StringWithMarkup", []):
+            match = re.match(r"(H\d{3}[A-Za-z]*)[^:]*:\s*(.*)", value.get("String", ""))
+            if match and match.group(1) not in seen_codes:
+                code, description = match.groups()
+                hazards.append({
+                    "code": code,
+                    "description": description.strip(),
+                    "source": "PubChem GHS Classification",
+                })
+                seen_codes.add(code)
+        if hazards:
+            return hazards
     return hazards
 
 
+def parse_hcodes_with_details(data: dict) -> tuple[bool, list[dict[str, str]]]:
+    """Parse structured PubChem GHS hazard statements without fetching.
+
+    The classification block is nested under Safety and Hazards. A missing
+    block is not the same as a document that lists no statements.
+    """
+    found = False
+    for section in _walk_sections(data.get("Record", {}).get("Section")):
+        if "GHS Classification" not in section.get("TOCHeading", ""):
+            continue
+        found = True
+        hazards = _statements_from_section(section)
+        if hazards:
+            return True, hazards
+    return found, []
+
+
 async def lookup_hcodes_with_details(cid: int) -> list[dict]:
-    """Fetch GHS H-codes and their descriptions for a compound from PubChem."""
+    """Fetch GHS H-codes and their descriptions for a compound from PubChem.
+
+    A failed fetch is not stored as "no hazards." Callers read last_ghs_status().
+    """
     url = (
         f"https://pubchem.ncbi.nlm.nih.gov/rest/pug_view"
         f"/data/compound/{cid}/JSON?heading=GHS+Classification"
     )
     try:
         data = await fetch_pubchem_json(url, f"GHS CID {cid}")
-        return parse_hcodes_with_details(data) if data else []
     except Exception as e:
         print(f"[ghs] details lookup error for CID {cid}: {e}")
+        data = None
+    if not data:
+        local = _local_hazard_details(cid)
+        if local:
+            _last_ghs_status.set("confirmed")
+            return local
+        _last_ghs_status.set("failed")
         return []
+    found, hazards = parse_hcodes_with_details(data)
+    if not hazards:
+        local = _local_hazard_details(cid)
+        if local:
+            _last_ghs_status.set("confirmed")
+            return local
+        # No classification block means the document was not a usable GHS read.
+        _last_ghs_status.set("confirmed" if found else "failed")
+        return []
+    _last_ghs_status.set("confirmed")
+    return hazards
 
 async def lookup_hcodes(cid: int) -> list[str]:
     """Fetch GHS H-codes for a compound from PubChem."""

@@ -1,0 +1,10 @@
+{
+  "caseId": "fixture-2",
+  "protocolText": "Dissolve cellulose acetate in acetone and add water slowly with vigorous stirring. Maintain the mixture at 25 °C for 45 minutes until the polymer precipitates. Filter the solid, rinse it twice with water, and dry under vacuum at 40 °C overnight.",
+  "frozenLiteratureMatches": [],
+  "analysisMetadata": {
+    "generatedAt": "2026-01-01T00:00:00.000Z",
+    "gcaiVersion": "benchmark-fixture",
+    "methodologyVersion": "benchmark-fixture-v1"
+  }
+}

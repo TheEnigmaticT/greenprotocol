@@ -4,6 +4,7 @@ import {
   isCandidateEngineSelected,
   OPENROUTER_COMPATIBLE_BASE_URL,
 } from '@/lib/model-runtime'
+import { localEvidenceIndexPath, searchLocalLiteratureEvidence } from '@/lib/local-literature'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type {
   Citation,
@@ -198,6 +199,16 @@ export async function searchLiteratureEvidence(
 ): Promise<LiteratureEvidenceMatch[]> {
   const query = validateInput(input)
   throwIfAborted(input.signal)
+
+  const localIndex = localEvidenceIndexPath()
+  if (localIndex) {
+    return searchLocalLiteratureEvidence({
+      query,
+      limit: input.limit,
+      threshold: input.threshold,
+      indexDir: localIndex,
+    })
+  }
 
   const candidateRuntime = resolveCandidateEmbeddingRuntime()
   // Parity mode changes transport only: same embedding model, index and query.
