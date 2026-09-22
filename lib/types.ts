@@ -83,6 +83,9 @@ export interface Recommendation {
     evidenceBasis: string
   }
   evidence?: Evidence
+  /** Eligibility is decided before wording; legacy recommendations omit this. */
+  evidenceAssessment?: RecommendationEvidenceAssessment
+  evidenceCandidateId?: string
   confidenceLevel: 'high' | 'medium' | 'low'
   isAccepted?: boolean
   // v0.6: waste + citability
@@ -91,6 +94,13 @@ export interface Recommendation {
   wasteDelta?: Record<string, unknown>
   citationMetadata?: RecommendationCitationMetadata
   evidenceTier?: 'sourced' | 'inferred'
+  /** Cited ACS GCIPR solvent or reagent-guide layer. Never application-eligible by itself. */
+  acsGcipr?: AcsGciprCitationLayer
+  /**
+   * swap: Accept / Reject / Ask. The procedure can change only if evidence allows it.
+   * warning: Close / Ask. A hazard with no substitute. Never changes the procedure.
+   */
+  cardKind?: 'swap' | 'warning'
 }
 
 export interface AnalysisResult {
@@ -361,4 +371,82 @@ export interface LiteratureEvidenceMatch {
   limitations?: string
   candidateStatus: string
   similarity: number
+}
+
+/** A bounded proposed procedure change, evaluated before recommendation wording. */
+export type InterventionKind = 'substitution' | 'condition-reduction' | 'operation-reduction'
+
+/** Hermes solvent-slice dispositions (Trevor acceptance 2026-09-17). */
+export type RecommendationDisposition =
+  | 'supported_applicable'
+  | 'supported_with_constraints'
+  | 'analogous_only'
+  | 'contradicted_or_inapplicable'
+  | 'insufficient_evidence'
+
+export interface AcsGciprSolventFacts {
+  catalogId: string
+  catalogName: string
+  cas: string | null
+  smiles: string | null
+  matchedOn: 'cas' | 'smiles' | 'name'
+  safety: number | null
+  health: number | null
+  environment: number | null
+  defaultRanking: string | null
+  adjustedRanking: string | null
+  ichClass: string | null
+  /** Raw ICH Limit cell. Blank cells are null; the field is in ppm in the source tool. */
+  ichLimitPpm: string | null
+  avoidance: 'Y' | 'N' | null
+  /** Y flags for what the solvent is, not which reaction functional groups it tolerates. */
+  solventClasses: string[]
+  caveats: { label: string; text: string }[]
+}
+
+export interface AcsGciprCitationLayer {
+  source: 'solvent_catalog' | 'reagent_guide'
+  /** Always false. Neither ACS catalog can revise a protocol. */
+  revisesProcedure: false
+  functionalGroupMeaning?: 'solvent_identity_not_reaction_compatibility'
+  solvent?: AcsGciprSolventFacts
+  reagentGuide?: {
+    family: 'suzuki' | 'buchwald-hartwig' | 'snar'
+    guideUrl: string
+    title: string
+    claim: string
+    dois: string[]
+  }
+}
+
+export interface RecommendationEvidenceAssessment {
+  /** Durable decision outcome for this occurrence-bounded intervention. */
+  disposition: RecommendationDisposition
+  directness: 'direct' | 'indirect' | 'none'
+  supportingReferenceCount: number
+  applicability: 'strong' | 'partial' | 'weak' | 'none'
+  /**
+   * Fail-closed application gate: true only for supported_applicable.
+   * CHEM21, ACS GCIPR catalogs, and PubChem hazard guidance alone never set this.
+   */
+  eligibleForApplication: boolean
+  eligibilityReason: string
+  /** Procedure constraints that must be validated in the lab when disposition requires it. */
+  constraints?: string[]
+  limitingFactors?: string[]
+}
+
+export interface EvidenceBackedCandidate {
+  id: string
+  kind: InterventionKind
+  target: {
+    stepNumber: number
+    occurrenceId: string
+    sourceChemical?: string
+    role?: string
+  }
+  proposedAlternative?: string
+  anchor: 'chem21' | 'literature'
+  evidence: LiteratureEvidenceMatch[]
+  evidenceAssessment: RecommendationEvidenceAssessment
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { AnalysisResult, Recommendation } from '@/lib/types'
 import { RecommendationApprovalReceipt, TalkAboutThis } from './TalkAboutThis'
+import { buildNoRecommendationsBullets } from '@/lib/no-recommendations-summary'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -48,6 +49,7 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
   const tier = evidenceLabel(rec)
   const evidenceState = tier === 'Sourced' ? 'sourced' : 'inferred'
   const whyLine = skimWhyLine(rec)
+  const warning = rec.cardKind === 'warning'
 
   return (
     <article
@@ -59,7 +61,7 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
           className="text-xs font-bold uppercase tracking-wider font-[family-name:var(--font-mono)]"
           style={{ color: '#1C1917', letterSpacing: '0.08em' }}
         >
-          Step {rec.stepNumber}
+          {warning ? rec.original.chemical : `Step ${rec.stepNumber}`}
         </span>
         <SeverityBadge severity={rec.severity} />
         <span
@@ -74,14 +76,20 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
         className="m-0 mb-2.5 font-[family-name:var(--font-sans)] font-medium text-[16px] sm:text-[17px] leading-snug"
         style={{ color: '#0D1F16' }}
       >
-        Replace{' '}
-        <span style={{ color: '#DC2626' }}>{rec.original.chemical}</span>
-        {' '}with{' '}
-        <span style={{ color: '#006D15' }}>{rec.alternative.chemical}</span>
-        .
+        {warning ? (
+          rec.original.issue
+        ) : (
+          <>
+            Replace{' '}
+            <span style={{ color: '#DC2626' }}>{rec.original.chemical}</span>
+            {' '}with{' '}
+            <span style={{ color: '#006D15' }}>{rec.alternative.chemical}</span>
+            .
+          </>
+        )}
       </p>
 
-      {whyLine && (
+      {!warning && whyLine && (
         <p
           className="m-0 mb-4 font-[family-name:var(--font-sans)] text-sm leading-snug line-clamp-2"
           style={{ color: '#57534E' }}
@@ -91,7 +99,8 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
         </p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-auto">
+      <div className={`grid grid-cols-1 ${warning ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2 mt-auto`}>
+        {!warning && (
         <button
           type="button"
           onClick={onAccept}
@@ -100,20 +109,23 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
         >
           Accept
         </button>
+        )}
         <button
           type="button"
           onClick={onDecline}
           className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em] cursor-pointer"
           style={{ background: '#FAFAF8', color: '#78716C', border: '1px solid #D6D0C4' }}
         >
-          Reject
+          {warning ? 'Close' : 'Reject'}
         </button>
         <TalkAboutThis
           analysisId={analysisId}
           scope={rec.id
             ? { kind: 'recommendation', recommendationId: rec.id }
             : { kind: 'recommendation', recommendationIndex }}
-          title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
+          title={warning
+            ? rec.original.chemical
+            : `Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
           evidenceState={evidenceState}
           onRecommendationApproved={onRecommendationApproved}
           buttonLabel="Ask"
@@ -227,7 +239,7 @@ export default function FinalizedProtocol({
 }) {
   const total = analysis.recommendations.length
   const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
-  const declined = analysis.recommendations.filter(r => r.isAccepted === false)
+  const declined = analysis.recommendations.filter(r => r.isAccepted === false && r.cardKind !== 'warning')
   const pending = analysis.recommendations.filter(r => r.isAccepted === undefined || r.isAccepted === null)
 
   const setRecAccepted = (index: number, value: boolean) => {
@@ -368,7 +380,31 @@ export default function FinalizedProtocol({
         )}
 
         {total === 0 && (
-          <p className="text-sm" style={{ color: '#78716C' }}>No recommendations for this protocol.</p>
+          <div
+            className="rounded-lg border p-4 sm:p-5"
+            style={{ background: '#FAFAF8', borderColor: '#D6D0C4' }}
+          >
+            <p
+              className="m-0 mb-2 font-[family-name:var(--font-sans)] font-medium text-[16px] sm:text-[17px] leading-snug"
+              style={{ color: '#0D1F16' }}
+            >
+              No recommendations for this protocol.
+            </p>
+            <ul className="m-0 mb-4 pl-5 space-y-1 font-[family-name:var(--font-sans)] text-sm leading-snug" style={{ color: '#57534E' }}>
+              {buildNoRecommendationsBullets(analysis.chemistryDataStatus).map(bullet => (
+                <li key={bullet}>{bullet}</li>
+              ))}
+            </ul>
+            <TalkAboutThis
+              analysisId={analysisId}
+              scope={{ kind: 'no-recommendations' }}
+              title="Why no recommendations?"
+              evidenceState="inferred"
+              buttonLabel="Ask"
+              className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em]"
+              buttonStyle={{ background: '#F6F3EB', color: '#1C3822', border: '1px solid #ECB815', borderRadius: 0 }}
+            />
+          </div>
         )}
       </div>
       )}

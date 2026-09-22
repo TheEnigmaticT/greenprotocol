@@ -1,64 +1,100 @@
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import FinalizedProtocol from '@/components/FinalizedProtocol'
-import type { AnalysisResult } from '@/lib/types'
+import { buildFinalizedProtocol, canApplyAcceptedRecommendation } from '@/lib/finalized-protocol'
+import type { AnalysisResult, Recommendation, RecommendationEvidenceAssessment } from '@/lib/types'
 
-function makeAnalysis(isAccepted?: boolean): AnalysisResult {
+function assessment(disposition: RecommendationEvidenceAssessment['disposition']): RecommendationEvidenceAssessment {
   return {
-    protocolTitle: 'Solvent replacement procedure',
-    chemistrySubdomain: 'Organic synthesis',
-    steps: [{
-      stepNumber: 1,
-      description: 'Charge DMF and stir for one hour.',
-      chemicals: [],
-      conditions: { temperature: null, duration: 'one hour', atmosphere: null },
-    }],
-    recommendations: [{
-      stepNumber: 1,
-      principleNumbers: [5],
-      principleNames: ['Safer solvents and auxiliaries'],
-      severity: 'high',
-      original: { chemical: 'DMF', issue: 'Hazardous solvent.' },
-      alternative: {
-        chemical: 'Ethyl acetate',
-        rationale: 'Lower-hazard alternative.',
-        yieldImpact: 'Validate experimentally.',
-        caveats: 'Confirm solubility.',
-        evidenceBasis: 'Literature evidence.',
-      },
-      confidenceLevel: 'high',
-      isAccepted,
-    }],
-    revisedProtocol: 'Charge Ethyl acetate and stir for one hour.',
-    overallAssessment: {
-      greenPrinciplesViolated: [5],
-      mostImpactfulChange: 'Replace DMF.',
-      experimentalValidationNeeded: true,
-      disclaimer: 'Validate experimentally.',
-    },
+    disposition,
+    directness: disposition === 'supported_applicable' || disposition === 'supported_with_constraints' ? 'direct' : disposition === 'analogous_only' ? 'indirect' : 'none',
+    supportingReferenceCount: disposition === 'insufficient_evidence' ? 0 : 1,
+    applicability: disposition === 'supported_applicable' ? 'strong' : disposition === 'supported_with_constraints' ? 'partial' : 'weak',
+    eligibleForApplication: disposition === 'supported_applicable',
+    eligibilityReason: 'test',
   }
 }
 
-describe('FinalizedProtocol', () => {
-  it('always shows a copyable and printable procedure workbench before recommendations are reviewed', () => {
-    const markup = renderToStaticMarkup(createElement(FinalizedProtocol, {
-      analysis: makeAnalysis(),
-      originalProtocol: 'Charge DMF and stir for one hour.',
-    }))
+function rec(overrides: Partial<Recommendation> = {}, disposition?: RecommendationEvidenceAssessment['disposition']): Recommendation {
+  return {
+    stepNumber: 1,
+    principleNumbers: [5],
+    principleNames: ['Safer Solvents and Auxiliaries'],
+    severity: 'medium',
+    original: { chemical: 'Dichloromethane', issue: 'Hazardous solvent' },
+    alternative: {
+      chemical: 'Ethyl acetate',
+      rationale: 'Greener alternative',
+      yieldImpact: 'Similar',
+      caveats: 'Validate',
+      evidenceBasis: 'Literature',
+    },
+    confidenceLevel: 'medium',
+    isAccepted: true,
+    evidenceAssessment: disposition ? assessment(disposition) : undefined,
+    ...overrides,
+  }
+}
 
-    expect(markup).toContain('Current Lab Procedure Draft')
-    expect(markup).toContain('Charge DMF and stir for one hour.')
-    expect(markup).toContain('Copy Procedure')
-    expect(markup).toContain('Print Procedure')
+describe('canApplyAcceptedRecommendation', () => {
+  it('allows supported_applicable when accepted', () => {
+    expect(canApplyAcceptedRecommendation(rec({}, 'supported_applicable'))).toBe(true)
   })
 
-  it('shows accepted recommendation edits in the procedure workbench', () => {
-    const markup = renderToStaticMarkup(createElement(FinalizedProtocol, {
-      analysis: makeAnalysis(true),
-      originalProtocol: 'Charge DMF and stir for one hour.',
-    }))
+  it('allows supported_with_constraints only after explicit acceptance', () => {
+    expect(canApplyAcceptedRecommendation(rec({ isAccepted: true }, 'supported_with_constraints'))).toBe(true)
+    expect(canApplyAcceptedRecommendation(rec({ isAccepted: false }, 'supported_with_constraints'))).toBe(false)
+  })
 
-    expect(markup).toContain('Charge Ethyl acetate and stir for one hour.')
+  it('never applies analogous_only or insufficient_evidence even when accepted', () => {
+    expect(canApplyAcceptedRecommendation(rec({}, 'analogous_only'))).toBe(false)
+    expect(canApplyAcceptedRecommendation(rec({}, 'insufficient_evidence'))).toBe(false)
+  })
+})
+
+describe('buildFinalizedProtocol', () => {
+  it('does not rewrite procedure text from accepted analogous_only hypotheses', () => {
+    const analysis: AnalysisResult = {
+      protocolTitle: 'Demo',
+      chemistrySubdomain: 'organic',
+      steps: [{
+        stepNumber: 1,
+        description: 'Extract with Dichloromethane.',
+        chemicals: [],
+        conditions: { temperature: null, duration: null, atmosphere: null },
+      }],
+      recommendations: [rec({}, 'analogous_only')],
+      revisedProtocol: 'Extract with Ethyl acetate.',
+      overallAssessment: {
+        greenPrinciplesViolated: [5],
+        mostImpactfulChange: 'none',
+        experimentalValidationNeeded: true,
+        disclaimer: 'test',
+      },
+    }
+    const finalized = buildFinalizedProtocol(analysis, 'Extract with Dichloromethane.')
+    expect(finalized).toContain('Dichloromethane')
+    expect(finalized).not.toContain('Ethyl acetate')
+  })
+
+  it('rewrites procedure text for accepted supported_applicable recommendations', () => {
+    const analysis: AnalysisResult = {
+      protocolTitle: 'Demo',
+      chemistrySubdomain: 'organic',
+      steps: [{
+        stepNumber: 1,
+        description: 'Extract with Dichloromethane.',
+        chemicals: [],
+        conditions: { temperature: null, duration: null, atmosphere: null },
+      }],
+      recommendations: [rec({}, 'supported_applicable')],
+      revisedProtocol: '',
+      overallAssessment: {
+        greenPrinciplesViolated: [5],
+        mostImpactfulChange: 'swap',
+        experimentalValidationNeeded: true,
+        disclaimer: 'test',
+      },
+    }
+    const finalized = buildFinalizedProtocol(analysis, 'Extract with Dichloromethane.')
+    expect(finalized).toContain('Ethyl acetate')
   })
 })

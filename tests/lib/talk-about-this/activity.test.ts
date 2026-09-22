@@ -83,6 +83,21 @@ describe('activityForEvent', () => {
     expect(activity).toMatchObject({ state: 'failed', label: 'PubChem GHS profile unavailable' })
     expect(activity?.detail).toContain('GHS information is unknown, not safe')
   })
+
+  it('treats a local GHS index miss as a calm note, not a red failure', () => {
+    const activity = activityForEvent('tool-complete', {
+      tool: 'lookup_solvent_hazard_profile',
+      source: 'Local GHS evidence',
+      status: 'not_found',
+      warnings: ['No complete local GHS profile is available for this solvent.'],
+    })
+
+    expect(activity).toMatchObject({
+      state: 'complete',
+      label: 'No local GHS snapshot for this solvent',
+    })
+    expect(activity?.detail).not.toContain('GHS information is unknown, not safe')
+  })
 })
 
 describe('conversation commands and verification notes', () => {

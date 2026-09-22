@@ -1,0 +1,490 @@
+{
+  "source": "ACS GCI Pharmaceutical Roundtable reagent guides",
+  "frameworkNote": "Image-only Venn green/utility/scale scores were not read and are omitted. Claims are one-line paraphrases written for this repository; ACS page prose is not copied.",
+  "records": [
+    {
+      "family": "suzuki",
+      "role": "guide",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/suzuki-miyaura/",
+      "title": "Suzuki-Miyaura",
+      "claim": "ACS GCIPR Suzuki-Miyaura guide cites metal, ligand, base, and solvent constraints; it does not make a parsed step application-eligible.",
+      "dois": [
+        "10.1039/C4OB02694B",
+        "10.1021/op500074h",
+        "10.1002/jctb.4306",
+        "10.1016/j.tet.2012.05.030",
+        "10.1021/cr100346g",
+        "10.1021/ja042491j",
+        "10.1039/C3CS60197H",
+        "10.3390/molecules20057528",
+        "10.1021/cr00039a007",
+        "10.1002/9783527655588.ch9",
+        "10.1016/j.chemosphere.2010.10.031"
+      ]
+    },
+    {
+      "family": "suzuki",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/suzuki-miyaura/list-of-reagents/",
+      "title": "List of Reagents",
+      "claim": "Index of Suzuki-Miyaura reagent classes in the ACS GCIPR guide; method detail lives on the linked child pages.",
+      "dois": []
+    },
+    {
+      "family": "suzuki",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/suzuki-miyaura/list-of-reagents/use-of-soluble-pd-complexes-and-soluble-pd-ligand-combinations/",
+      "title": "Use of Soluble Pd Complexes and Soluble Pd-Ligand Combinations",
+      "claim": "Records soluble palladium and ligand combinations discussed for Suzuki-Miyaura, without a scored catalyst prescription.",
+      "dois": [
+        "10.1016/S0040-4039(00)61017-1",
+        "10.1021/ja068577p",
+        "10.1021/op900221v",
+        "10.1021/cs400429j",
+        "10.1021/jm0308038",
+        "10.1039/9781782620259",
+        "10.1080/17518253.2012.705896",
+        "10.1021/acs.oprd.5b00201",
+        "10.1002/anie.200601663",
+        "10.1021/jo900152n",
+        "10.1016/j.tet.2004.03.009",
+        "10.1002/chem.200902842",
+        "10.1021/jo402089r",
+        "10.1021/jo301642v",
+        "10.1002/anie.200600493",
+        "10.1021/jo100846t",
+        "10.1055/s-0032-1317076",
+        "10.1021/op9000687",
+        "10.1021/op5002353",
+        "10.1021/op4001077",
+        "10.1021/op100268e",
+        "10.1021/acs.oprd.5b00037",
+        "10.1021/op060016v",
+        "10.1021/op2001063",
+        "10.1021/op100101q"
+      ]
+    },
+    {
+      "family": "suzuki",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/suzuki-miyaura/list-of-reagents/pd-c-and-other-heterogeneous-catalysts/",
+      "title": "Pd/C and Other Heterogeneous Catalysts",
+      "claim": "Records heterogeneous catalysts such as Pd/C as a recovery-oriented Suzuki option that still needs case-by-case checks.",
+      "dois": [
+        "10.1039/C4RA17308B",
+        "10.1021/op700065",
+        "10.1021/acs.oprd.5b00137",
+        "10.1016/S0040-4039(00)76884-5",
+        "10.1021/cr0505674",
+        "10.1002/ejoc.200501004",
+        "10.1002/anie.201000576",
+        "10.1021/ol0061687",
+        "10.1021/jo202482h",
+        "10.1055/s-0033-1338293",
+        "10.1021/op800257u",
+        "10.1021/op980079g",
+        "10.1021/op400118f",
+        "10.1021/op050116l"
+      ]
+    },
+    {
+      "family": "suzuki",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/suzuki-miyaura/list-of-reagents/suzuki-coupling-in-flow-reactors/",
+      "title": "Suzuki Coupling in Flow Reactors",
+      "claim": "Records flow-reactor Suzuki examples as process context, not an instruction to move this protocol into flow.",
+      "dois": [
+        "10.1021/acs.oprd.5b0007",
+        "10.1021/op5001989",
+        "10.1039/C4GC02160F",
+        "10.1039/9781782620259",
+        "10.1021/op060177z",
+        "10.1021/op4003449",
+        "10.1002/cctc.201402483",
+        "10.1016/j.tetlet.2014.05.010",
+        "10.1021/op500074h"
+      ]
+    },
+    {
+      "family": "suzuki",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/suzuki-miyaura/list-of-reagents/use-of-base-metals-in-suzuki-coupling/",
+      "title": "Use of Base Metals in Suzuki Coupling",
+      "claim": "Records base-metal Suzuki catalysis as a lower-precious-metal direction, leaving nickel toxicity unresolved.",
+      "dois": [
+        "10.1002/anie.200390362",
+        "10.1021/op300236f",
+        "10.1021/ol500310u",
+        "10.1002/chem.200600502",
+        "10.1021/ja074008l",
+        "10.1039/C3CS35521G",
+        "10.1039/B915945B",
+        "10.1021/op3002992"
+      ]
+    },
+    {
+      "family": "suzuki",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/suzuki-miyaura/list-of-reagents/one-pot-in-situ-borylation-by-c-h-activation/",
+      "title": "‘One Pot’ in situ Borylation by C-H Activation",
+      "claim": "Records one-pot C-H borylation followed by Suzuki coupling as a related method, not a validated step replacement.",
+      "dois": [
+        "10.1021/ja400295v",
+        "10.1021/ol0162668",
+        "10.1126/science.1067074",
+        "10.1021/ja0013069"
+      ]
+    },
+    {
+      "family": "buchwald-hartwig",
+      "role": "guide",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/buchwald-hartwig-amination/",
+      "title": "Buchwald-Hartwig Amination",
+      "claim": "ACS GCIPR Buchwald-Hartwig guide cites catalyst, ligand, base, and solvent constraints; it does not authorize a protocol revision.",
+      "dois": [
+        "10.1039/c3cs60289c",
+        "10.1002/cssc.201300239",
+        "10.1021/op300365e",
+        "10.1039/C1CS15082K",
+        "10.1002/jctb.4306",
+        "10.1021/cr0505268",
+        "10.1021/ja00092a058",
+        "10.1021/ja00096a059",
+        "10.1021/cr100346g",
+        "10.1039/C1CS15088J",
+        "10.1039/C1CS15114B",
+        "10.1039/C3CS60228A",
+        "10.1002/9783527655588.ch13",
+        "10.1039/B709565C"
+      ]
+    },
+    {
+      "family": "buchwald-hartwig",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/buchwald-hartwig-amination/list-of-reagents/",
+      "title": "List of Reagents",
+      "claim": "Index of Buchwald-Hartwig reagent classes in the ACS GCIPR guide.",
+      "dois": []
+    },
+    {
+      "family": "buchwald-hartwig",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/buchwald-hartwig-amination/list-of-reagents/preparation-of-sec-and-tert-amines/",
+      "title": "Preparation of Sec and Tert Amines",
+      "claim": "Collects cited conditions for secondary and tertiary amine C-N coupling, not a drop-in method for this substrate.",
+      "dois": [
+        "10.1039/C0SC00331J",
+        "10.1021/jo501817m",
+        "10.1021/ja2102373",
+        "10.1021/ja801137k",
+        "10.1021/ja8055358",
+        "10.1021/op050226s",
+        "10.1021/ol801285g",
+        "10.1002/chem.200600283",
+        "10.1021/ja037932y",
+        "10.1021/op400278d",
+        "10.1021/op7000996",
+        "10.1021/ol202177k",
+        "10.1021/om020841+",
+        "10.1021/op8000146",
+        "10.1021/op5002319",
+        "10.1021/op500367p",
+        "10.1021/op0499369",
+        "10.1021/op060013i",
+        "10.1021/op100101q",
+        "10.1021/op200229j",
+        "10.1021/op300365e"
+      ]
+    },
+    {
+      "family": "buchwald-hartwig",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/buchwald-hartwig-amination/list-of-reagents/synthesis-of-primary-amines/",
+      "title": "Synthesis of Primary Amines",
+      "claim": "Collects cited routes to primary aryl amines, including ammonia equivalents, without authorizing a reagent swap.",
+      "dois": [
+        "10.1002/chem.201302453",
+        "10.1021/jo801808r",
+        "10.1016/S0040-4039(97)01465-2",
+        "10.1039/C003692G",
+        "10.1021/ja903049z",
+        "10.1021/op0501601",
+        "10.1021/op5002319",
+        "10.1021/op200334x"
+      ]
+    },
+    {
+      "family": "buchwald-hartwig",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/buchwald-hartwig-amination/list-of-reagents/use-of-base-metals-in-buchwald-hartwig-coupling/",
+      "title": "Use of base metals in Buchwald-Hartwig coupling",
+      "claim": "Notes copper and nickel amination variants as constrained alternatives to palladium.",
+      "dois": [
+        "10.1021/ol403209k",
+        "10.1246/cl.2011.1036",
+        "10.1021/acs.oprd.5b00010"
+      ]
+    },
+    {
+      "family": "buchwald-hartwig",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/buchwald-hartwig-amination/specific-solvent-issues-with-buchwald-hartwig-amination/",
+      "title": "Specific Solvent Issues with Buchwald-Hartwig Amination",
+      "claim": "Flags solvent constraints for Buchwald-Hartwig, including historically common high-impact solvents; figure-only Venn scores are not stored.",
+      "dois": [
+        "10.1039/C4GC00853G",
+        "10.1002/chem.200601142",
+        "10.1021/jo101974u",
+        "10.1002/ejoc.201402077",
+        "10.1021/ja035483w"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "guide",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/",
+      "title": "SNAr Solvents and Reagents",
+      "claim": "ACS GCIPR SNAr guide cites solvent and reagent constraints, including pressure to avoid high-hazard dipolar aprotics where feasible, without scoring this procedure.",
+      "dois": [
+        "10.1021/cr60153a002",
+        "10.1002/anie.201206566",
+        "10.1002/9781118093559.ch4",
+        "10.1021/op500276u",
+        "10.1002/chem.201400097",
+        "10.1055/s-0029-1218742",
+        "10.1070/RC2003v072n08ABEH000809"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/",
+      "title": "List of Reagents",
+      "claim": "Index of SNAr solvent and reagent classes in the ACS GCIPR guide.",
+      "dois": []
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/s-sub-n-sub-ar-reaction-in-common-and-emerging-n-based-dipolar-aprotic-solvents/",
+      "title": "SNAr Reaction in Common and Emerging N-based Dipolar Aprotic Solvents",
+      "claim": "Records SNAr in common and emerging nitrogen dipolar aprotic solvents as cited examples, not a substitution matrix.",
+      "dois": [
+        "10.1021/jo00213a045",
+        "10.1021/ja01462a023",
+        "10.1016/j.tetlet.2006.06.029",
+        "10.1016/j.tetlet.2017.07.100",
+        "10.1002/anie.201202149",
+        "10.1021/ja01021a002",
+        "10.1007/BF00296230",
+        "10.1039/C6GC00932H",
+        "10.1021/op060087u",
+        "10.1021/op400101p",
+        "10.1021/op400137m",
+        "10.1021/op100163m",
+        "10.1021/op200068c",
+        "10.1021/op200365n",
+        "10.1021/op200257g"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/s-sub-n-sub-ar-reaction-in-s-based-solvents/",
+      "title": "SNAr Reaction in S-based Solvents",
+      "claim": "Records sulfur-containing solvents used for SNAr as cited examples.",
+      "dois": [
+        "10.1002/adsc.201000575",
+        "10.1021/op300108w",
+        "10.1016/j.tet.2017.11.067",
+        "10.1021/acs.joc.5b00563",
+        "10.1016/S0040-4039(99)00215-4",
+        "10.1039/C4RA04851B",
+        "10.1039/c4ra13753a",
+        "10.1021/jo401828b",
+        "10.1039/B616806J",
+        "10.1186/s40508-015-0040-7",
+        "10.1021/op300262z",
+        "10.1021/op060087u",
+        "10.1021/op900260k",
+        "10.1021/op800257u",
+        "10.1021/op400279n"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/s-sub-n-sub-ar-reaction-in-other-common-molecular-solvents/",
+      "title": "SNAr Reaction in Other Common Molecular Solvents",
+      "claim": "Records SNAr in other molecular solvents as cited examples.",
+      "dois": [
+        "10.1039/C5OB01892G",
+        "10.1021/acs.oprd.6b00401",
+        "10.1016/0040-4039(96)01425-6",
+        "10.1021/ja9933846",
+        "10.1002/ejoc.201201228",
+        "10.1002/pola.20464",
+        "10.1021/jo0523868",
+        "10.1002/ejoc.201200978",
+        "10.1039/C4RA13753A",
+        "10.1021/jo102173k",
+        "10.1021/jo200170z",
+        "10.1039/C4CC04133J",
+        "10.3762/bjoc.12.187",
+        "10.1021/acs.oprd.7b00006",
+        "10.1021/op200186d",
+        "10.1021/op3002273",
+        "10.1021/acs.oprd.6b00070",
+        "10.1021/op200311q",
+        "10.1021/op700248t",
+        "10.1021/acs.oprd.6b00368",
+        "10.1021/op500120z",
+        "10.1021/op200079g",
+        "10.1021/acs.oprd.7b00185",
+        "10.1021/acs.oprd.7b00388",
+        "10.1021/acs.oprd.8b00016"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/s-sub-n-sub-ar-reaction-in-common-molecular-solvents-under-pressure/",
+      "title": "SNAr Reaction in Common Molecular Solvents Under Pressure",
+      "claim": "Records pressurized SNAr in molecular solvents as a process constraint, not a default change.",
+      "dois": [
+        "10.1246/bcsj.64.42",
+        "10.1016/S0040-4039(99)00290-7",
+        "10.1016/j.tetlet.2016.03.095",
+        "10.1016/j.tetlet.2016.01.080",
+        "10.1055/s-2007-985574",
+        "10.1039/C0GC00823K",
+        "10.1002/aoc.2853",
+        "10.1080/17518253.2012.683046",
+        "10.1021/acs.oprd.5b00209",
+        "10.1021/acs.oprd.7b00388",
+        "10.1021/op300278c",
+        "10.1021/acs.oprd.8b00016"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/s-sub-n-sub-ar-reaction-run-neat/",
+      "title": "SNAr Reaction Run Neat",
+      "claim": "Records neat SNAr as a solvent-avoidance option that still requires procedure-specific validation.",
+      "dois": [
+        "10.1016/j.tet.2010.06.095",
+        "10.1002/ejoc.201500977",
+        "10.3390/ijms140918850",
+        "10.1021/acs.oprd.8b00016"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/s-sub-n-sub-ar-reactions-in-ionic-liquids-des/",
+      "title": "SNAr Reactions in Ionic Liquids/DES",
+      "claim": "Records ionic-liquid and deep-eutectic SNAr examples without assigning a green score.",
+      "dois": [
+        "10.1002/slct.201701318",
+        "10.1002/slct.201700584",
+        "10.3390/12040861",
+        "10.1021/ol902353t",
+        "10.1021/ol702435f"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/reaction-in-water-aqueous-surfactants-ptc/",
+      "title": "Reaction in Water/aqueous Surfactants/PTC",
+      "claim": "Records aqueous, surfactant, and phase-transfer SNAr examples as cited options.",
+      "dois": [
+        "10.1002/ejoc.201700459",
+        "10.1021/acs.orglett.6b03468",
+        "10.1021/acs.orglett.5b02240",
+        "10.1021/acs.oprd.6b00388",
+        "10.1039/C5RA03510D",
+        "10.1021/jo00003a026",
+        "10.1002/cssc.201300239",
+        "10.3987/COM-91-5819",
+        "10.1080/00397919008051499",
+        "10.1021/jo981647t",
+        "10.1002/1099-0690(200204)2002:7<1278::AID-EJOC1278>3.0.CO;2-B",
+        "10.1021/jo060627l",
+        "10.1021/ja050200g",
+        "10.1021/op2001854",
+        "10.1021/op800289h",
+        "10.1021/op800250v",
+        "10.1021/acs.oprd.7b00172"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/halex-reaction/",
+      "title": "Halex Reaction",
+      "claim": "Records Halex fluoride displacement as a distinct SNAr variant with equipment-corrosion constraints.",
+      "dois": [
+        "10.1055/s-0029-1218742",
+        "10.1016/S0022-1139(00)80104-9",
+        "10.1021/acs.joc.6b01656",
+        "10.1016/j.tetlet.2009.11.058",
+        "10.1016/S0926-9614(96)80019-0",
+        "10.1021/op5001258"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/catalysed-s-sub-n-sub-ar-reactions/",
+      "title": "Catalysed SNAr reactions",
+      "claim": "Records catalyzed SNAr variants separately from uncatalyzed displacement.",
+      "dois": [
+        "10.1016/j.bmc.2005.05.027",
+        "10.1002/cssc.201403154",
+        "10.1016/j.bmcl.2016.03.050",
+        "10.1021/op970103a",
+        "10.1002/chem.201304336",
+        "10.1016/j.tetlet.2012.11.107",
+        "10.1039/B919413D",
+        "10.1039/C4CC07116F",
+        "10.1002/adsc.201200879",
+        "10.1055/s-0030-1258774",
+        "10.1002/adsc.200505431",
+        "10.1002/poc.1820",
+        "10.1021/op0600557",
+        "10.1021/op800289h"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/biocatalysis/",
+      "title": "Biocatalysis",
+      "claim": "Records biocatalytic approaches that can intersect SNAr-type bond formation; not a license to replace a chemical step.",
+      "dois": [
+        "10.1128/AEM.02634-08",
+        "10.1002/anie.201409470",
+        "10.1021/ja00149a001",
+        "10.1155/2014/157974",
+        "10.1021/acs.chemrev.6b00571",
+        "10.1021/acs.biochem.6b00731"
+      ]
+    },
+    {
+      "family": "snar",
+      "role": "child",
+      "url": "https://reagents.acsgcipr.org/reagent-guides/s-sub-n-sub-ar-solvents-and-reagents/list-of-reagents/specific-solvent-issues-with-the-s-sub-n-sub-ar-reaction/",
+      "title": "Specific Solvent Issues with the SNAr Reaction",
+      "claim": "Flags solvent hazards for SNAr, including reprotoxic dipolar aprotics; figure-only Venn scores are omitted.",
+      "dois": [
+        "10.1021/jo802706d",
+        "10.1021/op034143s",
+        "10.1021/op300016m",
+        "10.1007/s10973-005-7338-8",
+        "10.1021/op500260n"
+      ]
+    }
+  ]
+}

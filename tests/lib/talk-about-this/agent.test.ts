@@ -458,9 +458,10 @@ describe('runScopedToolChat', () => {
       messages: [{ role: 'user', content: 'Check DMF.' }],
       executeTool: async () => chem21Result,
       onEvent: () => undefined,
+      loopTimeoutMs: 50,
     })).rejects.toThrow('provider deadline reached')
     expect(providerSawAbort).toBe(true)
-  }, 13_500)
+  }, 2_000)
 
   it('allows an approved chat tool call to exceed five seconds while staying within the chat budget', async () => {
     let requests = 0

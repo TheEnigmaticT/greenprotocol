@@ -2,6 +2,7 @@ export type TalkAboutScope =
   | { kind: 'recommendation'; recommendationId: string }
   | { kind: 'recommendation'; recommendationIndex: number; readOnly?: true }
   | { kind: 'principle'; principleNumber: number }
+  | { kind: 'no-recommendations' }
 
 export function parseTalkAboutScope(value: unknown): TalkAboutScope {
   if (!value || typeof value !== 'object') {
@@ -19,6 +20,10 @@ export function parseTalkAboutScope(value: unknown): TalkAboutScope {
 
   if (scope.kind === 'principle' && typeof scope.principleNumber === 'number') {
     return { kind: 'principle', principleNumber: scope.principleNumber }
+  }
+
+  if (scope.kind === 'no-recommendations') {
+    return { kind: 'no-recommendations' }
   }
 
   throw new Error('Invalid talk-about-this scope')

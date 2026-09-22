@@ -140,6 +140,7 @@ function RecommendationCard({
   recommendationIndex: number;
 }) {
   const isAccepted = !!rec.isAccepted
+  const warning = rec.cardKind === 'warning'
   const [showEvidence, setShowEvidence] = useState(false)
 
   return (
@@ -154,7 +155,7 @@ function RecommendationCard({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>
-            Step {rec.stepNumber}
+            {warning ? rec.original.chemical : `Step ${rec.stepNumber}`}
           </span>
           <SeverityBadge severity={rec.severity} />
           <ConfidenceBadge level={rec.confidenceLevel} />
@@ -175,7 +176,9 @@ function RecommendationCard({
             scope={rec.id
               ? { kind: 'recommendation', recommendationId: rec.id }
               : { kind: 'recommendation', recommendationIndex }}
-            title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
+            title={warning
+              ? rec.original.chemical
+              : `Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
             evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
           />
           <button
@@ -186,7 +189,7 @@ function RecommendationCard({
                 : 'bg-white text-[#78716C] border-[#D6D0C4] hover:border-[#16a34a] hover:text-[#16a34a]'
             }`}
           >
-            {isAccepted ? '✓ Accepted' : 'Accept Solution'}
+            {warning ? 'Close' : isAccepted ? '✓ Accepted' : 'Accept Solution'}
           </button>
         </div>
       </div>
@@ -203,9 +206,9 @@ function RecommendationCard({
 
         {/* Alternative */}
         <div className="p-3 rounded" style={{ background: isAccepted ? '#DCFCE7' : '#F0FDF4' }}>
-          <div className="text-xs font-semibold mb-1" style={{ color: '#16a34a' }}>RECOMMENDED</div>
+          <div className="text-xs font-semibold mb-1" style={{ color: '#16a34a' }}>{warning ? 'NO SUBSTITUTE' : 'RECOMMENDED'}</div>
           <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#1C1917' }}>
-            {rec.alternative.chemical}
+            {warning ? 'None on file' : rec.alternative.chemical}
           </div>
           <p className="text-xs mb-1" style={{ color: '#2D6A4F' }}>{rec.alternative.rationale}</p>
           <p className="text-xs" style={{ color: '#78716C' }}>
@@ -258,6 +261,7 @@ export default function AnalysisResults({
       .map((rec, i) => ({ rec, originalIndex: i }))
       .sort((a, b) => (SEVERITY_RANK[a.rec.severity] ?? 3) - (SEVERITY_RANK[b.rec.severity] ?? 3))
       .filter(({ rec }) => {
+        if (rec.cardKind === 'warning' && rec.isAccepted === false) return false
         if (filterMode === 'all') return true
         if (filterMode === 'unreviewed') return !rec.isAccepted
         return rec.severity === filterMode
@@ -266,7 +270,7 @@ export default function AnalysisResults({
 
   const recCounts = useMemo(() => ({
     high:           analysis.recommendations.filter(r => r.severity === 'high').length,
-    highUnaccepted: analysis.recommendations.filter(r => r.severity === 'high' && !r.isAccepted).length,
+    highUnaccepted: analysis.recommendations.filter(r => r.severity === 'high' && !r.isAccepted && r.cardKind !== 'warning').length,
     medium:         analysis.recommendations.filter(r => r.severity === 'medium').length,
     low:            analysis.recommendations.filter(r => r.severity === 'low').length,
     unreviewed:     analysis.recommendations.filter(r => !r.isAccepted).length,
@@ -275,7 +279,7 @@ export default function AnalysisResults({
   const handleAcceptAllHigh = useCallback(() => {
     if (!onUpdateAnalysis) return
     const updated = analysis.recommendations.map(rec =>
-      rec.severity === 'high' ? { ...rec, isAccepted: true } : rec
+      rec.severity === 'high' && rec.cardKind !== 'warning' ? { ...rec, isAccepted: true } : rec
     )
     onUpdateAnalysis({ ...analysis, recommendations: updated })
   }, [analysis, onUpdateAnalysis])
@@ -284,9 +288,10 @@ export default function AnalysisResults({
     if (!onUpdateAnalysis) return
     
     const newRecommendations = [...analysis.recommendations]
+    const current = newRecommendations[index]
     newRecommendations[index] = {
-      ...newRecommendations[index],
-      isAccepted: !newRecommendations[index].isAccepted
+      ...current,
+      isAccepted: current.cardKind === 'warning' ? false : !current.isAccepted
     }
     
     onUpdateAnalysis({

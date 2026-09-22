@@ -162,13 +162,15 @@ export function parseOpenConversationResponse(
   }
 
   const scopesMatch = scope.kind === responseScope.kind
-    && (scope.kind === 'principle'
-      ? scope.principleNumber === (responseScope as Extract<TalkAboutScope, { kind: 'principle' }>).principleNumber
-      : 'recommendationId' in scope && 'recommendationId' in responseScope
-        ? scope.recommendationId === responseScope.recommendationId
-        : 'recommendationIndex' in scope && 'recommendationIndex' in responseScope
-          ? scope.recommendationIndex === responseScope.recommendationIndex
-          : false)
+    && (scope.kind === 'no-recommendations'
+      ? true
+      : scope.kind === 'principle'
+        ? scope.principleNumber === (responseScope as Extract<TalkAboutScope, { kind: 'principle' }>).principleNumber
+        : 'recommendationId' in scope && 'recommendationId' in responseScope
+          ? scope.recommendationId === responseScope.recommendationId
+          : 'recommendationIndex' in scope && 'recommendationIndex' in responseScope
+            ? scope.recommendationIndex === responseScope.recommendationIndex
+            : false)
 
   if (
     typeof response.conversationId !== 'string'
@@ -306,7 +308,9 @@ function labelForTool(tool: string, source: string, status: string): string {
   if (tool === 'lookup_chem21_solvent') return 'Received CHEM21 solvent evidence'
   if (tool === 'lookup_experimental_solvent_evidence') return 'Received local solvent measurement evidence'
   if (tool === 'lookup_solvent_hazard_profile') {
-    return status === 'ok' ? 'Received PubChem GHS hazard profile' : `${source} profile unavailable`
+    if (status === 'ok') return 'Received PubChem GHS hazard profile'
+    if (status === 'not_found') return 'No local GHS snapshot for this solvent'
+    return `${source} profile unavailable`
   }
   if (tool === 'lookup_pubchem_profile') return 'Received PubChem profile'
   if (tool === 'calculate_rdkit_properties') return 'Received calculated molecular properties'
@@ -343,7 +347,9 @@ export function activityForEvent(event: string, data: Record<string, unknown>): 
     if (tool === 'screen_solvent_candidates' && status === 'ok') {
       details.push('Laboratory compatibility validation required.')
     }
-    if (source.includes('PubChem GHS') && status !== 'ok') {
+    // True unavailability (timeout/error) stays unknown-not-safe. A local-index
+    // miss is expected until the GHS harvest is complete — do not alarm on it.
+    if (source.includes('PubChem GHS') && status === 'unavailable') {
       details.push('GHS information is unknown, not safe.')
     }
     const warning = Array.isArray(data.warnings) && typeof data.warnings[0] === 'string'
@@ -351,9 +357,10 @@ export function activityForEvent(event: string, data: Record<string, unknown>): 
       : null
     if (warning) details.push(`Warning: ${warning}`)
 
+    const succeeded = status === 'ok' || status === 'not_found'
     return {
       callId,
-      state: status === 'ok' ? 'complete' : 'failed',
+      state: succeeded ? 'complete' : 'failed',
       label: labelForTool(tool, source, status),
       detail: details.join(' · '),
     }

@@ -130,8 +130,8 @@ describe('rankRecommendations', () => {
   })
 })
 
-describe('Phase 2.5 evidence grounding', () => {
-  it('attaches a page-bounded candidate citation in Phase 2.5', async () => {
+describe('evidence-first retrieval', () => {
+  it('does not turn an unbound literature hit into a recommendation', async () => {
     mocks.evidenceSearch.mockResolvedValue([candidateMatch('doi:p4:u2')])
     mocks.anthropicCreate
       .mockResolvedValueOnce(anthropicResponse({
@@ -180,17 +180,47 @@ describe('Phase 2.5 evidence grounding', () => {
 
     const result = await analyzeProtocol('Extract with dichloromethane.')
 
-    expect(result.recommendations[0].evidence?.citations).toContainEqual(
-      expect.objectContaining({
-        source_id: 'doi:p4:u2',
-        citation: expect.stringContaining('p. 4'),
-      }),
-    )
-    expect(result.recommendations[0].evidence?.why_replacement).toContainEqual(
-      expect.objectContaining({
-        content: expect.stringContaining('Candidate evidence'),
-      }),
-    )
+    expect(result.recommendations).toEqual([])
+  })
+})
+
+describe('evidence-first recommendation generation', () => {
+  it('does not send unsupported model suggestions into application recommendations', async () => {
+    mocks.anthropicCreate
+      .mockResolvedValueOnce(anthropicResponse({
+        protocolTitle: 'Extraction',
+        chemistrySubdomain: 'Organic synthesis',
+        steps: [{
+          stepNumber: 1,
+          description: 'Extract with dichloromethane.',
+          chemicals: [{ name: 'Dichloromethane', role: 'solvent' }],
+          conditions: {},
+        }],
+      }))
+      .mockImplementation(({ system }: { system: string }) => {
+        if (system.includes('protocol writer')) {
+          return Promise.resolve(anthropicResponse({
+            revisedProtocol: 'Extract with dichloromethane.',
+            overallAssessment: {
+              greenPrinciplesViolated: [],
+              mostImpactfulChange: 'No evidence-backed change is available.',
+              experimentalValidationNeeded: false,
+              disclaimer: 'No direct evidence was available.',
+            },
+          }))
+        }
+        return Promise.resolve(anthropicResponse({
+          principleNumber: 5,
+          recommendations: [makeRec({})],
+        }))
+      })
+
+    const result = await analyzeProtocol('Extract with dichloromethane.')
+
+    expect(result.recommendations).toEqual([])
+    expect(mocks.anthropicCreate.mock.calls.some(([request]) =>
+      typeof request === 'object' && request !== null && String(request.system).includes('Principle 5'),
+    )).toBe(false)
   })
 })
 
@@ -245,12 +275,11 @@ describe.each(['confirm', 'suppress'] as const)(
 
       const result = await analyzeProtocol('Extract with dichloromethane.')
 
-      expect(result.recommendations).toHaveLength(1)
-      expect(result.recommendations[0].confidenceLevel).toBe('low')
+      expect(result.recommendations).toEqual([])
       expect(result.reevaluationStats).toMatchObject({
         confirmed: 0,
         suppressed: 0,
-        downgraded: 1,
+        downgraded: 0,
       })
     })
   },

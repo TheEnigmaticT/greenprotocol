@@ -1,9 +1,11 @@
 """Core conversion logic: chemical name + quantity -> standardized units."""
 
+import re
+
 from models import ConvertResponse
 from parser import parse_quantity
 from chem21 import get_vetted_evidence
-from ghs import lookup_hcodes_with_details
+from ghs import last_ghs_status, lookup_hcodes_with_details
 from pubchem import lookup_chemical, get_last_lookup_failure
 from cas_lookup import get_cas
 from identity import resolve_cached_identity, split_combined_alias_labels
@@ -20,12 +22,55 @@ INDEFINITE_CHEMICALS = {
     "cellulose acetate",
 }
 
+# A named diazonium salt can be looked up. "Diazonium salt" cannot.
+_IDENTIFIABLE_DIAZONIUM = re.compile(
+    r"\b(chloride|bromide|iodide|tetrafluoroborate|tosylate|benzene|phenyl|aryl|arene)\b"
+)
+
+
+# Numbered eluent / solvent mixture strings, e.g. hexane/ethyl acetate (4:1).
+_RATIO_IN_NAME = re.compile(r"\d+\s*:\s*\d+")
+
+
+def is_indefinite_material(name: str) -> bool:
+    key = name.lower().strip()
+    if key in INDEFINITE_CHEMICALS:
+        return True
+    if re.search(r"\bdiazonium\b", key) and not _IDENTIFIABLE_DIAZONIUM.search(key):
+        return True
+    # Slash mixture with a numeric ratio is an indefinite composition (not a
+    # PubChem miss). Bare slash pairs like aniline/HCl are left alone.
+    if "/" in key and _RATIO_IN_NAME.search(key):
+        return True
+    return False
+
 try:
     from rdkit import Chem
     from rdkit.Chem import Descriptors
     RDKIT_AVAILABLE = True
 except ImportError:
     RDKIT_AVAILABLE = False
+
+
+def _ghs_needs_fetch(cached_data: dict) -> bool:
+    """Empty hazards without a confirmed read are a failed lookup, not a clean result."""
+    if "ghs_hazards" not in cached_data:
+        return True
+    if cached_data.get("ghs_status") == "confirmed":
+        return False
+    return not cached_data.get("ghs_hazards")
+
+
+async def _apply_ghs(target: dict, cid: int | None) -> None:
+    if not cid:
+        return
+    details = await lookup_hcodes_with_details(cid)
+    if last_ghs_status() == "confirmed":
+        target["ghs_hazards"] = details
+        target["ghs_status"] = "confirmed"
+        return
+    target.pop("ghs_hazards", None)
+    target.pop("ghs_status", None)
 
 
 def _rdkit_mw(smiles: str) -> float | None:
@@ -62,8 +107,8 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
     combined_labels = split_combined_alias_labels(chemical_name)
 
     if (
-        resolved_name.lower().strip() in INDEFINITE_CHEMICALS
-        or any(label.lower().strip() in INDEFINITE_CHEMICALS for label in combined_labels)
+        is_indefinite_material(resolved_name)
+        or any(is_indefinite_material(label) for label in combined_labels)
     ):
         warnings.append(
             "This material has an indefinite composition and cannot be analyzed as a single chemical."
@@ -80,15 +125,17 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
         if cached_data:
             cache.put(resolved_name, cached_data)
     if cached_data:
-        # Re-fetch evidence even for cached if it's missing (migration support)
-        if "ghs_hazards" not in cached_data or "green_alternatives" not in cached_data:
-            evidence = get_vetted_evidence(resolved_name, cached_data.get("cid"))
-            cid = cached_data.get("cid")
-            if cid:
-                ghs_details = await lookup_hcodes_with_details(cid)
-                cached_data["ghs_hazards"] = ghs_details
-            cached_data["green_alternatives"] = evidence["why_replacement"]
-            cached_data["citations"] = evidence["citations"]
+        # Re-fetch evidence even for cached if it's missing (migration support).
+        # An empty hazard list is only final after a confirmed read.
+        needs_ghs = _ghs_needs_fetch(cached_data)
+        needs_alts = "green_alternatives" not in cached_data
+        if needs_ghs or needs_alts:
+            if needs_alts:
+                evidence = get_vetted_evidence(resolved_name, cached_data.get("cid"))
+                cached_data["green_alternatives"] = evidence["why_replacement"]
+                cached_data["citations"] = evidence["citations"]
+            if needs_ghs:
+                await _apply_ghs(cached_data, cached_data.get("cid"))
             cache.put(resolved_name, cached_data)
 
         return _build_response(
@@ -107,8 +154,7 @@ async def convert(chemical_name: str, quantity: str) -> ConvertResponse:
         # Augment with GHS details and Green Alternatives evidence
         cid = pubchem_data.get("cid")
         if cid:
-            ghs_details = await lookup_hcodes_with_details(cid)
-            pubchem_data["ghs_hazards"] = ghs_details
+            await _apply_ghs(pubchem_data, cid)
             
         evidence = get_vetted_evidence(resolved_name, cid)
         pubchem_data["green_alternatives"] = evidence["why_replacement"]
