@@ -40,17 +40,14 @@ describe('buildChatTools', () => {
 
     expect(Object.keys(byName)).toEqual(expect.arrayContaining([
       'lookup_experimental_solvent_evidence',
-      'lookup_solvent_hazard_profile',
       'screen_solvent_candidates',
     ]))
+    // Local GHS harvest is incomplete for RC; omit the hazard tool so Ask cannot
+    // spam red unavailable chips for solvents the index does not cover.
+    expect(byName.lookup_solvent_hazard_profile).toBeUndefined()
     expect(byName.lookup_chem21_solvent.parameters.properties.chemical.enum).toEqual(expect.arrayContaining(['DMF', 'Cyrene', 'Ethyl acetate']))
     expect(byName.lookup_pubchem_profile.parameters.properties.chemical.enum).not.toContain('Ethyl acetate')
     expect(byName.calculate_rdkit_properties.parameters.properties.chemical.enum).not.toContain('Ethyl acetate')
-    expect(byName.lookup_solvent_hazard_profile.parameters).toMatchObject({
-      additionalProperties: false,
-      required: ['solvent'],
-      properties: { solvent: { type: 'string', enum: expect.arrayContaining(['Ethyl acetate']) } },
-    })
   })
 
   it('uses closed schemas for local solvent evidence and screening', () => {
