@@ -93,6 +93,7 @@ function buildProjectedChemicals(analysis: AnalysisResult): ChemSlot[] {
   // Apply accepted swaps
   for (const rec of analysis.recommendations) {
     if (rec.isAccepted !== true) continue
+    if (rec.cardKind === 'warning') continue
     const altData = findChemical(rec.alternative.chemical)
     if (!altData) continue
 

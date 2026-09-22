@@ -23,6 +23,11 @@ function applyRecommendation(text: string, rec: Recommendation): string {
  * - analogous_only / insufficient_evidence / contradicted never revise the procedure.
  */
 export function canApplyAcceptedRecommendation(rec: Recommendation): boolean {
+  // A warning names no replacement. Accept is not a real action on it.
+  if (rec.cardKind === 'warning') return false
+  // ACS GCIPR solvent-catalog and reagent-guide cards never revise text,
+  // including after a user accepts the card.
+  if (rec.acsGcipr?.revisesProcedure === false) return false
   if (rec.isAccepted !== true) return false
   const assessment = rec.evidenceAssessment
   if (!assessment) return true

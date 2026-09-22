@@ -18,6 +18,7 @@ kanban-plugin: board
 
 ## Backlog
 
+- [ ] **ORD mentions in the Evidence Atlas** — When a catalog we already trust ranks a solvent or reagent as worse than an alternative, show two or three ORD reactions that used the better chemical in a related procedure. These are examples, not recommendation cards: no Accept, and they must not change procedure text. "Greener" comes from the catalog. ORD only supplies the worked example and its reaction id. Do not import the full patent dump and do not embed the corpus. [added::2026-09-18] [priority::medium] [done-when::The Evidence Atlas can show up to three cited ORD examples for one procedure, each tied to a catalog-ranked better solvent or reagent, with no path into Accept or into the revised procedure]
 
 ## Next — Release 0.8.0
 

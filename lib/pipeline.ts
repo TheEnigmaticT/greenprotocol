@@ -4,6 +4,9 @@ import { boundLiteratureQuery } from './literature-query'
 import { QWEN_MODEL, callQwen } from '@/lib/qwen-adapter'
 import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type LiteratureEvidenceMatch, type EvidenceBackedCandidate } from '@/lib/types'
 import { buildEvidenceBackedCandidates, buildHypothesisRecommendation, evidenceCandidateKey, isPhraseableDisposition, isEligibleToReviseProcedure } from '@/lib/recommendation-candidates'
+import { applyAcsGciprRecommendations } from '@/lib/acs-gcipr'
+import { buildHazardWarnings } from '@/lib/hazard-warnings'
+import { normalizeParsedMaterials } from '@/lib/material-names'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
 import { prepareChemicalInputs } from '@/lib/chemical-inputs'
 import { groundDeclaredProducts } from '@/lib/declared-products'
@@ -278,6 +281,8 @@ async function parseProtocol(protocolText: string, context?: CallContext): Promi
     throw new Error('Protocol parsing returned no usable steps')
   }
 
+  result.steps = normalizeParsedMaterials(result.steps)
+
   if (process.env.GCAI_ENGINE_CANDIDATE === '1') {
     const grounded = groundDeclaredProducts(result.steps, protocolText)
     result.steps = grounded.steps
@@ -524,8 +529,12 @@ function deduplicateRecommendations(
 
   for (let i = 0; i < recs.length; i++) {
     const rec = recs[i]
-    // Key by step + original chemical (case-insensitive)
-    const key = `${rec.stepNumber}:${rec.original.chemical.toLowerCase()}`
+    // Same swap (or warning) for the same chemicals collapses across steps.
+    // DMF→MeCN in two steps is one card; hexane→heptane twice is one card.
+    const from = rec.original.chemical.toLowerCase()
+    const to = rec.alternative.chemical.toLowerCase()
+    const kind = rec.cardKind === 'warning' ? 'warning' : 'swap'
+    const key = kind === 'warning' ? `warning:${from}` : `${kind}:${from}:${to}`
     const existing = map.get(key)
 
     if (!existing) {
@@ -837,7 +846,18 @@ export async function analyzeProtocol(
   // Legacy stats remain additive for persisted-result compatibility. Evidence
   // eligibility is established before wording and is never changed by an LLM.
   const reevaluationStats = { confirmed: 0, downgraded: 0, suppressed: 0, failed: 0 }
-  const finalRecommendations = recommendations
+  const acsRecommendations = applyAcsGciprRecommendations({
+    steps: parsed.steps,
+    enrichedChemicals,
+    recommendations,
+  })
+  const finalRecommendations = [
+    ...acsRecommendations,
+    ...buildHazardWarnings({
+      enrichedChemicals,
+      recommendations: acsRecommendations,
+    }),
+  ]
 
   // v0.6: Derive evidence tier and rerank
   for (const rec of finalRecommendations) {

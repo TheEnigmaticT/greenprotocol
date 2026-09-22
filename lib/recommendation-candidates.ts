@@ -7,6 +7,7 @@ import type {
   RecommendationDisposition,
   RecommendationEvidenceAssessment,
 } from '@/lib/types'
+import { lookupAcsGciprSolvent } from '@/lib/acs-gcipr'
 
 export interface BuildEvidenceBackedCandidatesInput {
   steps: AnalysisStep[]
@@ -21,6 +22,23 @@ const keyFor = (occurrenceId: string, alternative: string) => `${occurrenceId}:$
 
 function isSolvent(role: string | undefined): boolean {
   return normalized(role ?? '') === 'solvent'
+}
+
+/**
+ * Parser role labels wobble between solvent, workup, and other.
+ * A catalog hit on name or SMILES covers those. A base, reagent, or
+ * catalyst stays what the parser said, even if the catalog also lists that name.
+ */
+function countsAsSolventSuggestion(
+  role: string | undefined,
+  name: string | undefined,
+  smiles: string | undefined,
+): boolean {
+  if (isSolvent(role)) return true
+  const label = normalized(role ?? '')
+  if (label !== 'workup' && label !== 'other' && label !== '') return false
+  if (!name?.trim() && !smiles?.trim()) return false
+  return lookupAcsGciprSolvent({ name, smiles }) !== null
 }
 
 /**
@@ -231,7 +249,7 @@ export function buildEvidenceBackedCandidates(
   const candidates: EvidenceBackedCandidate[] = []
 
   for (const chemical of input.enrichedChemicals) {
-    if (!chemical.occurrenceId || !chemical.stepNumber || !isSolvent(chemical.role)) continue
+    if (!chemical.occurrenceId || !chemical.stepNumber || !countsAsSolventSuggestion(chemical.role, chemical.name, chemical.smiles)) continue
     const step = stepByNumber.get(chemical.stepNumber)
     if (!step) continue
 
@@ -285,9 +303,7 @@ export function buildHypothesisRecommendation(candidate: EvidenceBackedCandidate
 
   const source = candidate.target.sourceChemical ?? 'unknown solvent'
   const alternative = candidate.proposedAlternative ?? 'unknown alternative'
-  const hypothesisNote = assessment.disposition === 'analogous_only'
-    ? 'Analogous literature only — not eligible to revise this procedure.'
-    : 'Insufficient reaction/procedure evidence — CHEM21/hazard guidance is not application eligibility.'
+  const hypothesisNote = 'Suggestion only. The procedure is not changed.'
 
   return {
     stepNumber: candidate.target.stepNumber,
@@ -296,14 +312,16 @@ export function buildHypothesisRecommendation(candidate: EvidenceBackedCandidate
     severity: 'low',
     original: {
       chemical: source,
-      issue: `Solvent occurrence flagged for greener alternatives (${hypothesisNote})`,
+      issue: `Possible replacement for ${source}.`,
     },
     alternative: {
       chemical: alternative,
-      rationale: assessment.eligibilityReason,
-      yieldImpact: 'Unknown — not established for this exact procedure',
-      caveats: [hypothesisNote, ...(assessment.constraints ?? [])].join(' '),
-      evidenceBasis: 'Hypothesis from catalogue and/or non-applicable literature; deterministic scores remain separate.',
+      rationale: `Consider replacing ${source} with ${alternative}. A solvent catalogue lists ${alternative} as an alternative. This is a suggestion, not proof it works in this step.`,
+      yieldImpact: 'Unknown. Not established for this exact procedure.',
+      caveats: [hypothesisNote, ...(assessment.constraints ?? [])].filter(Boolean).join(' '),
+      evidenceBasis: candidate.anchor === 'chem21'
+        ? 'CHEM21 solvent catalogue. Deterministic scores stay separate.'
+        : 'Solvent catalogue and any non-applicable literature. Deterministic scores stay separate.',
     },
     evidenceAssessment: assessment,
     evidenceCandidateId: candidate.id,

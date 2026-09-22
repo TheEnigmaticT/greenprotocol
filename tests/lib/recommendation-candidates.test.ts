@@ -181,3 +181,56 @@ describe('assembly eligibility gate', () => {
     expect(isEligibleToReviseProcedure(chem21Only.evidenceAssessment)).toBe(false)
   })
 })
+
+describe('catalog solvent names', () => {
+  function chem(name: string, role: string, alternative?: string, smiles?: string): EnrichedChemical {
+    return {
+      name,
+      role,
+      quantity: '',
+      quantityMl: null,
+      quantityKg: null,
+      occurrenceId: `occ:${name}`,
+      stepNumber: 1,
+      smiles,
+      reference_status: 'available',
+      green_alternatives: alternative
+        ? [{ chemical: alternative, source: 'CHEM21', content: 'catalogue alternative' }]
+        : [],
+      citations: [],
+    }
+  }
+
+  const protocolSteps: AnalysisStep[] = [{
+    stepNumber: 1,
+    description: 'Dilute with diethyl ether, then chromatograph in hexane.',
+    chemicals: [],
+    conditions: { temperature: null, duration: null, atmosphere: null },
+  }]
+
+  it('suggests catalog solvents even when the parser says workup or other', () => {
+    const workupParse = [
+      chem('diethyl ether', 'workup', 'Methyl tetrahydrofuran'),
+      chem('hexane', 'other', 'Heptane', 'CCCCCC'),
+      chem('water', 'workup'),
+      chem('potassium carbonate', 'reagent', 'Something else'),
+    ]
+    const solventParse = [
+      chem('diethyl ether', 'solvent', 'Methyl tetrahydrofuran'),
+      chem('hexane', 'solvent', 'Heptane', 'CCCCCC'),
+      chem('water', 'solvent'),
+      chem('potassium carbonate', 'reagent', 'Something else'),
+    ]
+    const names = (rows: EnrichedChemical[]) => buildEvidenceBackedCandidates({
+      steps: protocolSteps,
+      enrichedChemicals: rows,
+      evidenceByCandidate: new Map(),
+    }).map(candidate => `${candidate.target.sourceChemical} -> ${candidate.proposedAlternative}`).sort()
+
+    expect(names(workupParse)).toEqual(names(solventParse))
+    expect(names(workupParse)).toEqual([
+      'diethyl ether -> Methyl tetrahydrofuran',
+      'hexane -> Heptane',
+    ])
+  })
+})

@@ -409,7 +409,7 @@ def _store_profile(
     payload: dict,
     snapshot: dict[str, str],
 ) -> None:
-    hcodes = parse_hcodes_with_details(payload)
+    _found, hcodes = parse_hcodes_with_details(payload)
     codes = [hazard["code"] for hazard in hcodes]
     category_codes = {_category_code(code) for code in codes}
     acute_codes = {"H300", "H301", "H302", "H303", "H310", "H311", "H312", "H313", "H330", "H331", "H332", "H333"}
