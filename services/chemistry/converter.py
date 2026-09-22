@@ -28,11 +28,21 @@ _IDENTIFIABLE_DIAZONIUM = re.compile(
 )
 
 
+# Numbered eluent / solvent mixture strings, e.g. hexane/ethyl acetate (4:1).
+_RATIO_IN_NAME = re.compile(r"\d+\s*:\s*\d+")
+
+
 def is_indefinite_material(name: str) -> bool:
     key = name.lower().strip()
     if key in INDEFINITE_CHEMICALS:
         return True
-    return bool(re.search(r"\bdiazonium\b", key) and not _IDENTIFIABLE_DIAZONIUM.search(key))
+    if re.search(r"\bdiazonium\b", key) and not _IDENTIFIABLE_DIAZONIUM.search(key):
+        return True
+    # Slash mixture with a numeric ratio is an indefinite composition (not a
+    # PubChem miss). Bare slash pairs like aniline/HCl are left alone.
+    if "/" in key and _RATIO_IN_NAME.search(key):
+        return True
+    return False
 
 try:
     from rdkit import Chem

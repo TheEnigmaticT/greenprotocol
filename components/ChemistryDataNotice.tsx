@@ -26,8 +26,13 @@ export default function ChemistryDataNotice({ status }: { status?: ChemistryData
 
   const scoringUnavailable = status.deterministicScoringAvailable === false
   const callOutUnknown = !scoringUnavailable && unknown.length > 0
+  const unresolved = (status.unresolvedChemicals ?? []).filter(name => name.trim())
+  const indefiniteOnly = callOutUnknown && unresolved.length === 0
   const label = formatMaterials(unknown)
   const verb = unknown.length === 1 ? 'is' : 'are'
+  const bodyCopy = indefiniteOnly
+    ? 'We cannot treat mixtures or undefined compositions as a single chemical, so scoring skipped them. Your score may go up or down substantially if you specify them more precisely and rerun.'
+    : 'We scored everything we could identify. Check the spelling, or name it more precisely, and rerun. Your score may go up or down substantially.'
 
   const palette = scoringUnavailable
     ? { background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', body: '#7F1D1D' }
@@ -42,7 +47,7 @@ export default function ChemistryDataNotice({ status }: { status?: ChemistryData
         <>
           <p className="font-semibold">We don&apos;t know what {label} {verb}!</p>
           <p className="mt-1" style={{ color: palette.body }}>
-            We scored everything we could identify. Check the spelling, or name it more precisely, and rerun. Your score may go up or down substantially.
+            {bodyCopy}
           </p>
         </>
       ) : (
