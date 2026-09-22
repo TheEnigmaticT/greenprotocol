@@ -75,7 +75,14 @@ def test_indefinite_material_is_not_sent_to_pubchem_or_marked_missing(monkeypatc
         raise AssertionError("indefinite materials must not be sent to PubChem")
 
     monkeypatch.setattr(converter, "lookup_chemical", fail_lookup)
-    for material in ("brine", "cellulose acetate", "diazonium salt solution", "diazonium salt"):
+    for material in (
+        "brine",
+        "cellulose acetate",
+        "diazonium salt solution",
+        "diazonium salt",
+        "hexane/ethyl acetate (4:1)",
+        "hexane/ethyl acetate 9:1",
+    ):
         result = asyncio.run(converter.convert(material, "100 mL"))
 
         assert result.chemical_name == material
@@ -83,3 +90,6 @@ def test_indefinite_material_is_not_sent_to_pubchem_or_marked_missing(monkeypatc
         assert result.reference_status == "indefinite"
         assert result.quantity_kg is None
         assert any("indefinite composition" in warning for warning in result.warnings)
+
+    # Slash without a numeric ratio is not an indefinite mixture string.
+    assert converter.is_indefinite_material("aniline/HCl") is False
