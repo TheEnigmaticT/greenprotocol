@@ -1,11 +1,15 @@
 import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { assertBenchmarkPath, BENCHMARK_ROOT, exportCorpus, resolveBenchmarkAuth, sanitizeCorpusRecord, validateBenchmarkSupabaseUrl } from '@/scripts/benchmarks/export-corpus'
 import { readBenchmarkFixtureCases } from '@/scripts/benchmarks/run-pipeline-benchmark'
 
 describe('benchmark corpus security boundaries', () => {
+  beforeAll(() => {
+    mkdirSync(BENCHMARK_ROOT, { recursive: true })
+  })
+
   it('uses only an explicitly gated service role credential', () => {
     expect(() => resolveBenchmarkAuth([], { SUPABASE_SERVICE_ROLE_KEY: 'service', GCAI_BENCHMARK_ALLOWED_FIXTURE_IDS: 'a' })).toThrow(/read credential/i)
     expect(resolveBenchmarkAuth(['--service-role'], { SUPABASE_SERVICE_ROLE_KEY: 'service', GCAI_BENCHMARK_ALLOW_SERVICE_ROLE: '1' })).toEqual({ key: 'service', kind: 'service-role' })
