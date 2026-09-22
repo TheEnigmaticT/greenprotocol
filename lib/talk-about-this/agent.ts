@@ -16,6 +16,13 @@ import type { Citation, EvidenceSignalGroup, LiteratureEvidenceMatch } from '@/l
 export const MAX_TOOL_ROUNDS = 4
 export const MAX_TOOL_CALLS_PER_TURN = 3
 const TOOL_CALL_TIMEOUT_MS = 10_000
+
+/** Node AbortSignal.timeout rejects non-integer delays (ERR_OUT_OF_RANGE). */
+export function integerTimeoutMs(ms: number): number {
+  if (!Number.isFinite(ms) || ms <= 0) return 0
+  return Math.floor(ms)
+}
+
 const TOOL_LOOP_TIMEOUT_MS = 12_000
 export type ChatLifecycleEvent = 'activity' | 'delta' | 'tool-start' | 'tool-complete' | 'tool-failed'
 
@@ -613,7 +620,7 @@ export async function runScopedToolChat({
           return
         }
         primaryByFingerprint.set(key, id)
-        const remainingMs = Math.max(0, toolLoopDeadline - performance.now())
+        const remainingMs = integerTimeoutMs(toolLoopDeadline - performance.now())
         const timeoutSignal = AbortSignal.timeout(Math.min(TOOL_CALL_TIMEOUT_MS, remainingMs))
         const toolSignal = AbortSignal.any([requestSignal, timeoutSignal])
         const startedAt = new Date().toISOString()
