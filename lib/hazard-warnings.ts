@@ -73,7 +73,8 @@ export function buildHazardWarnings(input: {
     if (covered(name, input.recommendations)) continue
     if ((chem.green_alternatives?.length ?? 0) > 0) continue
 
-    const acs = lookupAcsGciprSolvent({ name, smiles: chem.smiles ?? undefined })
+    const acsMatch = lookupAcsGciprSolvent({ name, smiles: chem.smiles ?? undefined })
+    const acs = acsMatch?.row
     const ranking = (acs?.adjustedRanking || acs?.defaultRanking || '').trim()
     const rankingBad = /hazard/i.test(ranking) && !/recommended|preferred|acceptable|usable/i.test(ranking)
     const ghs = seriousGhs(chem)

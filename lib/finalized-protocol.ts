@@ -1,5 +1,5 @@
 import { AnalysisResult, Recommendation } from './types'
-import { isEligibleToReviseProcedure } from './recommendation-candidates'
+import { isEligibleToReviseProcedure } from './recommendation-eligibility'
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

@@ -207,7 +207,7 @@ function loadCatalog(): CatalogIndex {
     const avoidanceRaw = get('Avoidance').trim().toUpperCase()
     const avoidance = avoidanceRaw === 'Y' || avoidanceRaw === 'N' ? avoidanceRaw : null
     const solventClasses = FUNCTIONAL_GROUP_COLUMNS.filter(column => get(column).trim().toUpperCase() === 'Y')
-    const caveats = CAVEAT_COLUMNS.flatMap(([column, label]) => {
+    const caveats: { label: string; text: string }[] = CAVEAT_COLUMNS.flatMap(([column, label]) => {
       const text = blankToNull(get(column))
       return text ? [{ label, text }] : []
     })
