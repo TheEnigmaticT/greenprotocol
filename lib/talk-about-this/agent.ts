@@ -503,14 +503,23 @@ export async function runScopedToolChat({
     userNote: 'The tool completed.',
   }
 
-  const diagnosticForResult = (call: ChatToolCall, result: ToolResult): ToolDiagnostic =>
-    result.status === 'ok'
-      ? completedDiagnostic
-      : diagnosticForFailure({
-        tool: call.name as ToolName,
-        source: sourceForTool(call.name as ToolName),
-        abortReason: null,
-      })
+  const diagnosticForResult = (call: ChatToolCall, result: ToolResult): ToolDiagnostic => {
+    if (result.status === 'ok') return completedDiagnostic
+    // A local-index miss is evidence of absence, not a tool failure. Surface it as
+    // a completed not_found receipt so the UI does not flash a red "unavailable".
+    if (result.status === 'not_found') {
+      return {
+        status: 'completed',
+        reasonCode: 'none',
+        userNote: 'The local index has no complete profile for this request.',
+      }
+    }
+    return diagnosticForFailure({
+      tool: call.name as ToolName,
+      source: sourceForTool(call.name as ToolName),
+      abortReason: null,
+    })
+  }
 
   const appendToolComplete = (call: ChatToolCall, result: ToolResult) => {
     if (result.operation === 'literature_evidence') {

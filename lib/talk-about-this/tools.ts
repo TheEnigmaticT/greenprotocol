@@ -31,6 +31,16 @@ const LOCAL_INDEXED_SOLVENTS = [
   'Tetrahydrofuran', 'Toluene', 'Triethylamine', 'Water', 'Xylenes', 'n-Butanol', 'n-Butylacetate', 't-Butanol',
 ] as const
 
+/**
+ * Solvents with a useful complete local PubChem GHS snapshot in solvent-evidence.sqlite.
+ * Empty until the harvest covers real H-codes for catalogue solvents. When empty,
+ * buildChatTools omits lookup_solvent_hazard_profile so Ask cannot spam red
+ * "unavailable" chips for solvents the index does not have.
+ */
+export const LOCAL_SOLVENT_HAZARD_PROFILE_SOLVENTS = [
+  // Intentionally empty for RC: the baked index only has 5 empty-hcode shells.
+] as const
+
 interface BaseScopedToolCall { id: string }
 
 interface ChemicalToolCall extends BaseScopedToolCall {
@@ -168,10 +178,13 @@ export function buildChatTools(context: TalkAboutContext): ChatToolDefinition[] 
         { properties: { mode: { type: 'string', enum: ['mixture_solubility'] }, solute: scopedChemical, solvent: scopedChemical, coSolvent: scopedChemical, fractionSolvent: { type: 'number' }, fractionType: { type: 'string' } }, required: ['mode', 'solute', 'solvent', 'coSolvent', 'fractionSolvent', 'fractionType', 'temperatureK'] },
       ]),
     } },
-    { type: 'function', function: {
-      name: 'lookup_solvent_hazard_profile', description: 'Read the local GHS hazard profile for a locally indexed solvent.',
-      parameters: parameters({ solvent: localSolvent }, ['solvent']),
-    } },
+    ...(LOCAL_SOLVENT_HAZARD_PROFILE_SOLVENTS.length > 0
+      ? [{ type: 'function' as const, function: {
+          name: 'lookup_solvent_hazard_profile' as const,
+          description: 'Read the local GHS hazard profile for a solvent that has a complete local snapshot. Prefer lookup_pubchem_profile when this tool is absent or the solvent is not listed.',
+          parameters: parameters({ solvent: { type: 'string' as const, enum: [...LOCAL_SOLVENT_HAZARD_PROFILE_SOLVENTS] } }, ['solvent']),
+        } }]
+      : []),
     { type: 'function', function: {
       name: 'screen_solvent_candidates', description: 'Screen local solvent candidates against a scoped solute and current solvent at an exact temperature.',
       parameters: parameters({ solute: scopedChemical, currentSolvent: scopedChemical, temperatureK: { type: 'number' } }, ['solute', 'currentSolvent', 'temperatureK']),
@@ -239,7 +252,9 @@ export async function executeScopedTool(context: TalkAboutContext, call: ScopedT
       if (!matches(scoped, call.chemical)) throw new Error('Requested chemical is outside this scoped discussion')
       break
     case 'lookup_solvent_hazard_profile':
-      if (!matches(LOCAL_INDEXED_SOLVENTS, call.solvent)) throw new Error('Requested solvent is outside this scoped discussion')
+      if (!matches(LOCAL_SOLVENT_HAZARD_PROFILE_SOLVENTS, call.solvent)) {
+        throw new Error('Requested solvent has no local GHS hazard snapshot in this release')
+      }
       break
     case 'screen_solvent_candidates':
       if (!matches(scoped, call.solute) || !matches(scoped, call.currentSolvent)) throw new Error('Requested chemical is outside this scoped discussion')
