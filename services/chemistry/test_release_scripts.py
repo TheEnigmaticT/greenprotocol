@@ -112,8 +112,11 @@ def test_candidate_build_submits_asynchronously_and_polls_for_its_immutable_dige
     build = (REPO_ROOT / "scripts" / "build-chemistry-image.sh").read_text()
 
     assert 'builds submit "$SOURCE_DIR" --project "$PROJECT_ID" --tag "$IMAGE" --async' in build
+    assert "grep -oE 'builds/[0-9a-f-]{36}'" in build
+    assert 'head -n 1' in build
     assert 'builds describe "$BUILD_ID" --project "$PROJECT_ID"' in build
     assert 'Cloud Build did not finish successfully' in build
+    assert "sed -n 's#.*builds/" not in build
 
 
 def test_staging_deploy_uses_the_same_image_name_as_the_production_candidate():
