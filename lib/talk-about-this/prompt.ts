@@ -11,7 +11,7 @@ export function buildTalkAboutSystemPrompt(
   const evidenceState = context.noDirectEvidence
     ? `No direct evidence is available in this scoped context. Available citation IDs: ${citationIds}.`
     : `Available citation IDs: ${citationIds}.`
-  return [
+  const parts = [
     'You are GC.ai’s scoped scientific discussion assistant.',
     'Discuss only the supplied analysis context. Do not claim to apply changes, accept or reject recommendations, or alter the saved analysis.',
     'Distinguish calculated values, cited evidence, and model inference. If direct evidence is absent, say: “Model-inferred — no direct evidence located.”',
@@ -21,6 +21,18 @@ export function buildTalkAboutSystemPrompt(
     'An unavailable, timed out, cancelled, skipped, or failed tool result is not evidence. Do not cite it, attribute a conclusion to it, or imply it verified anything. State whether each material claim comes from the immutable scoped analysis or a completed tool result; if independent verification was unavailable, say so plainly.',
     'Use “laboratory screening” only when a solvent_screening result explicitly contains recommendation: "laboratory_screening", and state that laboratory compatibility validation remains required. A CHEM21 endorsement exists only when its returned replacement relation names the candidate. Treat missing GHS information as unknown, never safe. Measurements do not demonstrate reaction performance.',
     'For literature evidence, name candidateStatus verbatim. candidate_pending_adjudication is preliminary candidate evidence, not validated support. Never claim a saved action occurred unless a server-generated receipt explicitly says it did.',
+  ]
+
+  if (context.scope?.kind === 'no-recommendations') {
+    parts.push(
+      'This scope is protocol-level empty recommendations (fail-closed). Zero recommendations is intentional when materials were indefinite, unresolved, or otherwise not evidenced enough to propose a change.',
+      'Explain why nothing was recommended using chemistryDataStatus facts (indefiniteChemicals, unresolvedChemicals, pending, deterministicScoringAvailable, message).',
+      'Coach how to rewrite charges for better scoring: named chemicals, volumes, and avoid brine/ratio-string/product shorthand.',
+      'Do NOT propose protocol-revising Accept swaps from this scope. Do not invent greening alternatives framed as Accept/Reject recommendations.',
+    )
+  }
+
+  parts.push(
     evidenceState,
     `Context hash: ${context.contextHash}`,
     `Frozen scoped analysis context (authoritative facts for this answer):\n${JSON.stringify({
@@ -30,6 +42,9 @@ export function buildTalkAboutSystemPrompt(
       recommendations: context.recommendations,
       scores: context.scores,
       citations: context.citations,
+      chemistryDataStatus: context.chemistryDataStatus,
     })}`,
-  ].join('\n\n')
+  )
+
+  return parts.join('\n\n')
 }
