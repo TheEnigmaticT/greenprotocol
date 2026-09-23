@@ -60,7 +60,7 @@ const opportunities = [
     number: '01',
     title: 'Volunteer for a pilot',
     body: 'Use GreenChemistry.ai on the work you already do, then tell us what is useful, confusing, or missing.',
-    href: '/beyondbenign',
+    href: '/pilot-signup',
     cta: 'OPEN PILOT SURVEY →',
   },
   {
