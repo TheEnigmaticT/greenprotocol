@@ -1,59 +1,53 @@
 ---
-title: "GreenChemistry.ai 0.8: Recommendations That Show Their Work"
+title: "GreenChemistry.ai 0.8: The Version Where We Stop Guessing"
 slug: "greenchemistry-0-8-evidence-backed-recommendations"
 date: "2026-09-23T15:00:00Z"
-excerpt: "Version 0.8 ships evidence-backed Accept, Reject, and Ask cards, clearer empty states, and a full move of AI decisions onto local-quality models — OpenRouter with zero data retention by default, or your own hardware if you prefer."
+excerpt: "GreenChemistry.ai 0.8 keeps a plausible chemical suggestion from becoming a recommendation until it can explain why it belongs in this reaction."
 draft: false
 ---
 
-GreenChemistry.ai 0.8 is live.
+A chemically plausible suggestion is cheap. A recommendation you can put in a lab notebook is harder.
 
-This release is about one design choice: greening advice should be usable in a lab notebook only when we can show why it applies to *this* reaction.
+That is the whole point of 0.8.
 
-## Evidence-backed recommendations
+Green chemistry software has an easy failure mode. It sees a bad solvent, finds a greener one in a database, and acts like the job is done. But reactions don't happen in databases. The replacement has to make sense for the actual charge, conditions, and chemistry in front of you. If we can't make that case, we shouldn't put the suggestion in front of you as an answer.
 
-The recommendation engine now classifies proposed changes into three explicit outcomes:
+## The cards have to earn their labels
 
-- **Accept** — a substitution or change with matching literature or database evidence for the current reaction context
-- **Reject** — a candidate we evaluated and declined to promote, with the reason kept visible
-- **Ask** — a direction that needs your judgment, more detail, or a clearer charge before it can be scored as a greening move
+Recommendations now land in one of three places:
 
-Accept is fail-closed. Plausible-sounding swaps without a matching evidence path do not become Accept cards. Papers and analogous cases can still inform the conversation, but they do not quietly upgrade into a green light for your protocol.
+- **Accept** means we found evidence that fits the reaction context.
+- **Reject** means the system considered a change and declined to recommend it. You can see why.
+- **Ask** means the system needs a scientist to clarify something before it can responsibly go further.
 
-Scoring remains deterministic where it always was. ACS GCIPR-aligned waste and solvent framing, hazard-aware warnings, and material identity cleanup sit underneath the cards so the UI names chemicals the way a chemist wrote them, not the way a parser first saw them.
+Accept is fail-closed. A swap that sounds good but doesn't have a matching evidence path doesn't get an Accept card. It can still be part of the conversation. It doesn't get to masquerade as permission.
 
-## Local-quality models for every AI decision
+The scoring behind those cards remains deterministic. Waste, solvent framing, hazard warnings, and material cleanup don't get recalculated by a chat model because it wrote a convincing sentence. They are separate jobs, and they stay separate.
 
-Every AI decision in the product now runs on a local-quality model.
+## The system tells you when it has nothing
 
-By default we route those calls through OpenRouter to a local-quality model under a zero data retention policy. Protocol text and analysis context are not kept by the provider for training or long-term storage under that path.
+An empty recommendation screen used to leave too much room for interpretation. Did the analysis go well? Did it miss the chemistry? Did something break?
 
-If you want the same class of model entirely under your control, you can run it on your own hardware. The product is built so the hosted OpenRouter path and a self-hosted path are the same decision surface — only where the weights live changes.
+Now it says what happened.
 
-Deterministic scoring math still does not go through a chat model. The boundary is deliberate: numbers stay numbers; language and classification decisions use local-quality models with a privacy-first default.
+If a material isn't scored, an identity is too vague, or the charge doesn't contain enough detail to ground a replacement, the product holds the card back and tells you what would make the analysis better. That could mean naming a material more precisely, adding the charge, or leaving a ratio mixture alone because that's all the procedure gives us.
 
-## When there is nothing to recommend
+"Hexane/ethyl acetate 7:3" stays a mixture. We're not going to invent separate component charges and then pretend we know what a greener chromatography system looks like for a procedure that never gave us that information.
 
-Silence is not the same as success.
+That restraint matters. Silence can be a useful answer when it has an explanation attached.
 
-If the engine cannot produce Accept or Reject cards — for example when materials are unscored, identity is indefinite, or the charge is too incomplete to ground a swap — you now get an explicit empty state. It explains what was held back and points Ask at the right questions: clarify the material, tighten the charge, or decide whether a ratio mixture should stay as written.
+## Ask now does its job
 
-Common lab eluents such as hexane/ethyl acetate written as a ratio stay intact as indefinite mixtures. We do not invent component-level greening for a chromatography solvent that was never specified as separate charges.
+Ask (Talk About This) is for the conversation after the score. Why did a grade move? What does this warning mean? What information would let the system evaluate this part of the protocol?
 
-## Ask is part of the workflow
+The turn now has enough room to finish its tool lookups and answer. When a solvent hazard profile is not in the local evidence pack yet, Ask no longer throws a false unavailable error. Hazard lookup stays gated until the data is there. A half-answer with a reassuring interface is worse than a plain limitation.
 
-Ask (Talk About This) is meant for the follow-up that happens after the score: why a grade moved, what a warning means, how to rephrase a material so it resolves.
+## Models get a boundary too
 
-In 0.8 the conversation turn has enough budget to finish tool lookups and still answer. When a solvent hazard profile is not yet in our local evidence pack, Ask stays calm instead of flashing a false “unavailable” failure. Full local GHS coverage for common solvents is still being harvested; until that pack is complete, hazard lookup stays gated rather than half-broken.
+The product uses models for language and classification work. It doesn't hand them the math.
 
-## What stayed the same
+Our default route runs model calls through OpenRouter under its zero-data-retention policy, so protocol text and analysis context are not retained for training or long-term storage through that path. Teams that want to run the same decision work under their own control can use their own hardware instead.
 
-- Deterministic scoring math is not delegated to a chat model
-- Production still ships only through the release path you approve
-- The product goal is still the same: help researchers move protocols toward safer, lower-waste options without pretending certainty we do not have
+That's not a marketing checkbox. Chemistry teams have to know which part of a system is calculating, which part is interpreting, and where their protocol goes. Otherwise they're being asked to trust a black box while calling it evidence.
 
-## Try it
-
-Open a protocol on [GreenChemistry.ai](https://greenchemistry.ai), run an analysis, and read the recommendation cards before you open Ask. If a card is missing, the empty state should tell you why — that is intentional.
-
-We will keep tightening evidence coverage, solvent identity, and hazard data in follow-up releases. Version 0.8 is the point where the product refuses to overclaim.
+Open a protocol on [GreenChemistry.ai](https://greenchemistry.ai), run the analysis, then read the cards before opening Ask. If a card is missing, 0.8 should tell you why. That is the version change.
