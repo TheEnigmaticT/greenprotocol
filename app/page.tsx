@@ -168,6 +168,10 @@ export default function LandingPage() {
                 color:C.cream, fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,
                 letterSpacing:'0.06em', textDecoration:'none', display:'block',
               }}>BLOG</Link>
+              <Link href="/careers" style={{
+                color:C.cream, fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,
+                letterSpacing:'0.06em', textDecoration:'none', display:'block',
+              }}>CAREERS</Link>
               <Link href={NEW_ANALYSIS_HREF} style={{
                 background:C.gold, color:C.black,
                 fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,
