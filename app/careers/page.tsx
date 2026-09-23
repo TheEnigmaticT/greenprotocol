@@ -55,26 +55,34 @@ function Mark({ size = 32 }: { size?: number }) {
   )
 }
 
-const disciplines = [
+const opportunities = [
   {
     number: '01',
-    title: 'Chemistry & scientific data',
-    body: 'You care about methods, evidence quality, and what makes a recommendation defensible at the bench.',
+    title: 'Volunteer for a pilot',
+    body: 'Use GreenChemistry.ai on the work you already do, then tell us what is useful, confusing, or missing.',
+    href: '/beyondbenign',
+    cta: 'OPEN PILOT SURVEY →',
   },
   {
     number: '02',
-    title: 'Product engineering',
-    body: 'You can turn complex scientific work into durable, legible software without hiding uncertainty.',
+    title: 'Technical advisor',
+    body: 'Help shape the scientific, technical, and product decisions behind an evidence-first chemistry tool.',
+    href: 'mailto:hello@greenchemistry.ai?subject=GreenChemistry.ai%20technical%20advisor',
+    cta: 'EXPRESS INTEREST →',
   },
   {
     number: '03',
-    title: 'Design & research workflows',
-    body: 'You make technical tools easier to trust, learn, and use in the middle of real research work.',
+    title: 'AI engineer at CrowdTamers',
+    body: 'Build practical AI systems for scientific and sustainability work, with GreenChemistry.ai among the products they support.',
+    href: 'mailto:hello@greenchemistry.ai?subject=CrowdTamers%20AI%20engineer',
+    cta: 'INTRODUCE YOURSELF →',
   },
   {
     number: '04',
-    title: 'Lab & industry partnerships',
-    body: 'You know how to connect a useful tool to the people and institutions doing consequential chemistry.',
+    title: 'Other ways to help',
+    body: 'If you have a useful perspective, partnership, or contribution that does not fit a listed route, we still want to hear from you.',
+    href: 'mailto:hello@greenchemistry.ai?subject=Helping%20GreenChemistry.ai',
+    cta: 'START A CONVERSATION →',
   },
 ]
 
@@ -161,16 +169,17 @@ export default function CareersPage() {
       <section style={{ background: C.cream, padding: '6rem 0' }}>
         <div className="careers-grid">
           <div className="career-section-heading" style={{ borderTop: `1px solid ${C.creamDark}`, paddingTop: '1rem' }}>
-            <div style={{ fontFamily: MONO, color: C.goldDark, fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Where you fit</div>
-            <h2 style={{ fontFamily: MONO, color: C.forest, fontSize: 'clamp(1.8rem, 3.3vw, 3rem)', fontWeight: 700, lineHeight: 0.93, letterSpacing: '-0.03em', margin: '0.75rem 0 0' }}>We hire for the work, not a narrow template.</h2>
+            <div style={{ fontFamily: MONO, color: C.goldDark, fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Get involved</div>
+            <h2 style={{ fontFamily: MONO, color: C.forest, fontSize: 'clamp(1.8rem, 3.3vw, 3rem)', fontWeight: 700, lineHeight: 0.93, letterSpacing: '-0.03em', margin: '0.75rem 0 0' }}>Choose the contribution that fits.</h2>
           </div>
           <div className="career-section-content" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1px', background: '#C8C2B0' }}>
-            {disciplines.map(({ number, title, body }) => (
-              <article key={number} style={{ background: C.cream, padding: '1.5rem', minHeight: '185px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            {opportunities.map(({ number, title, body, href, cta }) => (
+              <article key={number} style={{ background: C.cream, padding: '1.5rem', minHeight: '210px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <span style={{ fontFamily: MONO, color: C.goldDark, fontSize: '0.7rem', fontWeight: 700 }}>{number}</span>
                 <div>
                   <h3 style={{ fontFamily: SERIF, color: C.forest, fontSize: '1.05rem', margin: '0 0 0.7rem' }}>{title}</h3>
                   <p style={{ color: C.mid, fontSize: '0.88rem', lineHeight: 1.65, margin: 0 }}>{body}</p>
+                  <Link href={href} style={{ display: 'inline-block', marginTop: '1rem', color: C.vivid, fontFamily: MONO, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', textDecoration: 'underline', textUnderlineOffset: '3px' }}>{cta}</Link>
                 </div>
               </article>
             ))}
@@ -200,12 +209,12 @@ export default function CareersPage() {
       <section style={{ background: C.sage, padding: '6rem 0' }}>
         <div className="careers-grid" style={{ alignItems: 'center' }}>
           <div className="career-apply-copy" style={{ borderTop: `2px solid ${C.forest}`, paddingTop: '1.5rem' }}>
-            <div style={{ fontFamily: MONO, color: C.forest, fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Start a conversation</div>
-            <h2 style={{ fontFamily: MONO, color: C.forest, fontSize: 'clamp(2rem, 4vw, 3.6rem)', fontWeight: 700, lineHeight: 0.92, letterSpacing: '-0.035em', margin: '1rem 0 0' }}>Tell us what you would make possible.</h2>
+            <div style={{ fontFamily: MONO, color: C.forest, fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Bring another route</div>
+            <h2 style={{ fontFamily: MONO, color: C.forest, fontSize: 'clamp(2rem, 4vw, 3.6rem)', fontWeight: 700, lineHeight: 0.92, letterSpacing: '-0.035em', margin: '1rem 0 0' }}>Have another way to help?</h2>
           </div>
           <div className="career-apply-action">
-            <p style={{ fontFamily: SERIF, color: C.forest, fontSize: '1rem', lineHeight: 1.75, margin: 0, maxWidth: '39ch' }}>Send a note with your background, the problem you are drawn to, and work that shows how you think. We read every thoughtful application.</p>
-            <a href="mailto:hello@greenchemistry.ai?subject=Joining%20GreenChemistry.ai" style={{ display: 'inline-block', marginTop: '2rem', background: C.forest, color: C.cream, fontFamily: MONO, fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.06em', padding: '1rem 1.35rem', textDecoration: 'none' }}>INTRODUCE YOURSELF →</a>
+            <p style={{ fontFamily: SERIF, color: C.forest, fontSize: '1rem', lineHeight: 1.75, margin: 0, maxWidth: '39ch' }}>If you can strengthen this work in a way the listed routes do not capture, send a note with the perspective, partnership, or contribution you have in mind.</p>
+            <a href="mailto:hello@greenchemistry.ai?subject=Helping%20GreenChemistry.ai" style={{ display: 'inline-block', marginTop: '2rem', background: C.forest, color: C.cream, fontFamily: MONO, fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.06em', padding: '1rem 1.35rem', textDecoration: 'none' }}>START A CONVERSATION →</a>
             <p style={{ fontFamily: MONO, color: C.forest, fontSize: '0.65rem', letterSpacing: '0.05em', margin: '0.9rem 0 0', opacity: 0.8 }}>hello@greenchemistry.ai</p>
           </div>
         </div>
