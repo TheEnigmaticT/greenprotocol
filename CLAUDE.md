@@ -1,6 +1,8 @@
 # GreenChemistry.ai
 
-AI-powered green chemistry protocol optimizer for LabreNew.org.
+AI-powered green chemistry protocol optimizer.
+
+**Branding:** GreenChemistry.ai is an independent company, completely separate from LabreNew.org. Never describe, label, or credit it as a LabreNew initiative or project.
 
 ## Commands
 - `npm run dev` — dev server (port 3000)

@@ -173,9 +173,7 @@ export default async function PublicProfilePage({ params }: Props) {
 
       <footer className="border-t px-6 py-8 text-center" style={{ borderColor: '#D6D0C4' }}>
         <p className="text-sm" style={{ color: '#78716C' }}>
-          Built for{' '}
-          <span className="font-semibold" style={{ color: '#1C3822' }}>LabreNew.org</span>
-          {' '}&mdash; Green chemistry recommendations require experimental validation before adoption.
+          Green chemistry recommendations require experimental validation before adoption.
         </p>
       </footer>
     </div>

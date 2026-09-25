@@ -984,7 +984,7 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
 
       {/* ══════════════════════════════════════════════════════
           FOOTER — near-black
-          Light logo. Legal. LabreNew attribution. Hairline top.
+          Light logo. Legal. Hairline top.
       ══════════════════════════════════════════════════════ */}
       <footer style={{background:C.black, borderTop:`1px solid ${C.forest}`}}>
         <div className="g" style={{paddingTop:'2.5rem', paddingBottom:'2.5rem'}}>
@@ -1005,12 +1005,6 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
             </div>
             <div style={{fontFamily:MONO, fontSize:'0.65rem', color:'#4A6B58', letterSpacing:'0.04em'}}>
               Recommendations require experimental validation.
-            </div>
-            <div style={{fontFamily:MONO, fontSize:'0.65rem', letterSpacing:'0.04em'}}>
-              <a href="https://labrenew.org" target="_blank" rel="noopener noreferrer"
-                style={{color:C.sage, textDecoration:'underline', textUnderlineOffset:'2px'}}>
-                Built with LabreNew.org
-              </a>
             </div>
           </div>
         </div>

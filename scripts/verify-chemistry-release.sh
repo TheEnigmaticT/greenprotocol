@@ -9,18 +9,24 @@ DEPLOY_ENV="${DEPLOY_ENV:-}"
 EXPECTED_GIT_SHA="${GIT_SHA:-}"
 [[ "$EXPECTED_GIT_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "GIT_SHA must be a full 40-character commit SHA."
 
-# Candidate routing is staging-only and must be requested explicitly. Validate it
-# before resolving gcloud so bad release inputs cannot contact cloud services.
+# Candidate routing expectations (validated before gcloud so bad release inputs
+# cannot contact cloud services):
+# - staging: optional via STAGING_ENGINE_CANDIDATE=1
+# - production: always expects OpenRouter Qwen candidate bindings (no Claude fallback)
+REQUIRED_OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
+REQUIRED_PRODUCTION_MODEL="qwen/qwen3.8-27b"
 STAGING_ENGINE_CANDIDATE="${STAGING_ENGINE_CANDIDATE:-}"
+EXPECT_CANDIDATE=""
 EXPECTED_CANDIDATE_BASE_URL=""
 EXPECTED_CANDIDATE_MODEL=""
 if [[ "$DEPLOY_ENV" == "staging" ]]; then
   [[ -z "$STAGING_ENGINE_CANDIDATE" || "$STAGING_ENGINE_CANDIDATE" == "1" ]] || \
     fail "STAGING_ENGINE_CANDIDATE must be 1 or unset."
   if [[ "$STAGING_ENGINE_CANDIDATE" == "1" ]]; then
-    EXPECTED_CANDIDATE_BASE_URL="${STAGING_OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
-    [[ "$EXPECTED_CANDIDATE_BASE_URL" == "https://openrouter.ai/api/v1" ]] || \
-      fail "STAGING_OPENROUTER_BASE_URL must be the exact https://openrouter.ai/api/v1 candidate endpoint."
+    EXPECT_CANDIDATE=1
+    EXPECTED_CANDIDATE_BASE_URL="${STAGING_OPENROUTER_BASE_URL:-$REQUIRED_OPENROUTER_BASE_URL}"
+    [[ "$EXPECTED_CANDIDATE_BASE_URL" == "$REQUIRED_OPENROUTER_BASE_URL" ]] || \
+      fail "STAGING_OPENROUTER_BASE_URL must be the exact ${REQUIRED_OPENROUTER_BASE_URL} candidate endpoint."
     EXPECTED_CANDIDATE_MODEL="${STAGING_OPENROUTER_MODEL:-}"
     [[ "$EXPECTED_CANDIDATE_MODEL" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]*$ ]] || \
       fail "STAGING_OPENROUTER_MODEL is required and must be a provider/model identifier when STAGING_ENGINE_CANDIDATE=1."
@@ -30,6 +36,13 @@ else
     fail "STAGING_ENGINE_CANDIDATE is allowed only for DEPLOY_ENV=staging."
   [[ -z "${STAGING_OPENROUTER_BASE_URL:-}" ]] || \
     fail "STAGING_OPENROUTER_BASE_URL is allowed only for DEPLOY_ENV=staging."
+  EXPECT_CANDIDATE=1
+  EXPECTED_CANDIDATE_BASE_URL="${PRODUCTION_OPENROUTER_BASE_URL:-$REQUIRED_OPENROUTER_BASE_URL}"
+  [[ "$EXPECTED_CANDIDATE_BASE_URL" == "$REQUIRED_OPENROUTER_BASE_URL" ]] || \
+    fail "PRODUCTION_OPENROUTER_BASE_URL must be the exact ${REQUIRED_OPENROUTER_BASE_URL} candidate endpoint."
+  EXPECTED_CANDIDATE_MODEL="${PRODUCTION_OPENROUTER_MODEL:-$REQUIRED_PRODUCTION_MODEL}"
+  [[ "$EXPECTED_CANDIDATE_MODEL" == "$REQUIRED_PRODUCTION_MODEL" ]] || \
+    fail "PRODUCTION_OPENROUTER_MODEL must be exactly ${REQUIRED_PRODUCTION_MODEL} (production is Qwen-only; no Claude fallback)."
 fi
 
 REGION="${REGION:-us-central1}"
@@ -108,16 +121,16 @@ if expect_candidate == "1":
     }
     for name, value in expected_runtime.items():
         if runtime_env.get(name) != value:
-            raise SystemExit(f"Candidate runtime binding {name} does not match the requested staging value.")
+            raise SystemExit(f"Candidate runtime binding {name} does not match the requested release value.")
 elif candidate_names.intersection(runtime_env):
-    raise SystemExit("Candidate runtime bindings are present without an explicit staging candidate request.")
+    raise SystemExit("Candidate runtime bindings are present without an explicit candidate request.")
 url = service.get("status", {}).get("url")
 if not url or not revision:
     raise SystemExit("Cloud Run service has no ready URL or revision.")
 print(f"revision={revision}")
 print(f"service_url={url}")
 print("secret_bindings=" + ",".join(f"{k}:{secret_names[k]}" for k in sorted(expected_secrets)))
-' "$EXPECTED_GIT_SHA" "$DEPLOY_ENV" "$RUNTIME_SERVICE_ACCOUNT" "$TOKEN_SECRET" "$SUPABASE_URL_SECRET" "$SUPABASE_SERVICE_ROLE_SECRET" "$PROVIDER_KEY_SECRET" "$STAGING_ENGINE_CANDIDATE" "$EXPECTED_CANDIDATE_MODEL" "$EXPECTED_CANDIDATE_BASE_URL" <<<"$SERVICE_JSON"
+' "$EXPECTED_GIT_SHA" "$DEPLOY_ENV" "$RUNTIME_SERVICE_ACCOUNT" "$TOKEN_SECRET" "$SUPABASE_URL_SECRET" "$SUPABASE_SERVICE_ROLE_SECRET" "$PROVIDER_KEY_SECRET" "$EXPECT_CANDIDATE" "$EXPECTED_CANDIDATE_MODEL" "$EXPECTED_CANDIDATE_BASE_URL" <<<"$SERVICE_JSON"
 
 SERVICE_URL="$("$GCLOUD" run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
 curl --fail --silent --show-error "$SERVICE_URL/health" >/dev/null

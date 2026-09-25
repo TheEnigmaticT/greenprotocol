@@ -57,7 +57,7 @@ export interface ChatCompletionStreamRequest {
   provider?: {
     data_collection: 'deny'
     zdr: true
-    allow_fallbacks: false
+    allow_fallbacks: true
   }
   reasoning?: {
     effort: 'minimal'
@@ -197,10 +197,14 @@ export function createOpenAICompatibleChatProvider(
       }
 
       if (new URL(config.baseUrl).hostname === 'openrouter.ai') {
+        // Privacy is enforced by zdr + data_collection, which filter the eligible
+        // endpoint set; fallbacks only move between endpoints that pass that filter.
+        // allow_fallbacks:false pinned every request to one ZDR host, so a single
+        // host's rate limit (HTTP 429 "Provider returned error") failed every chat.
         completionRequest.provider = {
           data_collection: 'deny',
           zdr: true,
-          allow_fallbacks: false,
+          allow_fallbacks: true,
         }
         completionRequest.reasoning = { effort: 'minimal' }
       }
