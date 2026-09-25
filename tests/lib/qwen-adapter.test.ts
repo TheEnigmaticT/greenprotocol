@@ -102,6 +102,33 @@ describe('Qwen OpenAI-compatible transport', () => {
     expect(wireRequest.tools[0].function.parameters).toBe(schema)
   })
 
+  it('restricts production candidate OpenRouter calls to zero-data-retention endpoints', async () => {
+    // Mirrors the production Vercel configuration set on 2026-09-25.
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    vi.stubEnv('GCAI_LLM_BASE_URL', 'https://openrouter.ai/api/v1')
+    vi.stubEnv('GCAI_LLM_MODEL', 'qwen/qwen3.8-27b')
+    vi.stubEnv('GCAI_LLM_API_KEY', 'candidate-openrouter-key')
+    mocks.create.mockResolvedValue(SUCCESS)
+
+    await callQwen<{ answer: string }>(request())
+
+    const wireRequest = mocks.create.mock.calls[0][0] as { model: string; provider?: unknown }
+    expect(wireRequest.model).toBe('qwen/qwen3.8-27b')
+    expect(wireRequest.provider).toEqual({ data_collection: 'deny', zdr: true, allow_fallbacks: true })
+  })
+
+  it('does not send OpenRouter provider preferences to a self-hosted endpoint', async () => {
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    vi.stubEnv('GCAI_LLM_BASE_URL', 'http://127.0.0.1:8080/v1')
+    vi.stubEnv('GCAI_LLM_MODEL', 'local/qwen-candidate')
+    vi.stubEnv('GCAI_LLM_API_KEY', 'local-key')
+    mocks.create.mockResolvedValue(SUCCESS)
+
+    await callQwen<{ answer: string }>(request())
+
+    expect((mocks.create.mock.calls[0][0] as { provider?: unknown }).provider).toBeUndefined()
+  })
+
   it('uses only the explicit candidate local endpoint, model, and key', async () => {
     vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
     vi.stubEnv('GCAI_LLM_BASE_URL', 'http://127.0.0.1:8080/v1')

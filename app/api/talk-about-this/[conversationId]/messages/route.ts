@@ -18,7 +18,10 @@ import { approveScopedRecommendation, isExplicitScopedApprovalRequest } from '@/
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+// Platform ceiling. Must stay well above TOOL_LOOP_TIMEOUT_MS (lib/talk-about-this/agent.ts)
+// so the turn's own graceful deadline fires first and returns partial tool results,
+// instead of Vercel hard-killing the request mid-turn.
+export const maxDuration = 300
 
 const MAX_RETRIEVAL_ATTEMPTS = 5
 const TERMINAL_DIAGNOSTIC_SETTLEMENT_MS = 250
