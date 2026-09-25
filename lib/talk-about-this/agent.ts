@@ -22,8 +22,15 @@ export const TOOL_CALL_TIMEOUT_MS = 10_000
  * Must stay meaningfully above TOOL_CALL_TIMEOUT_MS: a single 10s tool used to
  * leave only ~2s for the final answer under the old 12s loop, which aborted the
  * response and surfaced sibling local tools (e.g. solvent hazard) as unavailable.
+ *
+ * Must also stay well BELOW the messages route's Vercel maxDuration (300s): at
+ * 60s/60s the platform killed the request before this graceful deadline could
+ * fire, so slower dense models (qwen3.8-27b) produced a dead chat instead of a
+ * partial answer. Pre-loop work (auth, context load, persistence) needs headroom.
  */
-export const TOOL_LOOP_TIMEOUT_MS = 60_000
+export const TOOL_LOOP_TIMEOUT_MS = 90_000
+/** Vercel maxDuration of app/api/talk-about-this/[conversationId]/messages/route.ts. */
+export const MESSAGES_ROUTE_MAX_DURATION_S = 300
 
 /** Node AbortSignal.timeout rejects non-integer delays (ERR_OUT_OF_RANGE). */
 export function integerTimeoutMs(ms: number): number {

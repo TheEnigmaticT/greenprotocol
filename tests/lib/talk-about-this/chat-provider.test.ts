@@ -90,8 +90,15 @@ describe('createOpenAICompatibleChatProvider', () => {
 
     expect(create.mock.calls[0][0]).toMatchObject({
       model: 'qwen/qwen3.6-35b-a3b',
-      provider: { data_collection: 'deny', zdr: true, allow_fallbacks: false },
+      provider: { data_collection: 'deny', zdr: true, allow_fallbacks: true },
       reasoning: { effort: 'minimal' },
+    })
+    // Exact match: fallbacks are allowed ONLY because zdr + data_collection:deny
+    // restrict the eligible set. Dropping either privacy field must fail this test.
+    expect(create.mock.calls[0][0].provider).toEqual({
+      data_collection: 'deny',
+      zdr: true,
+      allow_fallbacks: true,
     })
   })
 
