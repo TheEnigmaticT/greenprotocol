@@ -21,6 +21,9 @@ def run_script(script: Path, extra_env: dict[str, str] | None = None) -> subproc
         "STAGING_OPENROUTER_MODEL",
         "STAGING_OPENROUTER_BASE_URL",
         "STAGING_CHEMISTRY_SERVICE_TOKEN",
+        "PRODUCTION_OPENROUTER_MODEL",
+        "PRODUCTION_OPENROUTER_BASE_URL",
+        "PRODUCTION_CHEMISTRY_SERVICE_TOKEN",
     ):
         env.pop(key, None)
     env.update(extra_env or {})
@@ -280,7 +283,7 @@ def test_staging_candidate_deploy_binds_the_openrouter_and_gcai_runtime_flags(tm
     assert "--remove-env-vars" not in deploy
 
 
-def test_production_deploy_keeps_the_legacy_model_without_candidate_runtime_flags(tmp_path):
+def test_production_deploy_requires_openrouter_qwen_candidate_runtime_flags(tmp_path):
     fake_gcloud, log = install_fake_gcloud(tmp_path)
 
     result = run_script(
@@ -299,10 +302,78 @@ def test_production_deploy_keeps_the_legacy_model_without_candidate_runtime_flag
     assert result.returncode == 0, result.stderr
     deploy = log.read_text()
     assert "run deploy greenchemistry-chemistry" in deploy
-    assert "OPENROUTER_MODEL=anthropic/claude-sonnet-4.5" in deploy
-    assert "GCAI_ENGINE_CANDIDATE" not in deploy
-    assert "GCAI_LLM_BASE_URL" not in deploy
-    assert "GCAI_LLM_MODEL" not in deploy
+    assert "OPENROUTER_MODEL=qwen/qwen3.8-27b" in deploy
+    assert "GCAI_ENGINE_CANDIDATE=1" in deploy
+    assert "GCAI_LLM_BASE_URL=https://openrouter.ai/api/v1" in deploy
+    assert "GCAI_LLM_MODEL=qwen/qwen3.8-27b" in deploy
+    assert "anthropic/claude-sonnet-4.5" not in deploy
+    assert "--remove-env-vars" not in deploy
+
+
+def test_production_deploy_rejects_a_non_qwen_openrouter_model_before_contacting_gcloud(tmp_path):
+    fake_gcloud, log = install_fake_gcloud(tmp_path)
+
+    result = run_script(
+        DEPLOY_SCRIPT,
+        {
+            "DEPLOY_ENV": "production",
+            "GIT_SHA": release_sha(),
+            "IMAGE_DIGEST": "sha256:" + "e" * 64,
+            "GITHUB_ACTIONS": "true",
+            "RELEASE_AUTHORITY": "approved-production-release",
+            "PRODUCTION_OPENROUTER_MODEL": "anthropic/claude-sonnet-4.5",
+            "GCLOUD": str(fake_gcloud),
+            "FAKE_GCLOUD_LOG": str(log),
+        },
+    )
+
+    assert result.returncode != 0
+    assert "PRODUCTION_OPENROUTER_MODEL must be exactly qwen/qwen3.8-27b" in result.stderr
+    assert not log.exists()
+
+
+def test_production_deploy_rejects_a_non_openrouter_candidate_base_url_before_contacting_gcloud(tmp_path):
+    fake_gcloud, log = install_fake_gcloud(tmp_path)
+
+    result = run_script(
+        DEPLOY_SCRIPT,
+        {
+            "DEPLOY_ENV": "production",
+            "GIT_SHA": release_sha(),
+            "IMAGE_DIGEST": "sha256:" + "f" * 64,
+            "GITHUB_ACTIONS": "true",
+            "RELEASE_AUTHORITY": "approved-production-release",
+            "PRODUCTION_OPENROUTER_BASE_URL": "https://openrouter.ai/api",
+            "GCLOUD": str(fake_gcloud),
+            "FAKE_GCLOUD_LOG": str(log),
+        },
+    )
+
+    assert result.returncode != 0
+    assert "PRODUCTION_OPENROUTER_BASE_URL must be the exact https://openrouter.ai/api/v1" in result.stderr
+    assert not log.exists()
+
+
+def test_production_deploy_still_rejects_staging_candidate_inputs(tmp_path):
+    fake_gcloud, log = install_fake_gcloud(tmp_path)
+
+    result = run_script(
+        DEPLOY_SCRIPT,
+        {
+            "DEPLOY_ENV": "production",
+            "GIT_SHA": release_sha(),
+            "IMAGE_DIGEST": "sha256:" + "1" * 64,
+            "GITHUB_ACTIONS": "true",
+            "RELEASE_AUTHORITY": "approved-production-release",
+            "STAGING_ENGINE_CANDIDATE": "1",
+            "GCLOUD": str(fake_gcloud),
+            "FAKE_GCLOUD_LOG": str(log),
+        },
+    )
+
+    assert result.returncode != 0
+    assert "STAGING_ENGINE_CANDIDATE is allowed only for DEPLOY_ENV=staging" in result.stderr
+    assert not log.exists()
 
 
 def test_deploy_rejects_an_invalid_staging_candidate_flag_before_contacting_gcloud(tmp_path):
@@ -415,6 +486,108 @@ def test_staging_verifier_accepts_the_requested_candidate_runtime_config(tmp_pat
     assert "batch_sentinel=ok" in result.stdout
     assert "/health" in curl_log.read_text()
     assert "/batch" in curl_log.read_text()
+
+
+
+def production_service_json(
+    *,
+    runtime_env: dict[str, str] | None = None,
+    secret_names: dict[str, str] | None = None,
+) -> str:
+    secrets = {
+        "CHEMISTRY_SERVICE_TOKEN": "chemistry-service-token",
+        "SUPABASE_URL": "supabase-url",
+        "SUPABASE_SERVICE_ROLE_KEY": "supabase-service-role-key",
+        "OPENROUTER_API_KEY": "greenchemistry-openrouter-api-key",
+    }
+    secrets.update(secret_names or {})
+    env = [
+        {"name": name, "valueFrom": {"secretKeyRef": {"name": secret}}}
+        for name, secret in secrets.items()
+    ]
+    env.extend({"name": name, "value": value} for name, value in (runtime_env or {}).items())
+    return json.dumps(
+        {
+            "status": {
+                "traffic": [{"percent": 100, "revisionName": "gcai-test-revision"}],
+                "url": "https://gcai.example.test",
+            },
+            "spec": {
+                "template": {
+                    "metadata": {"labels": {"release-sha": release_sha(), "deploy-env": "production"}},
+                    "spec": {
+                        "serviceAccountName": "greenchemistry-chemservice@greenchemistry-ai.iam.gserviceaccount.com",
+                        "containers": [{"env": env}],
+                    },
+                }
+            },
+        }
+    )
+
+
+def test_production_verifier_accepts_the_required_qwen_candidate_runtime_config(tmp_path):
+    fake_gcloud, gcloud_log = install_fake_gcloud(tmp_path)
+    _, curl_log = install_fake_curl(tmp_path)
+    service_json = production_service_json(
+        runtime_env={
+            "OPENROUTER_MODEL": "qwen/qwen3.8-27b",
+            "GCAI_ENGINE_CANDIDATE": "1",
+            "GCAI_LLM_BASE_URL": "https://openrouter.ai/api/v1",
+            "GCAI_LLM_MODEL": "qwen/qwen3.8-27b",
+        }
+    )
+
+    result = run_script(
+        VERIFY_SCRIPT,
+        {
+            "DEPLOY_ENV": "production",
+            "GIT_SHA": release_sha(),
+            "PRODUCTION_CHEMISTRY_SERVICE_TOKEN": "test-token",
+            "GCLOUD": str(fake_gcloud),
+            "FAKE_GCLOUD_LOG": str(gcloud_log),
+            "FAKE_GCLOUD_JSON": service_json,
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "FAKE_CURL_LOG": str(curl_log),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "health=ok" in result.stdout
+    assert "batch_sentinel=ok" in result.stdout
+
+
+def test_production_verifier_rejects_legacy_sonnet_only_runtime(tmp_path):
+    fake_gcloud, log = install_fake_gcloud(tmp_path)
+    install_fake_curl(tmp_path)
+    service_json = production_service_json(
+        runtime_env={"OPENROUTER_MODEL": "anthropic/claude-sonnet-4.5"}
+    )
+
+    result = run_script(
+        VERIFY_SCRIPT,
+        {
+            "DEPLOY_ENV": "production",
+            "GIT_SHA": release_sha(),
+            "PRODUCTION_CHEMISTRY_SERVICE_TOKEN": "test-token",
+            "GCLOUD": str(fake_gcloud),
+            "FAKE_GCLOUD_LOG": str(log),
+            "FAKE_GCLOUD_JSON": service_json,
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "FAKE_CURL_LOG": str(tmp_path / "curl.log"),
+        },
+    )
+
+    assert result.returncode != 0
+    assert "Candidate runtime binding GCAI_ENGINE_CANDIDATE does not match" in result.stderr
+
+
+def test_production_release_workflow_pins_qwen_candidate_contract():
+    workflow = (REPO_ROOT / ".github" / "workflows" / "release-production.yml").read_text()
+
+    assert "PRODUCTION_OPENROUTER_MODEL: qwen/qwen3.8-27b" in workflow
+    assert workflow.count("PRODUCTION_OPENROUTER_MODEL: qwen/qwen3.8-27b") >= 2
+    assert "deploy-chemistry-cloud-run.sh" in workflow
+    assert "verify-chemistry-release.sh" in workflow
 
 
 def test_staging_dispatch_workflow_requires_main_ci_and_candidate_release_contract():

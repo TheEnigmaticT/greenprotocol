@@ -22,18 +22,25 @@ if [[ "$DEPLOY_ENV" == "production" && "${BREAK_GLASS:-}" != "1" ]]; then
     fail "Production deploy requires the approved release workflow or BREAK_GLASS=1."
 fi
 
-# Candidate routing is deliberately staging-only. It is validated before gcloud
-# is located or invoked so an accidental flag cannot mutate a service.
+# OpenRouter Qwen candidate routing (validated before gcloud so bad inputs cannot
+# mutate a service):
+# - staging: optional via STAGING_ENGINE_CANDIDATE=1 (existing contract)
+# - production: required explicit runtime — always binds GCAI_ENGINE_CANDIDATE=1
+#   with literal qwen/qwen3.8-27b on exact OpenRouter v1 (no Claude/Sonnet fallback)
+REQUIRED_OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
+REQUIRED_PRODUCTION_MODEL="qwen/qwen3.8-27b"
 STAGING_ENGINE_CANDIDATE="${STAGING_ENGINE_CANDIDATE:-}"
+ENGINE_CANDIDATE=""
 CANDIDATE_BASE_URL=""
 CANDIDATE_MODEL=""
 if [[ "$DEPLOY_ENV" == "staging" ]]; then
   [[ -z "$STAGING_ENGINE_CANDIDATE" || "$STAGING_ENGINE_CANDIDATE" == "1" ]] || \
     fail "STAGING_ENGINE_CANDIDATE must be 1 or unset."
   if [[ "$STAGING_ENGINE_CANDIDATE" == "1" ]]; then
-    CANDIDATE_BASE_URL="${STAGING_OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}"
-    [[ "$CANDIDATE_BASE_URL" == "https://openrouter.ai/api/v1" ]] || \
-      fail "STAGING_OPENROUTER_BASE_URL must be the exact https://openrouter.ai/api/v1 candidate endpoint."
+    ENGINE_CANDIDATE=1
+    CANDIDATE_BASE_URL="${STAGING_OPENROUTER_BASE_URL:-$REQUIRED_OPENROUTER_BASE_URL}"
+    [[ "$CANDIDATE_BASE_URL" == "$REQUIRED_OPENROUTER_BASE_URL" ]] || \
+      fail "STAGING_OPENROUTER_BASE_URL must be the exact ${REQUIRED_OPENROUTER_BASE_URL} candidate endpoint."
     CANDIDATE_MODEL="${STAGING_OPENROUTER_MODEL:-}"
     [[ "$CANDIDATE_MODEL" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]*$ ]] || \
       fail "STAGING_OPENROUTER_MODEL is required and must be a provider/model identifier when STAGING_ENGINE_CANDIDATE=1."
@@ -43,6 +50,13 @@ else
     fail "STAGING_ENGINE_CANDIDATE is allowed only for DEPLOY_ENV=staging."
   [[ -z "${STAGING_OPENROUTER_BASE_URL:-}" ]] || \
     fail "STAGING_OPENROUTER_BASE_URL is allowed only for DEPLOY_ENV=staging."
+  ENGINE_CANDIDATE=1
+  CANDIDATE_BASE_URL="${PRODUCTION_OPENROUTER_BASE_URL:-$REQUIRED_OPENROUTER_BASE_URL}"
+  [[ "$CANDIDATE_BASE_URL" == "$REQUIRED_OPENROUTER_BASE_URL" ]] || \
+    fail "PRODUCTION_OPENROUTER_BASE_URL must be the exact ${REQUIRED_OPENROUTER_BASE_URL} candidate endpoint."
+  CANDIDATE_MODEL="${PRODUCTION_OPENROUTER_MODEL:-$REQUIRED_PRODUCTION_MODEL}"
+  [[ "$CANDIDATE_MODEL" == "$REQUIRED_PRODUCTION_MODEL" ]] || \
+    fail "PRODUCTION_OPENROUTER_MODEL must be exactly ${REQUIRED_PRODUCTION_MODEL} (production is Qwen-only; no Claude fallback)."
 fi
 
 GCLOUD="${GCLOUD:-$(command -v gcloud || true)}"
@@ -76,7 +90,7 @@ case "$DEPLOY_ENV" in
     SUPABASE_URL_SECRET="${PRODUCTION_SUPABASE_URL_SECRET:-supabase-url}"
     SUPABASE_SERVICE_ROLE_SECRET="${PRODUCTION_SUPABASE_SERVICE_ROLE_SECRET:-supabase-service-role-key}"
     PROVIDER_KEY_SECRET="${PRODUCTION_OPENROUTER_API_KEY_SECRET:-greenchemistry-openrouter-api-key}"
-    PROVIDER_MODEL="${PRODUCTION_OPENROUTER_MODEL:-anthropic/claude-sonnet-4.5}"
+    PROVIDER_MODEL="${PRODUCTION_OPENROUTER_MODEL:-qwen/qwen3.8-27b}"
     ;;
 esac
 
@@ -95,7 +109,8 @@ CHEMISTRY_IMAGE_NAME="${CHEMISTRY_IMAGE_NAME:-greenchemistry-chemistry}"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NAME}:${GIT_SHA}"
 
 RUNTIME_ENV_VARS="OPENROUTER_MODEL=${PROVIDER_MODEL}"
-if [[ "$STAGING_ENGINE_CANDIDATE" == "1" ]]; then
+if [[ "$ENGINE_CANDIDATE" == "1" ]]; then
+  # Candidate vars are authoritative; OPENROUTER_MODEL mirrors the same ID defensively.
   RUNTIME_ENV_VARS="OPENROUTER_MODEL=${CANDIDATE_MODEL},GCAI_ENGINE_CANDIDATE=1,GCAI_LLM_BASE_URL=${CANDIDATE_BASE_URL},GCAI_LLM_MODEL=${CANDIDATE_MODEL}"
 fi
 
