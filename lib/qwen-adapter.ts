@@ -196,8 +196,14 @@ export async function callQwen<T>(
       },
     }],
     tool_choice: { type: 'function' as const, function: { name: 'return_result' } },
+    // On OpenRouter, protocol text must only reach zero-data-retention endpoints
+    // (see the 0.8 release notes). zdr + data_collection:deny filter the eligible
+    // endpoint set; fallbacks move only within that filtered set.
     ...(config.baseURL === OPENROUTER_COMPATIBLE_BASE_URL
-      ? { reasoning: { enabled: false } }
+      ? {
+          reasoning: { enabled: false },
+          provider: { data_collection: 'deny', zdr: true, allow_fallbacks: true },
+        }
       : { enable_thinking: false }),
   }
 
