@@ -45,12 +45,14 @@ jobs:
           IMAGE_DIGEST: ${{ steps.image.outputs.image_digest }}
           GITHUB_ACTIONS: 'true'
           RELEASE_AUTHORITY: approved-production-release
+          PRODUCTION_OPENROUTER_MODEL: qwen/qwen3.8-27b
         run: bash scripts/deploy-chemistry-cloud-run.sh
       - name: Verify the deployed revision and authenticated sentinel
         env:
           DEPLOY_ENV: production
           GIT_SHA: ${{ github.sha }}
           PRODUCTION_CHEMISTRY_SERVICE_TOKEN: ${{ secrets.PRODUCTION_CHEMISTRY_SERVICE_TOKEN }}
+          PRODUCTION_OPENROUTER_MODEL: qwen/qwen3.8-27b
         run: bash scripts/verify-chemistry-release.sh
 
   release-evidence:
