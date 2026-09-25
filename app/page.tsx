@@ -620,7 +620,7 @@ export default function LandingPage() {
                             <div style={{fontFamily:MONO, fontSize:'0.6rem', fontWeight:700,
                               color:'#DC2626', marginBottom:'0.3rem'}}>ORIGINAL</div>
                             <div style={{fontFamily:MONO, fontWeight:700, fontSize:'0.85rem',
-                              color:'#1C1917', marginBottom:'0.3rem'}}>DMF</div>
+                              color:'#1C1917', marginBottom:'0.3rem'}}>N,N-Dimethylformamide</div>
                             <p style={{fontFamily:MONO, fontSize:'0.65rem', color:'#78716C', margin:0, lineHeight:1.5}}>
                               Classified carcinogen (CMR1B). Used as primary solvent across all 9 synthesis steps.
                             </p>
@@ -767,21 +767,21 @@ export default function LandingPage() {
                         border:'1px solid #FECACA',
                         maxHeight:'480px', overflowY:'auto',
                       }}>{`Step 1 — Resin Swelling
-Suspend 0.03 mmol Wang resin in DMF (5 mL).
+Suspend 0.03 mmol Wang resin in N,N-Dimethylformamide (5 mL).
 Heat to 70°C for 30 min with agitation.
-Drain and wash 3× with DMF (3 mL each).
+Drain and wash 3× with N,N-Dimethylformamide (3 mL each).
 
 Step 2 — First Fmoc Deprotection
-Add 20% piperidine in DMF (4 mL).
+Add 20% piperidine in N,N-Dimethylformamide (4 mL).
 React at room temperature, 20 min.
-Drain. Wash 3× DMF, 3× DCM, 3× DMF.
+Drain. Wash 3× N,N-Dimethylformamide, 3× DCM, 3× N,N-Dimethylformamide.
 Repeat deprotection once.
 
 Step 3 — Amino Acid Coupling
 Activate Fmoc-AA-OH (5 equiv) with
-DIC (5 equiv) + HOBt (5 equiv) in DMF.
+DIC (5 equiv) + HOBt (5 equiv) in N,N-Dimethylformamide.
 Add to resin, 75°C, 5 min (microwave).
-Wash 3× with DMF.
+Wash 3× with N,N-Dimethylformamide.
 
 Step 12 — Global Deprotection & Cleavage
 Add cleavage cocktail: 95% TFA,
@@ -804,7 +804,7 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
                         maxHeight:'480px', overflowY:'auto',
                       }}>{`Step 1 — Resin Swelling  ✓ OPTIMIZED
 Suspend 0.03 mmol Wang resin in DMSO (5 mL).
-[DMF → DMSO: eliminates CMR1B carcinogen]
+[N,N-Dimethylformamide → DMSO: eliminates CMR1B carcinogen]
 Swell at room temperature, 45 min.
 [70°C → RT: ~84% energy reduction]
 Drain and wash 3× with DMSO (3 mL each).
@@ -843,7 +843,7 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
                     fontFamily:MONO, fontSize:'0.7rem',
                   }}>
                     <span style={{color:'#16a34a', fontWeight:700}}>Changes accepted: 1 of 38</span>
-                    <span style={{color:'#2D6A4F'}}>DMF eliminated from Step 1</span>
+                    <span style={{color:'#2D6A4F'}}>N,N-Dimethylformamide eliminated from Step 1</span>
                     <span style={{color:'#2D6A4F'}}>Grade: C → projected B with all accepted</span>
                     <span style={{color:'#A8A29E', marginLeft:'auto'}}>Powered by RDKit + PubChem</span>
                   </div>

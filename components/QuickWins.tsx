@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { Recommendation } from '@/lib/types'
+import { displayChemicalName } from '@/lib/chemical-display'
 
 interface QuickWinProps {
   recommendations: Recommendation[]
@@ -45,7 +46,7 @@ export default function QuickWins({ recommendations }: QuickWinProps) {
               <div className="flex-1">
                 <div className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1">Current Chemical</div>
                 <div className="text-lg font-mono font-bold text-[#1C1917] break-words">
-                  {win.original.chemical}
+                  {displayChemicalName(win.original.chemical)}
                 </div>
               </div>
 
@@ -66,7 +67,7 @@ export default function QuickWins({ recommendations }: QuickWinProps) {
               <div className="flex-1">
                 <div className="text-[10px] font-bold text-[#16a34a] uppercase tracking-wider mb-1">Recommended Swap</div>
                 <div className="text-lg font-mono font-bold text-[#1C1917] break-words">
-                  {win.alternative.chemical}
+                  {displayChemicalName(win.alternative.chemical)}
                 </div>
               </div>
 

@@ -8,6 +8,7 @@ import Link from 'next/link'
 import WasteScoreCard from './WasteScoreCard'
 import { TalkAboutThis } from './TalkAboutThis'
 import { buildCitationString } from '@/lib/citation'
+import { displayChemicalName, formatChemicalText } from '@/lib/chemical-display'
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -155,7 +156,7 @@ function RecommendationCard({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: '#1C1917' }}>
-            {warning ? rec.original.chemical : `Step ${rec.stepNumber}`}
+            {warning ? displayChemicalName(rec.original.chemical) : `Step ${rec.stepNumber}`}
           </span>
           <SeverityBadge severity={rec.severity} />
           <ConfidenceBadge level={rec.confidenceLevel} />
@@ -177,8 +178,8 @@ function RecommendationCard({
               ? { kind: 'recommendation', recommendationId: rec.id }
               : { kind: 'recommendation', recommendationIndex }}
             title={warning
-              ? rec.original.chemical
-              : `Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
+              ? displayChemicalName(rec.original.chemical)
+              : `Step ${rec.stepNumber}: ${displayChemicalName(rec.original.chemical)} → ${displayChemicalName(rec.alternative.chemical)}`}
             evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
           />
           <button
@@ -199,18 +200,18 @@ function RecommendationCard({
         <div className="p-3 rounded" style={{ background: '#FEF2F2' }}>
           <div className="text-xs font-semibold mb-1" style={{ color: '#DC2626' }}>ORIGINAL</div>
           <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#1C1917' }}>
-            {rec.original.chemical}
+            {displayChemicalName(rec.original.chemical)}
           </div>
-          <p className="text-xs" style={{ color: '#78716C' }}>{rec.original.issue}</p>
+          <p className="text-xs" style={{ color: '#78716C' }}>{formatChemicalText(rec.original.issue)}</p>
         </div>
 
         {/* Alternative */}
         <div className="p-3 rounded" style={{ background: isAccepted ? '#DCFCE7' : '#F0FDF4' }}>
           <div className="text-xs font-semibold mb-1" style={{ color: '#16a34a' }}>{warning ? 'NO SUBSTITUTE' : 'RECOMMENDED'}</div>
           <div className="text-sm font-[family-name:var(--font-mono)] font-semibold mb-1" style={{ color: '#1C1917' }}>
-            {warning ? 'None on file' : rec.alternative.chemical}
+            {warning ? 'None on file' : displayChemicalName(rec.alternative.chemical)}
           </div>
-          <p className="text-xs mb-1" style={{ color: '#2D6A4F' }}>{rec.alternative.rationale}</p>
+          <p className="text-xs mb-1" style={{ color: '#2D6A4F' }}>{formatChemicalText(rec.alternative.rationale)}</p>
           <p className="text-xs" style={{ color: '#78716C' }}>
             <strong>Yield:</strong> {rec.alternative.yieldImpact}
           </p>

@@ -7,6 +7,7 @@ import { buildCitationString, buildBibtexCitation, formatCitationACS } from '@/l
 import PrincipleSection, { humanSource } from './PrincipleSection'
 import AppShell from './AppShell'
 import { buildQuietGradeLine } from '@/lib/quiet-grade'
+import { displayChemicalName, formatChemicalText } from '@/lib/chemical-display'
 
 const INTERNAL_SOURCE_VALUES = new Set(['cache', 'not_found', 'error', 'unknown', 'none', ''])
 
@@ -97,18 +98,18 @@ function RelatedPrescriptions({ analysis, chemical }: { analysis: AnalysisResult
                 </div>
                 <p className="m-0 text-sm font-[family-name:var(--font-sans)]" style={{ color: '#1C1917' }}>
                   Replace{' '}
-                  <strong className="font-[family-name:var(--font-mono)]">{rec.original.chemical}</strong>
+                  <strong className="font-[family-name:var(--font-mono)]">{displayChemicalName(rec.original.chemical)}</strong>
                   {' '}with{' '}
-                  <strong className="font-[family-name:var(--font-mono)]" style={{ color: '#166534' }}>{rec.alternative.chemical}</strong>.
+                  <strong className="font-[family-name:var(--font-mono)]" style={{ color: '#166534' }}>{displayChemicalName(rec.alternative.chemical)}</strong>.
                 </p>
                 {rec.original.issue && (
                   <p className="m-0 text-xs font-[family-name:var(--font-sans)]" style={{ color: '#57534E' }}>
-                    {rec.original.issue}
+                    {formatChemicalText(rec.original.issue)}
                   </p>
                 )}
                 {rec.alternative.rationale && (
                   <p className="m-0 text-sm font-[family-name:var(--font-sans)] leading-relaxed" style={{ color: '#1C1917' }}>
-                    {rec.alternative.rationale}
+                    {formatChemicalText(rec.alternative.rationale)}
                   </p>
                 )}
                 {rec.evidence?.citations && rec.evidence.citations.length > 0 && (
@@ -511,7 +512,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                             }}
                           >
                             <div className="font-[family-name:var(--font-mono)] text-sm font-semibold break-words" style={{ color: '#991B1B' }}>
-                              {chem}
+                              {displayChemicalName(chem)}
                             </div>
                             <div className="mt-1.5 flex flex-wrap gap-1">
                               {principles.map(pn => (
@@ -572,7 +573,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                               className="text-left rounded border px-3 py-2 min-h-11 font-[family-name:var(--font-mono)] text-xs font-semibold"
                               style={{ borderColor: '#FECACA', background: '#FEF2F2', color: '#991B1B' }}
                             >
-                              {chem} →
+                              {displayChemicalName(chem)} →
                             </button>
                           ))}
                         </div>
@@ -597,7 +598,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
                     Chemical dossier
                   </p>
                   <h2 className="m-0 mt-1 font-[family-name:var(--font-mono)] text-xl font-bold break-words" style={{ color: '#991B1B' }}>
-                    {selectedChemEntry[0]}
+                    {displayChemicalName(selectedChemEntry[0])}
                   </h2>
                 </div>
                 {selectedEnriched?.ghs_hazards && selectedEnriched.ghs_hazards.length > 0 && (

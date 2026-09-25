@@ -3,6 +3,7 @@
 import type { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical, ScoreProvenance } from '@/lib/types'
 import { buildRecommendationCitationString, formatCitationACS } from '@/lib/citation'
 import { TalkAboutThis } from './TalkAboutThis'
+import { displayChemicalName } from '@/lib/chemical-display'
 
 const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
   A: { bg: '#DCFCE7', text: '#166534' },
@@ -409,7 +410,7 @@ export default function PrincipleSection({
                   )}
                 </div>
                 <p className="text-xs mb-1" style={{ color: '#1C1917' }}>
-                  <strong>{rec.original.chemical}</strong> → <strong style={{ color: '#166534' }}>{rec.alternative.chemical}</strong>
+                  <strong>{displayChemicalName(rec.original.chemical)}</strong> → <strong style={{ color: '#166534' }}>{displayChemicalName(rec.alternative.chemical)}</strong>
                 </p>
                 {rec.original.issue && (
                   <p className="text-xs mb-1" style={{ color: '#57534E' }}>{rec.original.issue}</p>
@@ -450,7 +451,7 @@ export default function PrincipleSection({
                     {rec.evidence.sdsReferences && rec.evidence.sdsReferences.length > 0 && (
                       <div className="mt-1.5">
                         <p className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: '#78716C', fontFamily: 'var(--font-mono)' }}>
-                          Safety data sheets — {rec.original.chemical}
+                          Safety data sheets — {displayChemicalName(rec.original.chemical)}
                         </p>
                         <div className="flex flex-wrap gap-3">
                           {rec.evidence.sdsReferences.map((s, si) => (

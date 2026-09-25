@@ -64,7 +64,7 @@ const baseRec: Recommendation = {
 describe('buildRecommendationCitationString', () => {
   it('includes chemical names and step number', () => {
     const result = buildRecommendationCitationString(baseRec)
-    expect(result).toContain('DMF')
+    expect(result).toContain('N,N-Dimethylformamide')
     expect(result).toContain('DMSO')
     expect(result).toContain('Step 3')
   })

@@ -7,6 +7,7 @@
  */
 
 import type { AnalysisMetadata, Recommendation, Citation } from '@/lib/types'
+import { displayChemicalName } from '@/lib/chemical-display'
 
 /**
  * Build a short software citation string for display or export.
@@ -54,7 +55,7 @@ export function buildRecommendationCitationString(
     : new Date().toISOString().split('T')[0]
   const id = analysisId ?? rec.citationMetadata?.analysisId
   const idPart = id ? ` Analysis ID: ${id}.` : ''
-  return `GreenChemistry.ai v${version}. Recommendation: replace ${rec.original.chemical} with ${rec.alternative.chemical} (Step ${rec.stepNumber}).${idPart} Generated ${date}.`
+  return `GreenChemistry.ai v${version}. Recommendation: replace ${displayChemicalName(rec.original.chemical)} with ${displayChemicalName(rec.alternative.chemical)} (Step ${rec.stepNumber}).${idPart} Generated ${date}.`
 }
 
 /**

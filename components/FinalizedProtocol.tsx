@@ -5,6 +5,7 @@ import { AnalysisResult, Recommendation } from '@/lib/types'
 import { RecommendationApprovalReceipt, TalkAboutThis } from './TalkAboutThis'
 import { buildNoRecommendationsBullets } from '@/lib/no-recommendations-summary'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
+import { displayChemicalName, formatChemicalText } from '@/lib/chemical-display'
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
@@ -61,7 +62,7 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
           className="text-xs font-bold uppercase tracking-wider font-[family-name:var(--font-mono)]"
           style={{ color: '#1C1917', letterSpacing: '0.08em' }}
         >
-          {warning ? rec.original.chemical : `Step ${rec.stepNumber}`}
+          {warning ? displayChemicalName(rec.original.chemical) : `Step ${rec.stepNumber}`}
         </span>
         <SeverityBadge severity={rec.severity} />
         <span
@@ -77,13 +78,13 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
         style={{ color: '#0D1F16' }}
       >
         {warning ? (
-          rec.original.issue
+          formatChemicalText(rec.original.issue)
         ) : (
           <>
             Replace{' '}
-            <span style={{ color: '#DC2626' }}>{rec.original.chemical}</span>
+            <span style={{ color: '#DC2626' }}>{displayChemicalName(rec.original.chemical)}</span>
             {' '}with{' '}
-            <span style={{ color: '#006D15' }}>{rec.alternative.chemical}</span>
+            <span style={{ color: '#006D15' }}>{displayChemicalName(rec.alternative.chemical)}</span>
             .
           </>
         )}
@@ -93,9 +94,9 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
         <p
           className="m-0 mb-4 font-[family-name:var(--font-sans)] text-sm leading-snug line-clamp-2"
           style={{ color: '#57534E' }}
-          title={whyLine}
+          title={formatChemicalText(whyLine)}
         >
-          {whyLine}
+          {formatChemicalText(whyLine)}
         </p>
       )}
 
@@ -124,8 +125,8 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
             ? { kind: 'recommendation', recommendationId: rec.id }
             : { kind: 'recommendation', recommendationIndex }}
           title={warning
-            ? rec.original.chemical
-            : `Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
+            ? displayChemicalName(rec.original.chemical)
+            : `Step ${rec.stepNumber}: ${displayChemicalName(rec.original.chemical)} → ${displayChemicalName(rec.alternative.chemical)}`}
           evidenceState={evidenceState}
           onRecommendationApproved={onRecommendationApproved}
           buttonLabel="Ask"
@@ -317,16 +318,16 @@ export default function FinalizedProtocol({
                         Step {rec.stepNumber}
                       </span>
                       <p className="m-0 flex flex-wrap items-baseline gap-x-3 font-[family-name:var(--font-mono)] text-sm font-medium">
-                        <span style={{ color: '#A8A29E', textDecoration: 'line-through' }}>{rec.original.chemical}</span>
+                        <span style={{ color: '#A8A29E', textDecoration: 'line-through' }}>{displayChemicalName(rec.original.chemical)}</span>
                         <span>→</span>
-                        <span style={{ color: '#006D15' }}>{rec.alternative.chemical}</span>
+                        <span style={{ color: '#006D15' }}>{displayChemicalName(rec.alternative.chemical)}</span>
                       </p>
                       {rec.id && (
                         <div className="shrink-0" onClick={event => event.stopPropagation()}>
                           <TalkAboutThis
                             analysisId={analysisId}
                             scope={{ kind: 'recommendation', recommendationId: rec.id }}
-                            title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
+                            title={`Step ${rec.stepNumber}: ${displayChemicalName(rec.original.chemical)} → ${displayChemicalName(rec.alternative.chemical)}`}
                             evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
                             onRecommendationApproved={onRecommendationApproved}
                             buttonLabel="Ask"
@@ -369,7 +370,7 @@ export default function FinalizedProtocol({
                       Step {rec.stepNumber}
                     </span>
                     <span className="font-[family-name:var(--font-mono)] flex-1" style={{ color: '#A8A29E' }}>
-                      {rec.original.chemical}
+                      {displayChemicalName(rec.original.chemical)}
                     </span>
                     <span className="text-xs shrink-0" style={{ color: '#A8A29E' }}>✗</span>
                   </div>
