@@ -50,6 +50,11 @@
 - The panel uses the existing cream/forest palette with the established red unavailable treatment, and its retry button calls the existing authenticated `/api/rescore` route.
 - Successful retries merge scores into the analysis through the existing update path, which also performs the revision-checked PATCH; failures remain visible in an alert.
 
+## Sampled rejection-feedback card
+- After a saved-analysis recommendation is explicitly rejected, `FinalizedProtocol` samples a compact, non-blocking feedback card using Web Crypto entropy at a one-in-three rate. It is not rendered on page load and does not prompt for warning cards.
+- The card asks “Why did you reject this option?”, supports optional free text, provides a visible Skip action, and states that feedback does not alter the decision, analysis, evidence, or score.
+- Persist only via the authenticated `POST /api/analyses/[id]/rejection-feedback` route, with the analysis/recommendation index and optional stable recommendation ID. Keep the database record append-only and tenant-owned.
+
 ## Procedure workbench
 - Keep recommendation decisions above the scorecard and render the `ProcedureWorkbench` immediately below it on both new and persisted analysis routes.
 - The workbench always renders, including before any recommendation has been decided. It applies accepted changes only and states that pending/rejected items remain as written.
