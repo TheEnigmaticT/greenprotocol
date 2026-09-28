@@ -297,6 +297,14 @@ async def _call_openai_compatible(
         headers["Authorization"] = "Bearer " + resolved_key
         payload.pop("enable_thinking", None)
         payload["reasoning"] = {"enabled": False}
+        # Protocol-derived text must only reach zero-data-retention endpoints.
+        # zdr + data_collection:deny filter the eligible endpoint set; fallbacks
+        # move only within it (mirrors lib/qwen-adapter.ts and Talk About This).
+        payload["provider"] = {
+            "data_collection": "deny",
+            "zdr": True,
+            "allow_fallbacks": True,
+        }
     elif api_key:
         headers["Authorization"] = "Bearer " + api_key
 

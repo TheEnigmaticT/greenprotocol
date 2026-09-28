@@ -99,6 +99,7 @@ def test_candidate_uses_only_explicit_local_endpoint_model_and_key(monkeypatch):
     assert client.request["json"]["model"] == "local/qwen-candidate"
     assert client.request["json"]["enable_thinking"] is False
     assert "reasoning" not in client.request["json"]
+    assert "provider" not in client.request["json"]
 
 
 def test_candidate_openrouter_key_fallback_requires_exact_explicit_v1_endpoint(monkeypatch):
@@ -112,6 +113,7 @@ def test_candidate_openrouter_key_fallback_requires_exact_explicit_v1_endpoint(m
     assert client.request["url"] == "https://openrouter.ai/api/v1/chat/completions"
     assert client.request["headers"]["Authorization"] == "Bearer openrouter-fallback-key"
     assert client.request["json"]["reasoning"] == {"enabled": False}
+    assert client.request["json"]["provider"] == {"data_collection": "deny", "zdr": True, "allow_fallbacks": True}
     assert "enable_thinking" not in client.request["json"]
 
 
@@ -178,6 +180,7 @@ def test_parity_mode_uses_authenticated_openrouter_and_disables_reasoning(monkey
     assert client.request["headers"]["Authorization"] == "Bearer test-only-key"
     assert client.request["json"]["model"] == "qwen/qwen3.8-27b"
     assert client.request["json"]["reasoning"] == {"enabled": False}
+    assert client.request["json"]["provider"] == {"data_collection": "deny", "zdr": True, "allow_fallbacks": True}
     assert client.request["json"]["messages"] == [{"role": "system", "content": "original system"}, {"role": "user", "content": "original prompt"}]
 
 
