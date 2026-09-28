@@ -39,10 +39,10 @@
 - `/blog` is the index and `/blog/[slug]` is statically generated from published posts; drafts remain hidden when `draft: true`.
 - Blog navigation keeps the same forest/gold brand palette, with a compact mono header and readable cream article canvas.
 
-## External form landing page
+## External form landing pages
 - `/beyondbenign` is a focused landing page for the Beyond Benign open-beta invitation.
-- It embeds the HighLevel/LeadConnector form in a responsive iframe, keeping registration data collection in GHL rather than duplicating form fields in the app.
-- The page uses the established forest, gold, sage, and cream palette with a two-column desktop layout that collapses to one column below 800px.
+- `/pilot-signup` is the public GreenChemistry.ai pilot-volunteer page and embeds the GHL form that starts the pilot follow-up workflow.
+- Both pages embed a HighLevel/LeadConnector form in a responsive iframe, keeping registration data collection in GHL rather than duplicating form fields in the app.
 - External forms need an accessible iframe title and a generous mobile minimum height; test the full form at narrow widths after any GHL form changes.
 
 ## Deterministic score recovery panel
