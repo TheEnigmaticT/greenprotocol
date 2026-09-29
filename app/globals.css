@@ -211,6 +211,7 @@ body {
 }
 .blog-post h1 {
   max-width: 18ch;
+  overflow-wrap: anywhere;
   font-size: clamp(2.5rem, 7vw, 5rem);
 }
 .blog-excerpt {
@@ -238,6 +239,22 @@ body {
 .blog-prose li { margin-bottom: 0.5rem; }
 .blog-prose strong { color: var(--brand-forest-deep); }
 .blog-prose a { color: var(--brand-green-vivid); }
+.blog-prose img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 2rem 0 0.75rem;
+  border: 1px solid var(--brand-card-border, #C8C2B0);
+  border-radius: 0.5rem;
+  background: white;
+}
+.blog-prose img + em {
+  display: block;
+  margin-bottom: 2rem;
+  color: var(--brand-forest-mid);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
 .blog-prose blockquote {
   margin-block: 2rem;
   padding: 1rem 1.25rem;

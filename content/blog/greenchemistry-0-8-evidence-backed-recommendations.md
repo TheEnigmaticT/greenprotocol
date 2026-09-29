@@ -16,6 +16,10 @@ A recommendation now lands in one of three places.
 
 That last state matters. A plausible solvent swap is still a bad recommendation if the evidence doesn't fit the chemistry on the page.
 
+![Accept, Reject, and Ask recommendation cards in GreenChemistry.ai](/blog/greenchemistry-0-8/recommendation-cards.png)
+
+*The three outcomes stay together. You can see what the product accepts, rejects, or needs you to clarify before it makes a recommendation.*
+
 ## Recommendations now have to earn their place
 
 Accept cards fail closed. GreenChemistry.ai doesn't turn an adjacent paper or a generic hazard flag into permission to change a scientist's procedure. The evidence has to fit the chemistry closely enough to support the recommendation.
@@ -38,11 +42,19 @@ That can happen when a material isn't resolved, a mixture is indefinite, or the 
 
 A chromatography eluent written as a hexane/ethyl acetate ratio stays as that mixture. GreenChemistry.ai won't split it into separate charges and invent a solvent recommendation from incomplete input.
 
+![GreenChemistry.ai explaining that it held back a recommendation because two materials could not be resolved](/blog/greenchemistry-0-8/held-back-explanation.png)
+
+*When the input can't support a recommendation, the product says what it couldn't resolve and asks for a cleaner material name.*
+
 ## Ask belongs after the score
 
 Ask, formerly Talk About This, is for the follow-up work: checking why a grade moved, clarifying a material name, or reviewing a warning against the procedure in front of you.
 
 The 0.8 release gives that conversation enough time to finish its tool lookups before it answers. If a solvent hazard profile is missing from the local evidence pack, Ask reports the limit instead of returning a false "unavailable" failure.
+
+![Ask panel reporting that no direct evidence was located for a proposed solvent substitution](/blog/greenchemistry-0-8/ask-evidence-limit.png)
+
+*Ask can explain a limit in the evidence without pretending the answer is settled.*
 
 ## Try it on a procedure you know
 
