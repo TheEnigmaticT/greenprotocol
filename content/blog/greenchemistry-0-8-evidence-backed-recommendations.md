@@ -1,59 +1,63 @@
 ---
-title: "GreenChemistry.ai 0.8: Recommendations That Show Their Work"
+title: "GreenChemistry.ai 0.8: recommendations that show their work"
 slug: "greenchemistry-0-8-evidence-backed-recommendations"
 date: "2026-09-23T15:00:00Z"
-excerpt: "Version 0.8 ships evidence-backed Accept, Reject, and Ask cards, clearer empty states, and a full move of AI decisions onto local-quality models — OpenRouter with zero data retention by default, or your own hardware if you prefer."
+excerpt: "GreenChemistry.ai 0.8 gives scientists Accept, Reject, and Ask cards that show the evidence and limits behind a proposed change."
 draft: false
 ---
 
-GreenChemistry.ai 0.8 is live.
+You should be able to see why a recommendation fits your reaction before you change a procedure. GreenChemistry.ai 0.8 makes that part of the product.
 
-This release is about one design choice: greening advice should be usable in a lab notebook only when we can show why it applies to *this* reaction.
+A recommendation now lands in one of three places.
 
-## Evidence-backed recommendations
+- **Accept** means the proposed change has matching literature or database evidence for the reaction context.
+- **Reject** means the system looked at a candidate and shows why it rejected it.
+- **Ask** means the material, procedure, or evidence doesn't support a safe recommendation yet.
 
-The recommendation engine now classifies proposed changes into three explicit outcomes:
+That last state matters. A plausible solvent swap is still a bad recommendation if the evidence doesn't fit the chemistry on the page.
 
-- **Accept** — a substitution or change with matching literature or database evidence for the current reaction context
-- **Reject** — a candidate we evaluated and declined to promote, with the reason kept visible
-- **Ask** — a direction that needs your judgment, more detail, or a clearer charge before it can be scored as a greening move
+![Accept, Reject, and Ask recommendation cards in GreenChemistry.ai](/blog/greenchemistry-0-8/recommendation-cards.png)
 
-Accept is fail-closed. Plausible-sounding swaps without a matching evidence path do not become Accept cards. Papers and analogous cases can still inform the conversation, but they do not quietly upgrade into a green light for your protocol.
+*The three outcomes stay together. You can see what the product accepts, rejects, or needs you to clarify before it makes a recommendation.*
 
-Scoring remains deterministic where it always was. ACS GCIPR-aligned waste and solvent framing, hazard-aware warnings, and material identity cleanup sit underneath the cards so the UI names chemicals the way a chemist wrote them, not the way a parser first saw them.
+## Recommendations now have to earn their place
 
-## Local-quality models for every AI decision
+Accept cards fail closed. GreenChemistry.ai doesn't turn an adjacent paper or a generic hazard flag into permission to change a scientist's procedure. The evidence has to fit the chemistry closely enough to support the recommendation.
 
-Every AI decision in the product now runs on a local-quality model.
+The rest of the scoring stays deterministic. ACS GCIPR waste and solvent data, hazard warnings, and material cleanup feed the cards. The product can explain what it found without treating a parser's first guess as a chemical conclusion.
 
-By default we route those calls through OpenRouter to a local-quality model under a zero data retention policy. Protocol text and analysis context are not kept by the provider for training or long-term storage under that path.
+## Model calls stay separate from the math
 
-If you want the same class of model entirely under your control, you can run it on your own hardware. The product is built so the hosted OpenRouter path and a self-hosted path are the same decision surface — only where the weights live changes.
+The scoring math doesn't run through a language model. Numbers stay numbers.
 
-Deterministic scoring math still does not go through a chat model. The boundary is deliberate: numbers stay numbers; language and classification decisions use local-quality models with a privacy-first default.
+For classification and language tasks, GreenChemistry.ai uses a Qwen model through OpenRouter's Zero Data Retention path by default. That provider doesn't retain protocol text and analysis context for training or long-term storage under that route. Teams that need to keep model weights on their own infrastructure can use a self-hosted path instead.
 
-## When there is nothing to recommend
+Those choices change where the model runs. They don't change the standard for a recommendation. The evidence still has to hold up.
 
-Silence is not the same as success.
+## An empty result now says what happened
 
-If the engine cannot produce Accept or Reject cards — for example when materials are unscored, identity is indefinite, or the charge is too incomplete to ground a swap — you now get an explicit empty state. It explains what was held back and points Ask at the right questions: clarify the material, tighten the charge, or decide whether a ratio mixture should stay as written.
+A blank recommendation list used to leave too much unsaid. In 0.8, the product tells the scientist when it held a recommendation back and why.
 
-Common lab eluents such as hexane/ethyl acetate written as a ratio stay intact as indefinite mixtures. We do not invent component-level greening for a chromatography solvent that was never specified as separate charges.
+That can happen when a material isn't resolved, a mixture is indefinite, or the procedure doesn't have enough detail to support a change. Ask points to the missing information instead of giving a confident answer with a hole in it.
 
-## Ask is part of the workflow
+A chromatography eluent written as a hexane/ethyl acetate ratio stays as that mixture. GreenChemistry.ai won't split it into separate charges and invent a solvent recommendation from incomplete input.
 
-Ask (Talk About This) is meant for the follow-up that happens after the score: why a grade moved, what a warning means, how to rephrase a material so it resolves.
+![GreenChemistry.ai explaining that it held back a recommendation because two materials could not be resolved](/blog/greenchemistry-0-8/held-back-explanation.png)
 
-In 0.8 the conversation turn has enough budget to finish tool lookups and still answer. When a solvent hazard profile is not yet in our local evidence pack, Ask stays calm instead of flashing a false “unavailable” failure. Full local GHS coverage for common solvents is still being harvested; until that pack is complete, hazard lookup stays gated rather than half-broken.
+*When the input can't support a recommendation, the product says what it couldn't resolve and asks for a cleaner material name.*
 
-## What stayed the same
+## Ask belongs after the score
 
-- Deterministic scoring math is not delegated to a chat model
-- Production still ships only through the release path you approve
-- The product goal is still the same: help researchers move protocols toward safer, lower-waste options without pretending certainty we do not have
+Ask, formerly Talk About This, is for the follow-up work: checking why a grade moved, clarifying a material name, or reviewing a warning against the procedure in front of you.
 
-## Try it
+The 0.8 release gives that conversation enough time to finish its tool lookups before it answers. If a solvent hazard profile is missing from the local evidence pack, Ask reports the limit instead of returning a false "unavailable" failure.
 
-Open a protocol on [GreenChemistry.ai](https://greenchemistry.ai), run an analysis, and read the recommendation cards before you open Ask. If a card is missing, the empty state should tell you why — that is intentional.
+![Ask panel reporting that no direct evidence was located for a proposed solvent substitution](/blog/greenchemistry-0-8/ask-evidence-limit.png)
 
-We will keep tightening evidence coverage, solvent identity, and hazard data in follow-up releases. Version 0.8 is the point where the product refuses to overclaim.
+*Ask can explain a limit in the evidence without pretending the answer is settled.*
+
+## Try it on a procedure you know
+
+Open a protocol on [GreenChemistry.ai](https://greenchemistry.ai), run an analysis, and read the recommendation cards before you ask for a follow-up. If the product can't support a recommendation, it should tell you what is missing.
+
+That is the standard 0.8 is built around: fewer confident guesses, more visible reasoning.

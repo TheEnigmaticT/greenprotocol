@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { AnalysisResult, Recommendation } from '@/lib/types'
+import { shouldPromptForRejectionFeedback } from '@/lib/rejection-feedback'
 import { RecommendationApprovalReceipt, TalkAboutThis } from './TalkAboutThis'
 import { buildNoRecommendationsBullets } from '@/lib/no-recommendations-summary'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
@@ -137,6 +138,98 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
   )
 }
 
+function RejectionFeedbackCard({
+  analysisId,
+  recommendation,
+  recommendationIndex,
+  onDismiss,
+}: {
+  analysisId: string
+  recommendation: Recommendation
+  recommendationIndex: number
+  onDismiss: () => void
+}) {
+  const [reason, setReason] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setIsSaving(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/analyses/${analysisId}/rejection-feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recommendationId: recommendation.id,
+          recommendationIndex,
+          reason,
+        }),
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null
+        throw new Error(payload?.error ?? 'Unable to save feedback.')
+      }
+      onDismiss()
+    } catch (submissionError) {
+      setError(submissionError instanceof Error ? submissionError.message : 'Unable to save feedback.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <aside
+      className="rounded-lg border p-4 sm:p-5"
+      style={{ background: '#FFFDF7', borderColor: '#ECB815' }}
+      aria-labelledby="rejection-feedback-heading"
+    >
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <h2 id="rejection-feedback-heading" className="m-0 font-[family-name:var(--font-serif)] text-lg" style={{ color: '#1C3822' }}>
+            Why did you reject this option?
+          </h2>
+          <p className="mt-1 mb-0 text-sm" style={{ color: '#57534E' }}>
+            Your reason helps us understand when greener alternatives do not fit a lab workflow. This is optional and will not change this analysis.
+          </p>
+        </div>
+        <label className="block text-sm font-medium" style={{ color: '#1C1917' }}>
+          Reason <span className="font-normal" style={{ color: '#78716C' }}>(optional)</span>
+          <textarea
+            value={reason}
+            onChange={event => setReason(event.target.value)}
+            maxLength={500}
+            rows={3}
+            className="mt-1 block w-full rounded border p-2 text-sm"
+            style={{ borderColor: '#D6D0C4', background: '#FFFFFF', color: '#1C1917' }}
+          />
+        </label>
+        {error && <p role="alert" className="m-0 text-sm" style={{ color: '#B91C1C' }}>{error}</p>}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="min-h-11 px-4 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em] disabled:opacity-60"
+            style={{ background: '#1C3822', color: '#F6F3EB', border: '1px solid #1C3822' }}
+          >
+            {isSaving ? 'Saving…' : 'Send feedback'}
+          </button>
+          <button
+            type="button"
+            onClick={onDismiss}
+            disabled={isSaving}
+            className="min-h-11 px-4 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em] disabled:opacity-60"
+            style={{ background: '#FAFAF8', color: '#78716C', border: '1px solid #D6D0C4' }}
+          >
+            Skip
+          </button>
+        </div>
+      </form>
+    </aside>
+  )
+}
+
 export function ProcedureWorkbench({
   analysis,
   originalProtocol,
@@ -238,6 +331,7 @@ export default function FinalizedProtocol({
   showProcedure?: boolean
 }) {
   const total = analysis.recommendations.length
+  const [feedbackTarget, setFeedbackTarget] = useState<{ recommendation: Recommendation; index: number } | null>(null)
   const accepted = analysis.recommendations.filter(r => r.isAccepted === true)
   const declined = analysis.recommendations.filter(r => r.isAccepted === false && r.cardKind !== 'warning')
   const pending = analysis.recommendations.filter(r => r.isAccepted === undefined || r.isAccepted === null)
@@ -247,6 +341,24 @@ export default function FinalizedProtocol({
     const newRecs = [...analysis.recommendations]
     newRecs[index] = { ...newRecs[index], isAccepted: value }
     onUpdateAnalysis({ ...analysis, recommendations: newRecs })
+  }
+
+  const promptRejectionFeedbackIfSampled = (recommendation: Recommendation, index: number) => {
+    const entropy = new Uint32Array(1)
+    crypto.getRandomValues(entropy)
+    if (shouldPromptForRejectionFeedback(entropy[0]! / 4_294_967_296)) {
+      setFeedbackTarget({ recommendation, index })
+    }
+  }
+
+  const declineRecommendation = (index: number) => {
+    if (!onUpdateAnalysis) return
+    const recommendation = analysis.recommendations[index]
+    if (!recommendation) return
+    setRecAccepted(index, false)
+    if (analysisId && recommendation.cardKind !== 'warning') {
+      promptRejectionFeedbackIfSampled(recommendation, index)
+    }
   }
 
   const toggleAccepted = (index: number) => {
@@ -268,6 +380,14 @@ export default function FinalizedProtocol({
     <div>
       {showRecommendations && (
       <div className="space-y-8 print:hidden">
+        {feedbackTarget && analysisId && (
+          <RejectionFeedbackCard
+            analysisId={analysisId}
+            recommendation={feedbackTarget.recommendation}
+            recommendationIndex={feedbackTarget.index}
+            onDismiss={() => setFeedbackTarget(null)}
+          />
+        )}
         {pending.length > 0 && (
           <section>
             <p
@@ -284,7 +404,7 @@ export default function FinalizedProtocol({
                     key={globalIndex}
                     rec={rec}
                     onAccept={() => setRecAccepted(globalIndex, true)}
-                    onDecline={() => setRecAccepted(globalIndex, false)}
+                    onDecline={() => declineRecommendation(globalIndex)}
                     onRecommendationApproved={onRecommendationApproved}
                     analysisId={analysisId}
                     recommendationIndex={globalIndex}
