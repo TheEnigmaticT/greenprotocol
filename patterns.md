@@ -39,16 +39,21 @@
 - `/blog` is the index and `/blog/[slug]` is statically generated from published posts; drafts remain hidden when `draft: true`.
 - Blog navigation keeps the same forest/gold brand palette, with a compact mono header and readable cream article canvas.
 
-## External form landing page
+## External form landing pages
 - `/beyondbenign` is a focused landing page for the Beyond Benign open-beta invitation.
-- It embeds the HighLevel/LeadConnector form in a responsive iframe, keeping registration data collection in GHL rather than duplicating form fields in the app.
-- The page uses the established forest, gold, sage, and cream palette with a two-column desktop layout that collapses to one column below 800px.
+- `/pilot-signup` is the public GreenChemistry.ai pilot-volunteer page and embeds the GHL form that starts the pilot follow-up workflow.
+- Both pages embed a HighLevel/LeadConnector form in a responsive iframe, keeping registration data collection in GHL rather than duplicating form fields in the app.
 - External forms need an accessible iframe title and a generous mobile minimum height; test the full form at narrow widths after any GHL form changes.
 
 ## Deterministic score recovery panel
 - Analysis routes show `DeterministicScoreRecovery` when deterministic scoring is explicitly unavailable and no deterministic scores exist.
 - The panel uses the existing cream/forest palette with the established red unavailable treatment, and its retry button calls the existing authenticated `/api/rescore` route.
 - Successful retries merge scores into the analysis through the existing update path, which also performs the revision-checked PATCH; failures remain visible in an alert.
+
+## Sampled rejection-feedback card
+- After a saved-analysis recommendation is explicitly rejected, `FinalizedProtocol` samples a compact, non-blocking feedback card using Web Crypto entropy at a one-in-three rate. It is not rendered on page load and does not prompt for warning cards.
+- The card asks “Why did you reject this option?”, supports optional free text, provides a visible Skip action, and states that feedback does not alter the decision, analysis, evidence, or score.
+- Persist only via the authenticated `POST /api/analyses/[id]/rejection-feedback` route, with the analysis/recommendation index and optional stable recommendation ID. Keep the database record append-only and tenant-owned.
 
 ## Procedure workbench
 - Keep recommendation decisions above the scorecard and render the `ProcedureWorkbench` immediately below it on both new and persisted analysis routes.
