@@ -9,6 +9,7 @@ import subprocess
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "deploy-chemistry-cloud-run.sh"
 VERIFY_SCRIPT = REPO_ROOT / "scripts" / "verify-chemistry-release.sh"
+RESOLVE_SCRIPT = REPO_ROOT / "scripts" / "resolve-chemistry-image.sh"
 
 
 def run_script(script: Path, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -17,6 +18,7 @@ def run_script(script: Path, extra_env: dict[str, str] | None = None) -> subproc
         "DEPLOY_ENV",
         "GIT_SHA",
         "IMAGE_DIGEST",
+        "VALIDATED_SHA",
         "STAGING_ENGINE_CANDIDATE",
         "STAGING_OPENROUTER_MODEL",
         "STAGING_OPENROUTER_BASE_URL",
@@ -622,3 +624,94 @@ def test_staging_dispatch_workflow_requires_main_ci_and_candidate_release_contra
     assert workflow.index("Require successful CI push run") < workflow.index("google-github-actions/auth")
     assert workflow.index("google-github-actions/auth") < workflow.index("build-chemistry-image.sh")
     assert workflow.index("build-chemistry-image.sh") < workflow.index("deploy-chemistry-cloud-run.sh")
+
+
+def _git(*args: str) -> str:
+    # CI runners have no git identity; commit-tree needs one.
+    ident = {f"GIT_{role}_{field}": value for role in ("AUTHOR", "COMMITTER")
+             for field, value in (("NAME", "release-test"), ("EMAIL", "release-test@example.invalid"))}
+    return subprocess.check_output(
+        ["git", *args], cwd=REPO_ROOT, text=True, env={**os.environ, **ident}
+    ).strip()
+
+
+def _twin_of_head() -> str:
+    """A commit with HEAD's exact tree but a different SHA, like a squash-merged release."""
+    return _git("commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "squash-merge twin")
+
+
+def _commit_with_different_tree() -> str:
+    empty_tree = _git("hash-object", "-t", "tree", "/dev/null")
+    return _git("commit-tree", empty_tree, "-m", "different source")
+
+
+def _fake_registry(tmp_path, digest_for_sha: str):
+    fake_gcloud = tmp_path / "gcloud"
+    fake_gcloud.write_text(
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$*" >> "$FAKE_GCLOUD_LOG"\n'
+        f'if [[ "$*" == *":{digest_for_sha} "* ]]; then echo sha256:{"a" * 64}; exit 0; fi\n'
+        "exit 1\n"
+    )
+    fake_gcloud.chmod(0o755)
+    return fake_gcloud
+
+
+def test_production_resolves_the_validated_image_for_a_squash_merged_identical_tree(tmp_path):
+    head = _git("rev-parse", "HEAD")
+    validated = _twin_of_head()
+    log = tmp_path / "gcloud.log"
+    result = run_script(RESOLVE_SCRIPT, {
+        "DEPLOY_ENV": "production",
+        "GIT_SHA": head,
+        "VALIDATED_SHA": validated,
+        "GCLOUD": str(_fake_registry(tmp_path, validated)),
+        "FAKE_GCLOUD_LOG": str(log),
+    })
+
+    assert result.returncode == 0, result.stderr
+    assert f"greenchemistry-chemistry:{validated}\n" in result.stdout
+    assert f"image_digest=sha256:{'a' * 64}" in result.stdout
+    assert f"validated_sha={validated}" in result.stdout
+
+
+def test_production_refuses_a_validated_image_whose_source_tree_differs(tmp_path):
+    log = tmp_path / "gcloud.log"
+    other = _commit_with_different_tree()
+    result = run_script(RESOLVE_SCRIPT, {
+        "DEPLOY_ENV": "production",
+        "GIT_SHA": _git("rev-parse", "HEAD"),
+        "VALIDATED_SHA": other,
+        "GCLOUD": str(_fake_registry(tmp_path, other)),
+        "FAKE_GCLOUD_LOG": str(log),
+    })
+
+    assert result.returncode != 0
+    assert "source tree" in result.stderr
+    assert not log.exists()
+
+
+def test_production_deploy_refuses_a_validated_sha_with_a_different_tree_before_contacting_gcloud(tmp_path):
+    fake_gcloud = tmp_path / "gcloud"
+    fake_gcloud.write_text("#!/usr/bin/env bash\necho cloud-contacted >&2\nexit 99\n")
+    fake_gcloud.chmod(0o755)
+    result = run_script(DEPLOY_SCRIPT, {
+        "DEPLOY_ENV": "production",
+        "GIT_SHA": _git("rev-parse", "HEAD"),
+        "VALIDATED_SHA": _commit_with_different_tree(),
+        "IMAGE_DIGEST": f"sha256:{'a' * 64}",
+        "GITHUB_ACTIONS": "true",
+        "RELEASE_AUTHORITY": "approved-production-release",
+        "GCLOUD": str(fake_gcloud),
+    })
+
+    assert result.returncode != 0
+    assert "source tree" in result.stderr
+    assert "cloud-contacted" not in result.stderr
+
+
+def test_production_workflow_fails_the_resolve_step_and_passes_the_validated_sha():
+    production = (REPO_ROOT / ".github" / "workflows" / "release-production.yml").read_text()
+    assert "set -o pipefail" in production
+    assert "VALIDATED_SHA" in production
+    assert "pull-requests: read" in production
