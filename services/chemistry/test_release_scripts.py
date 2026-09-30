@@ -627,7 +627,12 @@ def test_staging_dispatch_workflow_requires_main_ci_and_candidate_release_contra
 
 
 def _git(*args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=REPO_ROOT, text=True).strip()
+    # CI runners have no git identity; commit-tree needs one.
+    ident = {f"GIT_{role}_{field}": value for role in ("AUTHOR", "COMMITTER")
+             for field, value in (("NAME", "release-test"), ("EMAIL", "release-test@example.invalid"))}
+    return subprocess.check_output(
+        ["git", *args], cwd=REPO_ROOT, text=True, env={**os.environ, **ident}
+    ).strip()
 
 
 def _twin_of_head() -> str:
