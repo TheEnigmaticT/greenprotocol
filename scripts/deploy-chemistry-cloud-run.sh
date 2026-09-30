@@ -14,6 +14,14 @@ GIT_SHA="${GIT_SHA:-}"
 [[ "$GIT_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "GIT_SHA must be a full 40-character commit SHA."
 HEAD_SHA="$(git rev-parse HEAD)"
 [[ "$GIT_SHA" == "$HEAD_SHA" ]] || fail "GIT_SHA does not match checked-out HEAD ($HEAD_SHA)."
+# The staging-validated commit whose image is promoted; see resolve-chemistry-image.sh.
+VALIDATED_SHA="${VALIDATED_SHA:-$GIT_SHA}"
+[[ "$VALIDATED_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "VALIDATED_SHA must be a full 40-character commit SHA."
+if [[ "$VALIDATED_SHA" != "$GIT_SHA" ]]; then
+  VALIDATED_TREE="$(git rev-parse --verify --quiet "${VALIDATED_SHA}^{tree}" || true)"
+  [[ -n "$VALIDATED_TREE" && "$VALIDATED_TREE" == "$(git rev-parse "HEAD^{tree}")" ]] || \
+    fail "VALIDATED_SHA ${VALIDATED_SHA} source tree does not match ${GIT_SHA}."
+fi
 
 # Production needs the protected workflow identity. BREAK_GLASS is deliberately
 # explicit so an incident command cannot look like an ordinary release.
@@ -106,7 +114,7 @@ IMAGE_DIGEST="${IMAGE_DIGEST:-}"
 # The image name is intentionally independent from the runtime service name so
 # staging and production deploy the same immutable artifact digest.
 CHEMISTRY_IMAGE_NAME="${CHEMISTRY_IMAGE_NAME:-greenchemistry-chemistry}"
-IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NAME}:${GIT_SHA}"
+IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NAME}:${VALIDATED_SHA}"
 
 RUNTIME_ENV_VARS="OPENROUTER_MODEL=${PROVIDER_MODEL}"
 if [[ "$ENGINE_CANDIDATE" == "1" ]]; then
@@ -117,7 +125,7 @@ fi
 "$GCLOUD" run deploy "$SERVICE_NAME" \
   --project "$PROJECT_ID" --region "$REGION" --image "${IMAGE}@${IMAGE_DIGEST}" \
   --service-account "$RUNTIME_SERVICE_ACCOUNT" \
-  --labels "release-sha=${GIT_SHA},deploy-env=${DEPLOY_ENV}" \
+  --labels "release-sha=${GIT_SHA},validated-sha=${VALIDATED_SHA},deploy-env=${DEPLOY_ENV}" \
   --set-secrets "CHEMISTRY_SERVICE_TOKEN=${TOKEN_SECRET}:latest,SUPABASE_URL=${SUPABASE_URL_SECRET}:latest,SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_SECRET}:latest,OPENROUTER_API_KEY=${PROVIDER_KEY_SECRET}:latest" \
   --set-env-vars "$RUNTIME_ENV_VARS" \
   --cpu 1 --memory 2Gi --timeout 300 --concurrency 4 --min-instances "$MIN_INSTANCES" --max-instances 3
