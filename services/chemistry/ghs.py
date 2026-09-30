@@ -4,10 +4,11 @@ import re
 from contextvars import ContextVar
 
 import cache as chem_cache
+from hstatements import describe_hcode
 from local_chem_data import lookup_local_hcodes
 from pubchem import fetch_pubchem_json
 
-# "confirmed" means PubChem returned a GHS document, or the local table has codes.
+# "confirmed" means PubChem returned a GHS document, or a local/seeded table has codes.
 # "failed" means the fetch did not succeed. An empty list is not a clean bill of health.
 _last_ghs_status: ContextVar[str] = ContextVar("last_ghs_status", default="confirmed")
 
@@ -16,10 +17,25 @@ def last_ghs_status() -> str:
     return _last_ghs_status.get()
 
 
+def _seeded_hcodes(cid: int) -> list[str]:
+    """PubChem codes harvested into the seed cache; the same codes /score uses."""
+    seeded = chem_cache.get(f"ghs_{cid}")
+    if not isinstance(seeded, dict):
+        return []
+    return [code for code in seeded.get("hcodes") or [] if isinstance(code, str)]
+
+
 def _local_hazard_details(cid: int) -> list[dict]:
+    local = lookup_local_hcodes(cid)
+    if local:
+        return [
+            {"code": code, "description": describe_hcode(code), "source": "local H-code table"}
+            for code in local
+        ]
+    # PubChem often answers 503 to Cloud Run egress, so the seed is the fallback.
     return [
-        {"code": code, "description": "", "source": "local H-code table"}
-        for code in lookup_local_hcodes(cid)
+        {"code": code, "description": describe_hcode(code), "source": "PubChem GHS (seeded cache)"}
+        for code in _seeded_hcodes(cid)
     ]
 
 TIMEOUT = 15.0
