@@ -12,6 +12,8 @@ def test_failed_fetch_is_not_confirmed(monkeypatch):
         return None
 
     monkeypatch.setattr(ghs, "fetch_pubchem_json", no_document)
+    monkeypatch.setattr(ghs, "lookup_local_hcodes", lambda cid: [])
+    monkeypatch.setattr(ghs.chem_cache, "get", lambda key: None)
 
     async def run():
         details = await ghs.lookup_hcodes_with_details(313)
@@ -116,3 +118,20 @@ def test_nested_pubchem_section_is_read():
     assert found is True
     assert hazards[0]["code"] == "H314"
     assert "severe skin burns" in hazards[0]["description"]
+
+
+def test_seeded_hazard_cache_confirms_when_pubchem_fails(monkeypatch):
+    """Cloud Run gets PubChem 503s; the seeded ghs_<cid> codes scoring uses must still reach warnings."""
+    async def no_document(url, label):
+        return None
+
+    monkeypatch.setattr(ghs, "fetch_pubchem_json", no_document)
+    monkeypatch.setattr(ghs, "lookup_local_hcodes", lambda cid: [])
+    seeded = {"ghs_14798": {"hcodes": ["H290", "H314"]}}
+    monkeypatch.setattr(ghs.chem_cache, "get", lambda key: seeded.get(key))
+
+    details = asyncio.run(ghs.lookup_hcodes_with_details(14798))
+
+    assert [item["code"] for item in details] == ["H290", "H314"]
+    assert details[1]["description"] == "Causes severe skin burns and eye damage"
+    assert ghs.last_ghs_status() == "confirmed"
