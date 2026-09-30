@@ -16,9 +16,31 @@ REGION="${REGION:-us-central1}"
 PROJECT_ID="${PRODUCTION_GCP_PROJECT_ID:-greenchemistry-ai}"
 REPOSITORY="${PRODUCTION_ARTIFACT_REPOSITORY:-cloud-run-source-deploy}"
 CHEMISTRY_IMAGE_NAME="${CHEMISTRY_IMAGE_NAME:-greenchemistry-chemistry}"
-IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NAME}:${GIT_SHA}"
 
-IMAGE_DIGEST="$("$GCLOUD" artifacts docker images describe "$IMAGE" --project "$PROJECT_ID" --format='value(image_summary.digest)' 2>/dev/null || true)"
+# A squash- or merge-commit release creates a new production SHA. Staging validated
+# the release PR head, so VALIDATED_SHA may name it, but only when its source tree
+# is byte-identical to the production commit.
+VALIDATED_SHA="${VALIDATED_SHA:-$GIT_SHA}"
+[[ "$VALIDATED_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "VALIDATED_SHA must be a full 40-character commit SHA."
+if [[ "$VALIDATED_SHA" != "$GIT_SHA" ]]; then
+  VALIDATED_TREE="$(git rev-parse --verify --quiet "${VALIDATED_SHA}^{tree}" || true)"
+  [[ -n "$VALIDATED_TREE" && "$VALIDATED_TREE" == "$(git rev-parse "HEAD^{tree}")" ]] || \
+    fail "VALIDATED_SHA ${VALIDATED_SHA} source tree does not match ${GIT_SHA}; refusing production deployment."
+fi
+
+describe_digest() {
+  "$GCLOUD" artifacts docker images describe "$1" --project "$PROJECT_ID" --format='value(image_summary.digest)' 2>/dev/null || true
+}
+
+IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${CHEMISTRY_IMAGE_NAME}"
+IMAGE="${IMAGE_BASE}:${GIT_SHA}"
+IMAGE_DIGEST="$(describe_digest "$IMAGE")"
+if [[ ! "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ && "$VALIDATED_SHA" != "$GIT_SHA" ]]; then
+  IMAGE="${IMAGE_BASE}:${VALIDATED_SHA}"
+  IMAGE_DIGEST="$(describe_digest "$IMAGE")"
+else
+  VALIDATED_SHA="$GIT_SHA"
+fi
 [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || \
-  fail "No immutable staging-validated image exists for ${GIT_SHA}; refusing production deployment."
-printf 'image=%s\nimage_digest=%s\n' "$IMAGE" "$IMAGE_DIGEST"
+  fail "No immutable staging-validated image exists for ${VALIDATED_SHA}; refusing production deployment."
+printf 'image=%s\nimage_digest=%s\nvalidated_sha=%s\n' "$IMAGE" "$IMAGE_DIGEST" "$VALIDATED_SHA"

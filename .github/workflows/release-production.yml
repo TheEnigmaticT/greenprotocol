@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: production-release
@@ -18,6 +19,7 @@ jobs:
     environment: production
     outputs:
       image_digest: ${{ steps.image.outputs.image_digest }}
+      validated_sha: ${{ steps.validated.outputs.validated_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,12 +32,30 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_PRODUCTION_RELEASE_CREDENTIALS }}
       - uses: google-github-actions/setup-gcloud@v2
+      - name: Identify the staging-validated release PR head
+        id: validated
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Squash/merge commits get a new SHA; staging validated the PR head.
+          pr="$(gh api "repos/${{ github.repository }}/commits/${GIT_SHA}/pulls" \
+            --jq '[.[] | select(.base.ref == "production" and .merged_at != null)][0].number // empty')"
+          validated_sha="$GIT_SHA"
+          if [[ -n "$pr" ]]; then
+            git fetch --no-tags origin "refs/pull/${pr}/head"
+            validated_sha="$(git rev-parse FETCH_HEAD)"
+          fi
+          echo "validated_sha=${validated_sha}" | tee -a "$GITHUB_OUTPUT"
       - name: Resolve the immutable staging-validated image
         id: image
         env:
           DEPLOY_ENV: production
           GIT_SHA: ${{ github.sha }}
+          VALIDATED_SHA: ${{ steps.validated.outputs.validated_sha }}
         run: |
+          set -o pipefail
           bash scripts/resolve-chemistry-image.sh | tee image.txt
           echo "image_digest=$(awk -F= '/^image_digest=/{print $2}' image.txt)" >> "$GITHUB_OUTPUT"
       - name: Deploy the exact production commit
@@ -43,6 +63,7 @@ jobs:
           DEPLOY_ENV: production
           GIT_SHA: ${{ github.sha }}
           IMAGE_DIGEST: ${{ steps.image.outputs.image_digest }}
+          VALIDATED_SHA: ${{ steps.validated.outputs.validated_sha }}
           GITHUB_ACTIONS: 'true'
           RELEASE_AUTHORITY: approved-production-release
           PRODUCTION_OPENROUTER_MODEL: qwen/qwen3.8-27b
@@ -66,6 +87,7 @@ jobs:
           {
             echo "git_sha=${{ github.sha }}"
             echo "image_digest=${{ needs.deploy-chemistry.outputs.image_digest }}"
+            echo "validated_sha=${{ needs.deploy-chemistry.outputs.validated_sha }}"
             echo "release_workflow=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } | tee release-evidence.txt
       - uses: actions/upload-artifact@v4
