@@ -58,11 +58,14 @@ export default function AnalysisCard({ analysis }: { analysis: AnalysisSummary }
       )}
 
       <div className="flex items-center gap-4 text-xs" style={{ color: '#2D6A4F' }}>
-        {impact_delta.co2eSavedKg > 0 && (
+        {impact_delta && impact_delta.co2eSavedKg > 0 && (
           <span title="CO2e saved">-{fmt(impact_delta.co2eSavedKg)} kg CO2e</span>
         )}
-        {impact_delta.hazardousWasteEliminatedKg > 0 && (
+        {impact_delta && impact_delta.hazardousWasteEliminatedKg > 0 && (
           <span title="Hazardous waste eliminated">-{fmt(impact_delta.hazardousWasteEliminatedKg)} kg waste</span>
+        )}
+        {!impact_delta && (
+          <span style={{ color: '#78716C' }}>Impact not calculated</span>
         )}
       </div>
 
