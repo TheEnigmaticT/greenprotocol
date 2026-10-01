@@ -5,13 +5,18 @@
 \ir ../../supabase/migrations/20261001020000_create_partner_inquiry_mail_outbox.sql
 \ir ../../supabase/migrations/20261001040000_add_encrypted_guest_mail_outbox.sql
 \ir ../../supabase/migrations/20261001030000_harden_scisure_registered_admission_and_review.sql
+\ir ../../supabase/migrations/20261001050000_record_mail_acceptance_not_delivery.sql
 
 DO $$
-DECLARE v_subject_id uuid; foreign_subject_id uuid; principal_id uuid; connection_id uuid; snapshot_id uuid; first_job uuid; replay_job uuid; second_job uuid; guest_outbox uuid;
+DECLARE v_subject_id uuid; foreign_subject_id uuid; principal_id uuid; connection_id uuid; snapshot_id uuid; first_job uuid; replay_job uuid; second_job uuid; guest_outbox uuid; accepted_outbox uuid; acceptance_lease uuid;
 BEGIN
   INSERT INTO gpc_scisure_guest_subjects(subject_hash, expires_at) VALUES ('a' || repeat('0',63), now()+interval '90 days') RETURNING id INTO v_subject_id;
   SELECT gpc_queue_scisure_guest_mail(v_subject_id,'admission','v1.abc.def.ghi',now()+interval '15 minutes') INTO guest_outbox;
   PERFORM assert_true(EXISTS(SELECT 1 FROM gpc_partner_mail_outbox WHERE id=guest_outbox AND guest_subject_id=v_subject_id AND encrypted_payload='v1.abc.def.ghi' AND expires_at>now()), 'guest mail must persist only an encrypted payload in the shared durable outbox');
+  SELECT outbox_id, lease_token INTO accepted_outbox, acceptance_lease FROM gpc_lease_partner_mail(900);
+  PERFORM assert_true(accepted_outbox=guest_outbox, 'queued guest message must lease once for compare-and-swap finalization');
+  PERFORM assert_true(gpc_finalize_partner_mail(accepted_outbox,acceptance_lease,'accepted','smtp-fixture-message-id',NULL), 'SMTP receipt must finalize as provider acceptance');
+  PERFORM assert_true((SELECT state='accepted' AND provider_message_id='smtp-fixture-message-id' FROM gpc_partner_mail_outbox WHERE id=guest_outbox), 'mail outbox must not claim inbox delivery from an SMTP receipt');
   -- A stable subject, not a freshly issued token hash, owns the guest principal.
   INSERT INTO gpc_scisure_principals(kind, guest_subject_id, expires_at) VALUES ('guest', v_subject_id, now()+interval '90 days') RETURNING id INTO principal_id;
   INSERT INTO gpc_scisure_connections(principal_id,allowed_origin,nonce_hash,credential_id,credential_hash,expires_at)

@@ -21,20 +21,20 @@ describe('partner inquiry boundary', () => {
   })
 })
 
-describe('provider-neutral mail delivery', () => {
-  it('accepts a configured approved provider origin only', () => {
-    const base = { GCAI_PARTNER_MAIL_TOKEN: 'token', GCAI_PARTNER_MAIL_FROM: 'noreply@example.test', GCAI_PARTNER_MAIL_ALLOWED_ORIGIN: 'https://mail.approved.test' }
+describe('explicit mail delivery adapters', () => {
+  it('selects the HTTP API only when explicitly configured with its approved origin', () => {
+    const base = { GCAI_PARTNER_MAIL_TRANSPORT: 'httpapi', GCAI_PARTNER_MAIL_TOKEN: 'token', GCAI_PARTNER_MAIL_FROM: 'trevor@greenchemistry.ai', GCAI_PARTNER_MAIL_ALLOWED_ORIGIN: 'https://mail.approved.test' }
     expect(configuredMail({ ...base, GCAI_PARTNER_MAIL_ENDPOINT: 'https://mail.attacker.test/send' })).toBeNull()
     expect(configuredMail({ ...base, GCAI_PARTNER_MAIL_ENDPOINT: 'https://mail.approved.test/v1/send' })).toMatchObject({ endpoint: 'https://mail.approved.test/v1/send' })
   })
 
-  it('marks sent only after a verified provider message id', async () => {
-    const result = await dispatchMail({ endpoint: 'https://mail.fixture/send', token: 'test-token', from: 'noreply@example.test' }, { to: 'recipient@example.test', subject: 'Subject', text: 'Body', idempotencyKey: 'outbox-1' }, async () => new Response(JSON.stringify({ id: 'provider-123' }), { status: 202 }))
-    expect(result).toEqual({ kind: 'sent', providerMessageId: 'provider-123' })
+  it('records provider handoff as accepted, not recipient inbox delivery', async () => {
+    const result = await dispatchMail({ kind: 'httpapi', endpoint: 'https://mail.fixture/send', token: 'test-token', from: 'trevor@greenchemistry.ai' }, { to: 'recipient@example.test', subject: 'Subject', text: 'Body', idempotencyKey: 'outbox-1' }, async () => new Response(JSON.stringify({ id: 'provider-123' }), { status: 202 }))
+    expect(result).toEqual({ kind: 'accepted', providerMessageId: 'provider-123' })
   })
 
   it('treats a timeout as uncertain and does not make a blind retry safe', async () => {
-    const result = await dispatchMail({ endpoint: 'https://mail.fixture/send', token: 'test-token', from: 'noreply@example.test' }, { to: 'recipient@example.test', subject: 'Subject', text: 'Body', idempotencyKey: 'outbox-1' }, async () => { throw new DOMException('timed out', 'AbortError') })
+    const result = await dispatchMail({ kind: 'httpapi', endpoint: 'https://mail.fixture/send', token: 'test-token', from: 'trevor@greenchemistry.ai' }, { to: 'recipient@example.test', subject: 'Subject', text: 'Body', idempotencyKey: 'outbox-1' }, async () => { throw new DOMException('timed out', 'AbortError') })
     expect(result).toEqual({ kind: 'uncertain' })
   })
 

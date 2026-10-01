@@ -49,15 +49,15 @@ async function main() {
   const result = !process.env.GCAI_PARTNER_MAIL_DISPATCH_ENABLED || !to
     ? { kind: 'pending_configuration' as const }
     : await dispatchMail(config, { to, subject, text, idempotencyKey: `outbox:${row.outbox_id}` })
-  const state = result.kind === 'sent' ? 'sent' : result.kind
+  const state = result.kind === 'accepted' ? 'accepted' : result.kind
   const { error: finalError } = await admin.rpc('gpc_finalize_partner_mail' as never, {
     p_outbox_id: row.outbox_id, p_lease_token: row.lease_token, p_state: state,
-    p_provider_message_id: result.kind === 'sent' ? result.providerMessageId : null,
+    p_provider_message_id: result.kind === 'accepted' ? result.providerMessageId : null,
     p_error_code: result.kind === 'failed' ? result.code : null,
   } as never)
   if (finalError) throw finalError
-  if (row.scisure_email_event_id && result.kind === 'sent') {
-    const { error: eventError } = await admin.from('gpc_scisure_email_events').update({ state: 'sent' }).eq('id', row.scisure_email_event_id)
+  if (row.scisure_email_event_id && result.kind === 'accepted') {
+    const { error: eventError } = await admin.from('gpc_scisure_email_events').update({ state: 'accepted' }).eq('id', row.scisure_email_event_id)
     if (eventError) throw eventError
   }
   console.log(JSON.stringify({ worker: 'scisure-mail', outboxId: row.outbox_id, status: result.kind }))
