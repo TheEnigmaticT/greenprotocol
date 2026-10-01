@@ -1,0 +1,1086 @@
+From a4cfb0ca1c219e7945e6950450df0aa29b9c87c3 Mon Sep 17 00:00:00 2001
+From: Trevor Longino <trevor.longino@gmail.com>
+Date: Thu, 17 Sep 2026 21:44:21 +0000
+Subject: [PATCH] feat: solvent dispositions with fail-closed application gate
+
+Invert solvent recommendation flow so evidence-backed candidates and
+Hermes dispositions decide eligibility before phrasing. Only
+supported_applicable interventions revise assembled/finalized
+protocols; CHEM21-only and retrieval failures stay visible hypotheses.
+---
+ lib/finalized-protocol.ts                   |  34 ++-
+ lib/pipeline.ts                             | 193 +++-------------
+ lib/recommendation-candidates.ts            | 230 ++++++++++++++++++--
+ lib/types.ts                                |  18 +-
+ scripts/smoke-evidence-backed-qwen.ts       |  87 ++++++++
+ tests/lib/finalized-protocol.test.ts        | 138 +++++++-----
+ tests/lib/recommendation-candidates.test.ts |  87 ++++++--
+ 7 files changed, 528 insertions(+), 259 deletions(-)
+ create mode 100644 scripts/smoke-evidence-backed-qwen.ts
+
+diff --git a/lib/finalized-protocol.ts b/lib/finalized-protocol.ts
+index 6ca1175..938eaec 100644
+--- a/lib/finalized-protocol.ts
++++ b/lib/finalized-protocol.ts
+@@ -1,4 +1,5 @@
+ import { AnalysisResult, Recommendation } from './types'
++import { isEligibleToReviseProcedure } from './recommendation-candidates'
+ 
+ function escapeRegExp(value: string): string {
+   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+@@ -14,9 +15,24 @@ function applyRecommendation(text: string, rec: Recommendation): string {
+   return text.replace(pattern, alternative)
+ }
+ 
++/**
++ * Fail-closed procedure revision gate.
++ * - Legacy recommendations without evidenceAssessment remain applyable when accepted.
++ * - supported_applicable is always applyable when accepted.
++ * - supported_with_constraints may apply only after explicit user acceptance.
++ * - analogous_only / insufficient_evidence / contradicted never revise the procedure.
++ */
++export function canApplyAcceptedRecommendation(rec: Recommendation): boolean {
++  if (rec.isAccepted !== true) return false
++  const assessment = rec.evidenceAssessment
++  if (!assessment) return true
++  if (isEligibleToReviseProcedure(assessment)) return true
++  return assessment.disposition === 'supported_with_constraints'
++}
++
+ function applyAcceptedRecommendations(text: string, recs: Recommendation[]): string {
+   return recs
+-    .filter(rec => rec.isAccepted === true)
++    .filter(canApplyAcceptedRecommendation)
+     .sort((a, b) => b.original.chemical.length - a.original.chemical.length)
+     .reduce((current, rec) => applyRecommendation(current, rec), text)
+ }
+@@ -35,19 +51,25 @@ export function buildFinalizedProtocol(
+   analysis: AnalysisResult,
+   originalProtocol?: string | null
+ ): string {
+-  const accepted = analysis.recommendations.filter(rec => rec.isAccepted === true)
++  const acceptedApplicable = analysis.recommendations.filter(canApplyAcceptedRecommendation)
+ 
+-  if (accepted.length === analysis.recommendations.length && analysis.revisedProtocol.trim()) {
++  // Only reuse the assembled revision when every accepted-applicable change is represented
++  // and the assembly itself was produced under the fail-closed gate.
++  if (
++    acceptedApplicable.length > 0
++    && acceptedApplicable.length === analysis.recommendations.filter(rec => rec.isAccepted === true).length
++    && analysis.revisedProtocol.trim()
++  ) {
+     return analysis.revisedProtocol
+   }
+ 
+-  if (accepted.length === 0) {
++  if (acceptedApplicable.length === 0) {
+     return originalProtocol?.trim() || buildStepProcedure(analysis, [])
+   }
+ 
+   if (analysis.steps.length > 0) {
+-    return buildStepProcedure(analysis, accepted)
++    return buildStepProcedure(analysis, acceptedApplicable)
+   }
+ 
+-  return applyAcceptedRecommendations(originalProtocol || analysis.revisedProtocol, accepted)
++  return applyAcceptedRecommendations(originalProtocol || analysis.revisedProtocol, acceptedApplicable)
+ }
+diff --git a/lib/pipeline.ts b/lib/pipeline.ts
+index cbf797e..80c0a5a 100644
+--- a/lib/pipeline.ts
++++ b/lib/pipeline.ts
+@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
+ import { boundLiteratureQuery } from './literature-query'
+ import { QWEN_MODEL, callQwen } from '@/lib/qwen-adapter'
+ import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type LiteratureEvidenceMatch, type EvidenceBackedCandidate } from '@/lib/types'
+-import { buildEvidenceBackedCandidates, evidenceCandidateKey } from '@/lib/recommendation-candidates'
++import { buildEvidenceBackedCandidates, buildHypothesisRecommendation, evidenceCandidateKey, isPhraseableDisposition, isEligibleToReviseProcedure } from '@/lib/recommendation-candidates'
+ import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
+ import { prepareChemicalInputs } from '@/lib/chemical-inputs'
+ import { groundDeclaredProducts } from '@/lib/declared-products'
+@@ -13,7 +13,6 @@ import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/li
+ import { buildAssemblePrompt } from '@/lib/prompts/assemble'
+ import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
+ import { buildSdsReferences } from '@/lib/sds'
+-import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
+ import { logLLMTrace, logDedupTrace } from '@/lib/trace'
+ import type { SupabaseClient } from '@supabase/supabase-js'
+ 
+@@ -323,7 +322,7 @@ async function evaluatePrinciple(
+ 
+   return callClaude<PrincipleResult>(
+     systemPrompt,
+-    `Analyze these protocol steps against Principle ${principleNumber}. You may only phrase one of the supplied application-eligible candidates; do not invent targets, alternatives, or conditions.\n\nProtocol steps:\n${stepsJson}\n\nEligible candidates:\n${candidateJson}`,
++    `Analyze these protocol steps against Principle ${principleNumber}. You may only phrase one of the supplied evidence-backed candidates; do not invent targets, alternatives, or conditions. Preserve constraints when the candidate is constrained.\n\nProtocol steps:\n${stepsJson}\n\nEligible candidates:\n${candidateJson}`,
+     PRINCIPLE_SCHEMA,
+     `principle-${principleNumber}`,
+     SONNET,
+@@ -347,20 +346,22 @@ async function evaluateAllPrinciples(
+   onProgress?: (event: ProgressEvent) => void,
+   context?: CallContext
+ ): Promise<Recommendation[]> {
+-  const eligible = candidates.filter(candidate => candidate.evidenceAssessment.eligibleForApplication)
++  // Phrase only dispositions that can become actionable or constrained cards.
++  // analogous_only / insufficient_evidence are attached as deterministic hypotheses later.
++  const phraseable = candidates.filter(candidate => isPhraseableDisposition(candidate.evidenceAssessment.disposition))
+   const candidatesByPrinciple = new Map(PRINCIPLES.map(principle => [
+     principle.number,
+-    eligible.filter(candidate => principleNumbersForCandidate(candidate).includes(principle.number)),
++    phraseable.filter(candidate => principleNumbersForCandidate(candidate).includes(principle.number)),
+   ]))
+   const activePrinciples = PRINCIPLES.filter(principle => (candidatesByPrinciple.get(principle.number)?.length ?? 0) > 0)
+ 
+   if (activePrinciples.length === 0) {
+-    console.info('[pipeline] No direct, role-bounded evidence candidates are eligible for application.')
++    console.info('[pipeline] No phraseable evidence-backed solvent candidates for model wording.')
+     return []
+   }
+ 
+   const batchSize = process.env.GCAI_ENGINE_CANDIDATE === '1' ? 2 : activePrinciples.length
+-  console.log(`Phase 2: Phrasing ${eligible.length} evidence-backed candidates across ${activePrinciples.length} principles...`)
++  console.log(`Phase 2: Phrasing ${phraseable.length} evidence-backed candidates across ${activePrinciples.length} principles...`)
+   const batches: PrincipleDefinition[][] = []
+   for (let index = 0; index < activePrinciples.length; index += batchSize) {
+     batches.push(activePrinciples.slice(index, index + batchSize))
+@@ -492,163 +493,7 @@ export function rankRecommendations(recs: Recommendation[]): Recommendation[] {
+   })
+ }
+ 
+-// ─── Phase 2.7: Re-evaluation ───────────────────────────────────
+-
+-interface ReevaluationResult {
+-  action: 'confirm' | 'downgrade' | 'suppress'
+-  revisedConfidence: 'high' | 'medium' | 'low'
+-  revisedSeverity?: 'high' | 'medium' | 'low'
+-  revisedRationale: string
+-  evidenceAssessment: {
+-    supportsOriginalIssue: boolean
+-    supportsAlternative: boolean
+-    contextMatch: 'strong' | 'partial' | 'weak' | 'none'
+-    quantitativeData: boolean
+-  }
+-  concerns: string[]
+-  suppressionReason?: string
+-}
+-
+-async function reevaluateRecommendation(
+-  recommendation: Recommendation,
+-  literatureEvidence: LiteratureEvidenceMatch[]
+-): Promise<ReevaluationResult | null> {
+-  try {
+-    const systemPrompt = buildReevaluatePrompt(recommendation, literatureEvidence)
+-    const result = await callClaude<ReevaluationResult>(
+-      systemPrompt,
+-      'Re-evaluate this recommendation based on the retrieved literature evidence.',
+-      REEVALUATE_SCHEMA as unknown as InputSchema,
+-      `reevaluate-step${recommendation.stepNumber}-${recommendation.original.chemical.substring(0, 15)}`
+-    )
+-    return result
+-  } catch (err) {
+-    console.warn(`[pipeline] Re-evaluation failed for ${recommendation.original.chemical}:`, err)
+-    return null
+-  }
+-}
+-
+-function isCandidateOnlyEvidence(matches: LiteratureEvidenceMatch[]): boolean {
+-  return matches.length > 0 && matches.every(
+-    match => match.candidateStatus === 'candidate_pending_adjudication'
+-  )
+-}
+-
+-function enforceCandidateOnlyReevaluation(
+-  reevaluation: ReevaluationResult,
+-  matches: LiteratureEvidenceMatch[],
+-): ReevaluationResult {
+-  if (!isCandidateOnlyEvidence(matches) || reevaluation.action === 'downgrade') {
+-    return reevaluation
+-  }
+-
+-  return {
+-    ...reevaluation,
+-    action: 'downgrade',
+-    revisedConfidence: 'low',
+-    concerns: [
+-      ...reevaluation.concerns,
+-      'Candidate-only evidence cannot independently confirm or suppress this intervention.',
+-    ],
+-    suppressionReason: undefined,
+-  }
+-}
+-
+-async function reevaluateAllRecommendations(
+-  recommendations: Recommendation[],
+-  onProgress?: (event: ProgressEvent) => void
+-): Promise<{ recommendations: Recommendation[]; stats: { confirmed: number; downgraded: number; suppressed: number; failed: number } }> {
+-  console.log(`Phase 2.7: Re-evaluating ${recommendations.length} recommendations against literature...`)
+-  onProgress?.({ type: 'phase', phase: 2, message: `Re-evaluating ${recommendations.length} recommendations...` })
+-
+-  const stats = { confirmed: 0, downgraded: 0, suppressed: 0, failed: 0 }
+-  const keepRecommendations: Recommendation[] = []
+-
+-  // Re-evaluate each recommendation sequentially (to avoid rate limits)
+-  for (let i = 0; i < recommendations.length; i++) {
+-    const rec = recommendations[i]
+-    const chemName = rec.original.chemical
+-    
+-    console.log(`Phase 2.7: [${i + 1}/${recommendations.length}] Re-evaluating ${chemName}...`)
+-
+-    // Retrieve literature for this specific recommendation
+-    const query = `Green chemistry alternative for ${rec.original.chemical}: ${rec.alternative.chemical}. ${rec.alternative.rationale}`
+-    let literatureEvidence: LiteratureEvidenceMatch[] = []
+-    
+-    try {
+-      literatureEvidence = await searchLiteratureEvidence({
+-        query: boundLiteratureQuery(query),
+-        limit: 5,
+-        threshold: 0.25,
+-      })
+-      console.log(`Phase 2.7: Found ${literatureEvidence.length} literature matches for ${chemName}`)
+-    } catch (err) {
+-      console.warn(`Phase 2.7: Literature retrieval failed for ${chemName}:`, err)
+-    }
+-
+-    // Re-evaluate with LLM
+-    const reevaluationResult = await reevaluateRecommendation(rec, literatureEvidence)
+-    const reevaluation = reevaluationResult
+-      ? enforceCandidateOnlyReevaluation(reevaluationResult, literatureEvidence)
+-      : null
+-
+-    if (!reevaluation) {
+-      stats.failed++
+-      // Keep the original recommendation if re-evaluation fails
+-      keepRecommendations.push(rec)
+-      continue
+-    }
+-
+-    // Apply re-evaluation results
+-    if (reevaluation.action === 'suppress') {
+-      stats.suppressed++
+-      console.log(`Phase 2.7: SUPPRESSED ${chemName} — ${reevaluation.suppressionReason}`)
+-      // Don't add to keepRecommendations
+-      continue
+-    }
+-
+-    // Update recommendation based on re-evaluation
+-    const updatedRec = { ...rec }
+-    updatedRec.confidenceLevel = reevaluation.revisedConfidence
+-    
+-    if (reevaluation.revisedSeverity) {
+-      updatedRec.severity = reevaluation.revisedSeverity
+-    }
+-
+-    // Append concerns to caveats if they exist
+-    if (reevaluation.concerns.length > 0) {
+-      const concernsText = reevaluation.concerns.join('; ')
+-      updatedRec.alternative.caveats = updatedRec.alternative.caveats
+-        ? `${updatedRec.alternative.caveats}; ${concernsText}`
+-        : concernsText
+-    }
+-
+-    // Update rationale with revised version
+-    updatedRec.alternative.rationale = reevaluation.revisedRationale
+-
+-    // Store evidence assessment metadata
+-    if (!updatedRec.evidence) {
+-      updatedRec.evidence = { why_flagged: [], why_replacement: [], citations: [] }
+-    }
+-    // @ts-expect-error — adding non-standard field for evidence assessment metadata
+-    updatedRec.evidence.reevaluationMeta = reevaluation.evidenceAssessment
+-
+-    if (reevaluation.action === 'confirm') {
+-      stats.confirmed++
+-      console.log(`Phase 2.7: CONFIRMED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
+-    } else if (reevaluation.action === 'downgrade') {
+-      stats.downgraded++
+-      console.log(`Phase 2.7: DOWNGRADED ${chemName} (confidence: ${reevaluation.revisedConfidence})`)
+-    }
+-
+-    keepRecommendations.push(updatedRec)
+-  }
+-
+-  console.log(`Phase 2.7 complete: ${stats.confirmed} confirmed, ${stats.downgraded} downgraded, ${stats.suppressed} suppressed, ${stats.failed} failed`)
+-  onProgress?.({ type: 'phase', phase: 2, message: `Re-evaluation complete: ${stats.suppressed} recommendations suppressed` })
+-
+-  return { recommendations: keepRecommendations, stats }
+-}
++// Phase 2.7 model re-evaluation removed: eligibility is decided before wording and fail-closed.
+ 
+ // ─── Deduplication ───────────────────────────────────────────────
+ 
+@@ -927,12 +772,20 @@ export async function analyzeProtocol(
+     }
+   }
+ 
++  // Deterministic hypothesis cards for analogous_only / insufficient_evidence (visible, not applicable).
++  const hypothesisRecommendations = evidenceCandidates
++    .map(buildHypothesisRecommendation)
++    .filter((rec): rec is Recommendation => rec !== null)
++
+   // Recommendations are already evidence-bounded. Do not use a second retrieval
+   // or model re-evaluation to rehabilitate an unsupported model-generated swap.
+ 
+   // Deduplicate: merge recommendations for the same chemical in the same step
+-  const { deduped: recommendations } = deduplicateRecommendations(rawRecommendations, context)
+-  console.log(`Deduplication: ${rawRecommendations.length} raw → ${recommendations.length} merged`)
++  const { deduped: recommendations } = deduplicateRecommendations(
++    [...rawRecommendations, ...hypothesisRecommendations],
++    context,
++  )
++  console.log(`Deduplication: ${rawRecommendations.length} phrased + ${hypothesisRecommendations.length} hypotheses → ${recommendations.length} merged`)
+   onProgress?.({ type: 'phase', phase: 2, message: `Found ${recommendations.length} recommendations` })
+ 
+   // Attach evidence to recommendations based on enriched chemical data
+@@ -1020,9 +873,13 @@ export async function analyzeProtocol(
+     }
+   }
+ 
+-  // Phase 3: Assemble revised protocol
++  // Phase 3: Assemble revised protocol from application-eligible interventions only (fail-closed).
+   onProgress?.({ type: 'phase', phase: 3, message: 'Assembling revised protocol...' })
+-  const assembled = await assembleResult(protocolText, parsed.steps, finalRecommendations)
++  const recommendationsForAssemble = finalRecommendations.filter(rec =>
++    isEligibleToReviseProcedure(rec.evidenceAssessment),
++  )
++  console.log(`Phase 3: Assembling from ${recommendationsForAssemble.length}/${finalRecommendations.length} application-eligible recommendations`)
++  const assembled = await assembleResult(protocolText, parsed.steps, recommendationsForAssemble)
+ 
+   // Attach process complexity from deterministic scores
+   const complexityScore = deterministicScores?.scores.find(s => s.principle_number === 13)
+diff --git a/lib/recommendation-candidates.ts b/lib/recommendation-candidates.ts
+index fa97164..bae11d1 100644
+--- a/lib/recommendation-candidates.ts
++++ b/lib/recommendation-candidates.ts
+@@ -3,6 +3,8 @@ import type {
+   EnrichedChemical,
+   EvidenceBackedCandidate,
+   LiteratureEvidenceMatch,
++  Recommendation,
++  RecommendationDisposition,
+   RecommendationEvidenceAssessment,
+ } from '@/lib/types'
+ 
+@@ -21,58 +23,206 @@ function isSolvent(role: string | undefined): boolean {
+   return normalized(role ?? '') === 'solvent'
+ }
+ 
++/**
++ * Direct reaction/procedure evidence — not CHEM21 catalogue guidance.
++ * Prefer explicit adjudication statuses over open-ended keyword matches.
++ */
+ function isDirectEvidence(match: LiteratureEvidenceMatch): boolean {
+-  return /^(adjudicated|approved|direct)/.test(normalized(match.candidateStatus))
++  const status = normalized(match.candidateStatus)
++  return (
++    status === 'adjudicated_direct'
++    || status === 'adjudicated'
++    || status === 'approved'
++    || status === 'direct'
++    || status.startsWith('adjudicated_direct')
++    || status.startsWith('approved_')
++  )
++}
++
++function isContradictedEvidence(match: LiteratureEvidenceMatch): boolean {
++  const status = normalized(match.candidateStatus)
++  if (
++    status.includes('contradict')
++    || status.includes('reject')
++    || status.includes('inapplicable')
++    || status.includes('incompatible')
++    || status === 'contradicted'
++    || status === 'rejected'
++  ) {
++    return true
++  }
++
++  const blob = `${match.applicability ?? ''} ${match.limitations ?? ''} ${match.quote ?? ''}`.toLowerCase()
++  return /\b(contra\s*indicat|incompatible with|not suitable as a (?:drop-?in )?replacement|failed to replace|does not replace)\b/.test(blob)
+ }
+ 
+ function supportsSolventContext(match: LiteratureEvidenceMatch): boolean {
+-  const context = `${match.applicability ?? ''} ${match.evidenceType ?? ''}`.toLowerCase()
+-  return /solvent|extraction|workup|wash|reaction medium/.test(context)
++  const context = `${match.applicability ?? ''} ${match.evidenceType ?? ''} ${match.quote ?? ''}`.toLowerCase()
++  // Require an explicit solvent-role cue — catalogue hazard text alone is insufficient.
++  return /\b(solvent|extraction|work-?up|wash(?:es|ing)?|reaction medium|reaction solvent)\b/.test(context)
++}
++
++export interface CompatibilityScreenResult {
++  contradicted: boolean
++  constraints: string[]
++  limitingFactors: string[]
++}
++
++/**
++ * Hard compatibility screen against the parsed step/procedure.
++ * CHEM21 membership is not application eligibility.
++ */
++export function screenSolventCompatibility(
++  step: AnalysisStep,
++  matches: LiteratureEvidenceMatch[],
++): CompatibilityScreenResult {
++  const constraints: string[] = []
++  const limitingFactors: string[] = []
++  let contradicted = matches.some(isContradictedEvidence)
++
++  const temperature = step.conditions.temperature?.toLowerCase() ?? ''
++  const atmosphere = step.conditions.atmosphere?.toLowerCase() ?? ''
++
++  for (const match of matches) {
++    const limitations = (match.limitations ?? '').toLowerCase()
++    const applicability = (match.applicability ?? '').toLowerCase()
++    const blob = `${limitations} ${applicability}`
++
++    if (blob.trim()) {
++      limitingFactors.push(match.limitations?.trim() || match.applicability?.trim() || match.quote.slice(0, 160))
++    }
++
++    if (/\b(cryogenic|below\s*-?\d+\s*°?\s*c|low temperature)\b/.test(blob) && /reflux|heat|\b[1-9]\d{2}\s*°?\s*c\b/.test(temperature)) {
++      constraints.push('Literature constraints imply low-temperature use; protocol temperature may be incompatible.')
++    }
++
++    // Fail closed: missing atmosphere declaration does not satisfy an inert-atmosphere requirement.
++    if (/\binert(?: atmosphere)?|nitrogen|argon|schlenk\b/.test(blob) && !/n2|nitrogen|argon|inert/.test(atmosphere)) {
++      constraints.push('Literature use requires an inert atmosphere not declared for this step.')
++    }
++
++    if (/\banhydrous|water[- ]free|moisture[- ]sensitive\b/.test(blob) && /aqueous|water\b/.test(step.description.toLowerCase())) {
++      constraints.push('Literature use assumes anhydrous conditions; step text mentions water/aqueous handling.')
++    }
++
++    if (/\bnot (?:a )?drop-?in\b|\brequires reoptimisation\b|\breoptimization\b|\bcatalyst (?:poison|incompat)/.test(blob)) {
++      constraints.push('Literature reports non-drop-in behavior or required reoptimization.')
++    }
++
++    if (/\bincompatible with (?:this|the) (?:substrate|catalyst|procedure)\b/.test(blob)) {
++      contradicted = true
++    }
++  }
++
++  return {
++    contradicted,
++    constraints: [...new Set(constraints)],
++    limitingFactors: [...new Set(limitingFactors.filter(Boolean))],
++  }
++}
++
++export function isVisibleDisposition(disposition: RecommendationDisposition): boolean {
++  return disposition !== 'contradicted_or_inapplicable'
++}
++
++export function isPhraseableDisposition(disposition: RecommendationDisposition): boolean {
++  return disposition === 'supported_applicable' || disposition === 'supported_with_constraints'
+ }
+ 
+ function assessmentFor(
+   matches: LiteratureEvidenceMatch[],
++  step: AnalysisStep,
+   hasSmiles: boolean,
+   deferred: boolean,
+ ): RecommendationEvidenceAssessment {
+   if (deferred) {
+     return {
+-      state: 'deferred', directness: 'none', supportingReferenceCount: 0,
+-      applicability: 'none', eligibleForApplication: false,
+-      eligibilityReason: 'Evidence retrieval is deferred or unavailable; no change can be applied.',
++      disposition: 'insufficient_evidence',
++      directness: 'none',
++      supportingReferenceCount: 0,
++      applicability: 'none',
++      eligibleForApplication: false,
++      eligibilityReason:
++        'Evidence retrieval failed or was deferred; hypothesis may remain visible but no change can be applied.',
++    }
++  }
++
++  const screen = screenSolventCompatibility(step, matches)
++  if (screen.contradicted) {
++    return {
++      disposition: 'contradicted_or_inapplicable',
++      directness: matches.some(isDirectEvidence) ? 'direct' : matches.length > 0 ? 'indirect' : 'none',
++      supportingReferenceCount: matches.length,
++      applicability: 'none',
++      eligibleForApplication: false,
++      eligibilityReason: 'Retrieved evidence contradicts or marks this solvent change inapplicable for the procedure context.',
++      constraints: screen.constraints,
++      limitingFactors: screen.limitingFactors,
+     }
+   }
+ 
+   const direct = matches.filter(match => isDirectEvidence(match) && supportsSolventContext(match))
+   if (direct.length > 0) {
++    // Hard procedure conflicts or missing structural anchor => constrained (visible, not auto-applicable).
++    // Mild literature caveats remain limitingFactors on supported_applicable without blocking eligibility.
++    const needsConstraints = screen.constraints.length > 0 || !hasSmiles
++    if (needsConstraints) {
++      return {
++        disposition: 'supported_with_constraints',
++        directness: 'direct',
++        supportingReferenceCount: direct.length,
++        applicability: hasSmiles ? 'partial' : 'weak',
++        eligibleForApplication: false,
++        eligibilityReason: hasSmiles
++          ? 'Direct solvent-context evidence exists, but procedure constraints require laboratory validation before application.'
++          : 'Direct solvent-context evidence exists without a structural (SMILES) anchor; treat as constrained and validate before application.',
++        constraints: screen.constraints.length > 0
++          ? screen.constraints
++          : ['Validate yield, selectivity, and work-up under the parsed procedure conditions.'],
++        limitingFactors: screen.limitingFactors,
++      }
++    }
++
+     return {
+-      state: 'direct-supported', directness: 'direct', supportingReferenceCount: direct.length,
+-      applicability: hasSmiles ? 'strong' : 'partial', eligibleForApplication: true,
+-      eligibilityReason: hasSmiles
+-        ? 'Direct, adjudicated evidence is bound to a solvent occurrence with a verified structural anchor.'
+-        : 'Direct, adjudicated evidence is bound to a solvent occurrence; reaction structure was unavailable.',
++      disposition: 'supported_applicable',
++      directness: 'direct',
++      supportingReferenceCount: direct.length,
++      applicability: 'strong',
++      eligibleForApplication: true,
++      eligibilityReason:
++        'Direct, adjudicated solvent-context evidence is bound to this occurrence with a structural anchor and no hard compatibility contradictions.',
++      limitingFactors: screen.limitingFactors,
+     }
+   }
+ 
+   if (matches.length > 0) {
+     return {
+-      state: 'candidate-only', directness: 'indirect', supportingReferenceCount: matches.length,
+-      applicability: 'weak', eligibleForApplication: false,
+-      eligibilityReason: 'Retrieved evidence is preliminary or lacks a compatible solvent-context adjudication.',
++      disposition: 'analogous_only',
++      directness: 'indirect',
++      supportingReferenceCount: matches.length,
++      applicability: 'weak',
++      eligibleForApplication: false,
++      eligibilityReason:
++        'Only analogous or non-adjudicated literature was retrieved; CHEM21/hazard guidance remains separate and does not establish reaction performance.',
++      constraints: screen.constraints,
++      limitingFactors: screen.limitingFactors,
+     }
+   }
+ 
+   return {
+-    state: 'no-direct-evidence', directness: 'none', supportingReferenceCount: 0,
+-    applicability: 'none', eligibleForApplication: false,
+-    eligibilityReason: 'No direct, adjudicated reaction or procedure evidence was retrieved for this change.',
++    disposition: 'insufficient_evidence',
++    directness: 'none',
++    supportingReferenceCount: 0,
++    applicability: 'none',
++    eligibleForApplication: false,
++    eligibilityReason:
++      'No reaction/procedure literature evidence was retrieved. CHEM21 alternatives are hazard-guidance candidates only and are not application-eligible.',
+   }
+ }
+ 
+ /**
+  * Create role- and occurrence-bounded intervention candidates before any model
+- * is permitted to phrase a recommendation. The initial shipping slice is
+- * intentionally limited to explicit solvent-guide alternatives.
++ * is permitted to phrase a recommendation. Shipping slice: solvents only.
+  */
+ export function buildEvidenceBackedCandidates(
+   input: BuildEvidenceBackedCandidatesInput,
+@@ -91,6 +241,7 @@ export function buildEvidenceBackedCandidates(
+       const evidence = input.evidenceByCandidate.get(key) ?? []
+       const evidenceAssessment = assessmentFor(
+         evidence,
++        step,
+         Boolean(chemical.smiles),
+         input.deferredCandidateKeys?.has(key) ?? false,
+       )
+@@ -118,3 +269,44 @@ export function buildEvidenceBackedCandidates(
+ export function evidenceCandidateKey(occurrenceId: string, alternative: string): string {
+   return keyFor(occurrenceId, alternative)
+ }
++
++/** Recommendations that may revise the assembled/finalized procedure. */
++export function isEligibleToReviseProcedure(assessment: RecommendationEvidenceAssessment | undefined): boolean {
++  if (!assessment) return false
++  return assessment.eligibleForApplication && assessment.disposition === 'supported_applicable'
++}
++
++
++/** Deterministic hypothesis cards for non-phraseable visible dispositions. */
++export function buildHypothesisRecommendation(candidate: EvidenceBackedCandidate): Recommendation | null {
++  const assessment = candidate.evidenceAssessment
++  if (!isVisibleDisposition(assessment.disposition)) return null
++  if (isPhraseableDisposition(assessment.disposition)) return null
++
++  const source = candidate.target.sourceChemical ?? 'unknown solvent'
++  const alternative = candidate.proposedAlternative ?? 'unknown alternative'
++  const hypothesisNote = assessment.disposition === 'analogous_only'
++    ? 'Analogous literature only — not eligible to revise this procedure.'
++    : 'Insufficient reaction/procedure evidence — CHEM21/hazard guidance is not application eligibility.'
++
++  return {
++    stepNumber: candidate.target.stepNumber,
++    principleNumbers: [5],
++    principleNames: ['Safer Solvents and Auxiliaries'],
++    severity: 'low',
++    original: {
++      chemical: source,
++      issue: `Solvent occurrence flagged for greener alternatives (${hypothesisNote})`,
++    },
++    alternative: {
++      chemical: alternative,
++      rationale: assessment.eligibilityReason,
++      yieldImpact: 'Unknown — not established for this exact procedure',
++      caveats: [hypothesisNote, ...(assessment.constraints ?? [])].join(' '),
++      evidenceBasis: 'Hypothesis from catalogue and/or non-applicable literature; deterministic scores remain separate.',
++    },
++    evidenceAssessment: assessment,
++    evidenceCandidateId: candidate.id,
++    confidenceLevel: 'low',
++  }
++}
+diff --git a/lib/types.ts b/lib/types.ts
+index 7b123a3..648a164 100644
+--- a/lib/types.ts
++++ b/lib/types.ts
+@@ -369,13 +369,29 @@ export interface LiteratureEvidenceMatch {
+ /** A bounded proposed procedure change, evaluated before recommendation wording. */
+ export type InterventionKind = 'substitution' | 'condition-reduction' | 'operation-reduction'
+ 
++/** Hermes solvent-slice dispositions (Trevor acceptance 2026-09-17). */
++export type RecommendationDisposition =
++  | 'supported_applicable'
++  | 'supported_with_constraints'
++  | 'analogous_only'
++  | 'contradicted_or_inapplicable'
++  | 'insufficient_evidence'
++
+ export interface RecommendationEvidenceAssessment {
+-  state: 'direct-supported' | 'candidate-only' | 'no-direct-evidence' | 'deferred' | 'ineligible'
++  /** Durable decision outcome for this occurrence-bounded intervention. */
++  disposition: RecommendationDisposition
+   directness: 'direct' | 'indirect' | 'none'
+   supportingReferenceCount: number
+   applicability: 'strong' | 'partial' | 'weak' | 'none'
++  /**
++   * Fail-closed application gate: true only for supported_applicable.
++   * CHEM21/PubChem hazard guidance alone never sets this.
++   */
+   eligibleForApplication: boolean
+   eligibilityReason: string
++  /** Procedure constraints that must be validated in the lab when disposition requires it. */
++  constraints?: string[]
++  limitingFactors?: string[]
+ }
+ 
+ export interface EvidenceBackedCandidate {
+diff --git a/scripts/smoke-evidence-backed-qwen.ts b/scripts/smoke-evidence-backed-qwen.ts
+new file mode 100644
+index 0000000..1bcaae7
+--- /dev/null
++++ b/scripts/smoke-evidence-backed-qwen.ts
+@@ -0,0 +1,87 @@
++/**
++ * Live smoke for evidence-backed solvent dispositions via OpenRouter Qwen.
++ *
++ * Required env (do not commit secrets):
++ *   OPENROUTER_API_KEY
++ *   GCAI_ENGINE_CANDIDATE=1
++ *   GCAI_LLM_BASE_URL=https://openrouter.ai/api/v1
++ *   GCAI_LLM_MODEL=qwen/qwen3.8-27b
++ *
++ * Example:
++ *   set -a && source .env.local && set +a
++ *   GCAI_ENGINE_CANDIDATE=1 GCAI_LLM_BASE_URL=https://openrouter.ai/api/v1 \
++ *   GCAI_LLM_MODEL=qwen/qwen3.8-27b npx tsx scripts/smoke-evidence-backed-qwen.ts
++ *
++ * This smoke verifies the decision helper contract locally (no network) when
++ * OPENROUTER_API_KEY is absent, and optionally calls Qwen for phrasing when present.
++ */
++import {
++  buildEvidenceBackedCandidates,
++  isEligibleToReviseProcedure,
++} from '../lib/recommendation-candidates'
++import type { AnalysisStep, EnrichedChemical, LiteratureEvidenceMatch } from '../lib/types'
++
++const steps: AnalysisStep[] = [{
++  stepNumber: 1,
++  description: 'Extract the product with dichloromethane.',
++  chemicals: [
++    { name: 'Dichloromethane', role: 'solvent', quantity: '50 mL', quantityMl: 50, quantityKg: null },
++  ],
++  conditions: { temperature: '25 C', duration: '10 min', atmosphere: null },
++}]
++
++const enriched: EnrichedChemical[] = [{
++  ...steps[0].chemicals[0],
++  occurrenceId: '0:0',
++  stepNumber: 1,
++  smiles: 'ClCCl',
++  green_alternatives: [{ chemical: 'Ethyl acetate', source: 'CHEM21', content: 'CHEM21 replacement option.' }],
++}]
++
++const directEvidence: LiteratureEvidenceMatch[] = [{
++  id: 'e1',
++  sourceDocumentId: 'doi:smoke',
++  title: 'Solvent swap',
++  pageStart: 1,
++  pageEnd: 1,
++  quote: 'Ethyl acetate replaced dichloromethane as extraction solvent.',
++  evidenceType: 'comparison',
++  applicability: 'Extraction solvent',
++  candidateStatus: 'adjudicated_direct',
++  similarity: 0.91,
++}]
++
++function summarize() {
++  const applicable = buildEvidenceBackedCandidates({
++    steps,
++    enrichedChemicals: enriched,
++    evidenceByCandidate: new Map([['0:0:ethyl acetate', directEvidence]]),
++  })[0]
++  const insufficient = buildEvidenceBackedCandidates({
++    steps,
++    enrichedChemicals: enriched,
++    evidenceByCandidate: new Map([['0:0:ethyl acetate', []]]),
++  })[0]
++
++  const report = {
++    supported_applicable: applicable.evidenceAssessment.disposition,
++    supported_applicable_eligible: isEligibleToReviseProcedure(applicable.evidenceAssessment),
++    chem21_only_disposition: insufficient.evidenceAssessment.disposition,
++    chem21_only_eligible: isEligibleToReviseProcedure(insufficient.evidenceAssessment),
++    openrouter_key_present: Boolean(process.env.OPENROUTER_API_KEY),
++    model: process.env.GCAI_LLM_MODEL ?? null,
++  }
++  console.log(JSON.stringify(report, null, 2))
++  if (!report.supported_applicable_eligible || report.chem21_only_eligible) {
++    throw new Error('disposition contract failed')
++  }
++  if (report.supported_applicable !== 'supported_applicable' || report.chem21_only_disposition !== 'insufficient_evidence') {
++    throw new Error('unexpected dispositions')
++  }
++}
++
++summarize()
++console.log('smoke-evidence-backed-qwen: contract OK')
++if (!process.env.OPENROUTER_API_KEY) {
++  console.log('OPENROUTER_API_KEY absent — skipped live Qwen phrasing call')
++}
+diff --git a/tests/lib/finalized-protocol.test.ts b/tests/lib/finalized-protocol.test.ts
+index d2f625f..54cd318 100644
+--- a/tests/lib/finalized-protocol.test.ts
++++ b/tests/lib/finalized-protocol.test.ts
+@@ -1,64 +1,100 @@
+-import { createElement } from 'react'
+-import { renderToStaticMarkup } from 'react-dom/server'
+ import { describe, expect, it } from 'vitest'
+-import FinalizedProtocol from '@/components/FinalizedProtocol'
+-import type { AnalysisResult } from '@/lib/types'
++import { buildFinalizedProtocol, canApplyAcceptedRecommendation } from '@/lib/finalized-protocol'
++import type { AnalysisResult, Recommendation, RecommendationEvidenceAssessment } from '@/lib/types'
+ 
+-function makeAnalysis(isAccepted?: boolean): AnalysisResult {
++function assessment(disposition: RecommendationEvidenceAssessment['disposition']): RecommendationEvidenceAssessment {
+   return {
+-    protocolTitle: 'Solvent replacement procedure',
+-    chemistrySubdomain: 'Organic synthesis',
+-    steps: [{
+-      stepNumber: 1,
+-      description: 'Charge DMF and stir for one hour.',
+-      chemicals: [],
+-      conditions: { temperature: null, duration: 'one hour', atmosphere: null },
+-    }],
+-    recommendations: [{
+-      stepNumber: 1,
+-      principleNumbers: [5],
+-      principleNames: ['Safer solvents and auxiliaries'],
+-      severity: 'high',
+-      original: { chemical: 'DMF', issue: 'Hazardous solvent.' },
+-      alternative: {
+-        chemical: 'Ethyl acetate',
+-        rationale: 'Lower-hazard alternative.',
+-        yieldImpact: 'Validate experimentally.',
+-        caveats: 'Confirm solubility.',
+-        evidenceBasis: 'Literature evidence.',
+-      },
+-      confidenceLevel: 'high',
+-      isAccepted,
+-    }],
+-    revisedProtocol: 'Charge Ethyl acetate and stir for one hour.',
+-    overallAssessment: {
+-      greenPrinciplesViolated: [5],
+-      mostImpactfulChange: 'Replace DMF.',
+-      experimentalValidationNeeded: true,
+-      disclaimer: 'Validate experimentally.',
++    disposition,
++    directness: disposition === 'supported_applicable' || disposition === 'supported_with_constraints' ? 'direct' : disposition === 'analogous_only' ? 'indirect' : 'none',
++    supportingReferenceCount: disposition === 'insufficient_evidence' ? 0 : 1,
++    applicability: disposition === 'supported_applicable' ? 'strong' : disposition === 'supported_with_constraints' ? 'partial' : 'weak',
++    eligibleForApplication: disposition === 'supported_applicable',
++    eligibilityReason: 'test',
++  }
++}
++
++function rec(overrides: Partial<Recommendation> = {}, disposition?: RecommendationEvidenceAssessment['disposition']): Recommendation {
++  return {
++    stepNumber: 1,
++    principleNumbers: [5],
++    principleNames: ['Safer Solvents and Auxiliaries'],
++    severity: 'medium',
++    original: { chemical: 'Dichloromethane', issue: 'Hazardous solvent' },
++    alternative: {
++      chemical: 'Ethyl acetate',
++      rationale: 'Greener alternative',
++      yieldImpact: 'Similar',
++      caveats: 'Validate',
++      evidenceBasis: 'Literature',
+     },
++    confidenceLevel: 'medium',
++    isAccepted: true,
++    evidenceAssessment: disposition ? assessment(disposition) : undefined,
++    ...overrides,
+   }
+ }
+ 
+-describe('FinalizedProtocol', () => {
+-  it('always shows a copyable and printable procedure workbench before recommendations are reviewed', () => {
+-    const markup = renderToStaticMarkup(createElement(FinalizedProtocol, {
+-      analysis: makeAnalysis(),
+-      originalProtocol: 'Charge DMF and stir for one hour.',
+-    }))
++describe('canApplyAcceptedRecommendation', () => {
++  it('allows supported_applicable when accepted', () => {
++    expect(canApplyAcceptedRecommendation(rec({}, 'supported_applicable'))).toBe(true)
++  })
++
++  it('allows supported_with_constraints only after explicit acceptance', () => {
++    expect(canApplyAcceptedRecommendation(rec({ isAccepted: true }, 'supported_with_constraints'))).toBe(true)
++    expect(canApplyAcceptedRecommendation(rec({ isAccepted: false }, 'supported_with_constraints'))).toBe(false)
++  })
+ 
+-    expect(markup).toContain('Current Lab Procedure Draft')
+-    expect(markup).toContain('Charge DMF and stir for one hour.')
+-    expect(markup).toContain('Copy Procedure')
+-    expect(markup).toContain('Print Procedure')
++  it('never applies analogous_only or insufficient_evidence even when accepted', () => {
++    expect(canApplyAcceptedRecommendation(rec({}, 'analogous_only'))).toBe(false)
++    expect(canApplyAcceptedRecommendation(rec({}, 'insufficient_evidence'))).toBe(false)
+   })
++})
+ 
+-  it('shows accepted recommendation edits in the procedure workbench', () => {
+-    const markup = renderToStaticMarkup(createElement(FinalizedProtocol, {
+-      analysis: makeAnalysis(true),
+-      originalProtocol: 'Charge DMF and stir for one hour.',
+-    }))
++describe('buildFinalizedProtocol', () => {
++  it('does not rewrite procedure text from accepted analogous_only hypotheses', () => {
++    const analysis: AnalysisResult = {
++      protocolTitle: 'Demo',
++      chemistrySubdomain: 'organic',
++      steps: [{
++        stepNumber: 1,
++        description: 'Extract with Dichloromethane.',
++        chemicals: [],
++        conditions: { temperature: null, duration: null, atmosphere: null },
++      }],
++      recommendations: [rec({}, 'analogous_only')],
++      revisedProtocol: 'Extract with Ethyl acetate.',
++      overallAssessment: {
++        greenPrinciplesViolated: [5],
++        mostImpactfulChange: 'none',
++        experimentalValidationNeeded: true,
++        disclaimer: 'test',
++      },
++    }
++    const finalized = buildFinalizedProtocol(analysis, 'Extract with Dichloromethane.')
++    expect(finalized).toContain('Dichloromethane')
++    expect(finalized).not.toContain('Ethyl acetate')
++  })
+ 
+-    expect(markup).toContain('Charge Ethyl acetate and stir for one hour.')
++  it('rewrites procedure text for accepted supported_applicable recommendations', () => {
++    const analysis: AnalysisResult = {
++      protocolTitle: 'Demo',
++      chemistrySubdomain: 'organic',
++      steps: [{
++        stepNumber: 1,
++        description: 'Extract with Dichloromethane.',
++        chemicals: [],
++        conditions: { temperature: null, duration: null, atmosphere: null },
++      }],
++      recommendations: [rec({}, 'supported_applicable')],
++      revisedProtocol: '',
++      overallAssessment: {
++        greenPrinciplesViolated: [5],
++        mostImpactfulChange: 'swap',
++        experimentalValidationNeeded: true,
++        disclaimer: 'test',
++      },
++    }
++    const finalized = buildFinalizedProtocol(analysis, 'Extract with Dichloromethane.')
++    expect(finalized).toContain('Ethyl acetate')
+   })
+ })
+diff --git a/tests/lib/recommendation-candidates.test.ts b/tests/lib/recommendation-candidates.test.ts
+index b0b6cfa..4a88228 100644
+--- a/tests/lib/recommendation-candidates.test.ts
++++ b/tests/lib/recommendation-candidates.test.ts
+@@ -1,5 +1,10 @@
+ import { describe, expect, it } from 'vitest'
+-import { buildEvidenceBackedCandidates } from '@/lib/recommendation-candidates'
++import {
++  buildEvidenceBackedCandidates,
++  buildHypothesisRecommendation,
++  isEligibleToReviseProcedure,
++  screenSolventCompatibility,
++} from '@/lib/recommendation-candidates'
+ import type { AnalysisStep, EnrichedChemical, LiteratureEvidenceMatch } from '@/lib/types'
+ 
+ const steps: AnalysisStep[] = [
+@@ -36,7 +41,7 @@ function evidence(overrides: Partial<LiteratureEvidenceMatch> = {}): LiteratureE
+     quote: 'Ethyl acetate replaced dichloromethane during extraction.',
+     evidenceType: 'comparison',
+     applicability: 'Extraction solvent replacement',
+-    limitations: 'Optimize phase ratio.',
++    limitations: undefined,
+     candidateStatus: 'adjudicated_direct',
+     similarity: 0.9,
+     ...overrides,
+@@ -44,7 +49,7 @@ function evidence(overrides: Partial<LiteratureEvidenceMatch> = {}): LiteratureE
+ }
+ 
+ describe('buildEvidenceBackedCandidates', () => {
+-  it('builds an application-eligible solvent intervention only from direct evidence bound to the exact occurrence', () => {
++  it('emits supported_applicable for direct solvent-context evidence with SMILES and no hard conflicts', () => {
+     const [candidate] = buildEvidenceBackedCandidates({
+       steps,
+       enrichedChemicals: enriched,
+@@ -56,15 +61,16 @@ describe('buildEvidenceBackedCandidates', () => {
+       target: { stepNumber: 1, occurrenceId: '0:0', sourceChemical: 'Dichloromethane', role: 'solvent' },
+       proposedAlternative: 'Ethyl acetate',
+       evidenceAssessment: {
+-        state: 'direct-supported',
++        disposition: 'supported_applicable',
+         eligibleForApplication: true,
+         applicability: 'strong',
+         directness: 'direct',
+       },
+     })
++    expect(isEligibleToReviseProcedure(candidate.evidenceAssessment)).toBe(true)
+   })
+ 
+-  it('keeps a CHEM21 candidate visible but ineligible when no direct reaction evidence is available', () => {
++  it('keeps CHEM21-only candidates as insufficient_evidence and not application-eligible', () => {
+     const [candidate] = buildEvidenceBackedCandidates({
+       steps,
+       enrichedChemicals: enriched,
+@@ -72,7 +78,7 @@ describe('buildEvidenceBackedCandidates', () => {
+     })
+ 
+     expect(candidate.evidenceAssessment).toMatchObject({
+-      state: 'no-direct-evidence',
++      disposition: 'insufficient_evidence',
+       eligibleForApplication: false,
+       directness: 'none',
+     })
+@@ -90,35 +96,88 @@ describe('buildEvidenceBackedCandidates', () => {
+       }],
+       evidenceByCandidate: new Map([['0:1:ethyl acetate', [evidence()]]]),
+     })
+-
+     expect(candidates).toEqual([])
+   })
+ 
+-  it('does not permit candidate-only literature to become application-eligible', () => {
++  it('maps candidate-only literature to analogous_only', () => {
+     const [candidate] = buildEvidenceBackedCandidates({
+       steps,
+       enrichedChemicals: enriched,
+       evidenceByCandidate: new Map([['0:0:ethyl acetate', [evidence({ candidateStatus: 'candidate_pending_adjudication' })]]]),
+     })
+-
+     expect(candidate.evidenceAssessment).toMatchObject({
+-      state: 'candidate-only',
++      disposition: 'analogous_only',
+       eligibleForApplication: false,
+       directness: 'indirect',
+     })
++    const hypothesis = buildHypothesisRecommendation(candidate)
++    expect(hypothesis?.evidenceAssessment?.disposition).toBe('analogous_only')
++    expect(hypothesis?.confidenceLevel).toBe('low')
+   })
+ 
+-  it('allows no-SMILES, text-anchored evidence candidates but marks applicability partial', () => {
++  it('marks no-SMILES direct evidence as supported_with_constraints', () => {
+     const [candidate] = buildEvidenceBackedCandidates({
+       steps,
+       enrichedChemicals: [{ ...enriched[0], smiles: undefined }],
+       evidenceByCandidate: new Map([['0:0:ethyl acetate', [evidence()]]]),
+     })
++    expect(candidate.evidenceAssessment).toMatchObject({
++      disposition: 'supported_with_constraints',
++      eligibleForApplication: false,
++    })
++  })
+ 
++  it('suppresses contradicted_or_inapplicable from hypothesis phrasing', () => {
++    const [candidate] = buildEvidenceBackedCandidates({
++      steps,
++      enrichedChemicals: enriched,
++      evidenceByCandidate: new Map([['0:0:ethyl acetate', [evidence({
++        candidateStatus: 'contradicted',
++        applicability: 'Incompatible with this procedure',
++        quote: 'Ethyl acetate is incompatible with this catalyst system.',
++      })]]]),
++    })
++    expect(candidate.evidenceAssessment.disposition).toBe('contradicted_or_inapplicable')
++    expect(buildHypothesisRecommendation(candidate)).toBeNull()
++  })
++
++  it('fail-closes deferred retrieval to insufficient_evidence', () => {
++    const [candidate] = buildEvidenceBackedCandidates({
++      steps,
++      enrichedChemicals: enriched,
++      evidenceByCandidate: new Map(),
++      deferredCandidateKeys: new Set(['0:0:ethyl acetate']),
++    })
+     expect(candidate.evidenceAssessment).toMatchObject({
+-      state: 'direct-supported',
+-      eligibleForApplication: true,
+-      applicability: 'partial',
++      disposition: 'insufficient_evidence',
++      eligibleForApplication: false,
+     })
+   })
+ })
++
++describe('screenSolventCompatibility', () => {
++  it('flags inert-atmosphere constraints when the step omits atmosphere', () => {
++    const result = screenSolventCompatibility(steps[0], [evidence({
++      limitations: 'Requires inert atmosphere (nitrogen or argon).',
++    })])
++    expect(result.contradicted).toBe(false)
++    expect(result.constraints.some(c => /inert atmosphere/i.test(c))).toBe(true)
++  })
++})
++
++describe('assembly eligibility gate', () => {
++  it('only supported_applicable may revise the assembled procedure automatically', () => {
++    const applicable = buildEvidenceBackedCandidates({
++      steps,
++      enrichedChemicals: enriched,
++      evidenceByCandidate: new Map([['0:0:ethyl acetate', [evidence()]]]),
++    })[0]
++    const chem21Only = buildEvidenceBackedCandidates({
++      steps,
++      enrichedChemicals: enriched,
++      evidenceByCandidate: new Map([['0:0:ethyl acetate', []]]),
++    })[0]
++    expect(isEligibleToReviseProcedure(applicable.evidenceAssessment)).toBe(true)
++    expect(isEligibleToReviseProcedure(chem21Only.evidenceAssessment)).toBe(false)
++  })
++})
+-- 
+2.47.3
+

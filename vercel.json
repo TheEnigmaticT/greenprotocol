@@ -6,7 +6,7 @@
       "schedule": "0 12 * * *"
     },
     {
-      "path": "/api/scisure/worker-tick",
+      "path": "/api/scisure/worker-tick-v2",
       "schedule": "* * * * *"
     }
   ]
