@@ -11,7 +11,8 @@ type Status = { version: 1; bridgeSessionId: string; snapshotId: string; sourceH
 type Review = Record<string, 'approved_for_experiment' | 'rejected'>
 
 const POLL_MS = 1_500
-const POLL_TIMEOUT_MS = 9 * 60_000
+const POLL_TIMEOUT_MS = 13 * 60_000
+const ACK_TIMEOUT_MS = 10_000
 
 function allowedOrigin(value: string) {
   return (process.env.NEXT_PUBLIC_SCISURE_ALLOWED_ORIGINS || '').split(',').map((item) => item.trim()).filter(Boolean).includes(value)
@@ -33,7 +34,9 @@ export function ConnectionBridge() {
   const bridge = useRef<Bridge | null>(null)
   const admittedSource = useRef<Source | undefined>(undefined)
   const returned = useRef(false)
+  const ackReceived = useRef(false)
   const pollAbort = useRef<AbortController | null>(null)
+  const ackTimeout = useRef<number | null>(null)
   const sendResult = useRef<(current: Status, decisions: Review) => void>(() => undefined)
 
   useEffect(() => {
@@ -51,7 +54,12 @@ export function ConnectionBridge() {
       const recommendations = (current.recommendations || []).map((recommendation) => ({ ...recommendation, decision: decisions[recommendation.recommendationId] === 'approved_for_experiment' ? 'accepted' : 'rejected' }))
       returned.current = true; stopPolling()
       window.opener.postMessage({ version: 1, type: 'gcai.scisure.result', nonce: active.nonce, bridgeSessionId: active.sessionId, snapshot: sourceIdentity(admittedSource.current), sourceHash: current.sourceHash, runId: current.runId, revisionNumber: current.revisionNumber ?? null, recommendations }, active.sourceOrigin)
-      setMessage(recommendations.length ? 'Scientist decisions returned to SciSure. Supply ordering remains a separate manual confirmation.' : 'Completed result returned to SciSure; no eligible substitution options were produced.')
+      ackReceived.current = false
+      if (ackTimeout.current) window.clearTimeout(ackTimeout.current)
+      ackTimeout.current = window.setTimeout(() => {
+        if (!ackReceived.current) setMessage('Decisions were sent to the SciSure add-on, but no acknowledgement arrived. Refresh the SciSure tab and reopen this connection rather than retrying automatically.')
+      }, ACK_TIMEOUT_MS)
+      setMessage(recommendations.length ? 'Waiting for the SciSure add-on to acknowledge the reviewed decisions. Supply ordering remains a separate manual confirmation.' : 'Waiting for the SciSure add-on to acknowledge the completed result. No eligible substitution options were produced.')
     }
     sendResult.current = returnResult
     const poll = async (snapshotId: string, active: Bridge) => {
@@ -73,7 +81,7 @@ export function ConnectionBridge() {
     }
     const receive = async (event: MessageEvent) => {
       if (!allowedOrigin(event.origin) || event.source !== window.opener || !event.data || typeof event.data !== 'object') return
-      const data = event.data as { version?: number; type?: string; nonce?: string }
+      const data = event.data as { version?: number; type?: string; nonce?: string; bridgeSessionId?: string; count?: number }
       if (data.version !== 1 || typeof data.type !== 'string') return
       if (data.type === 'scisure.gcai.hello') {
         if (!/^[a-f0-9]{64}$/.test(data.nonce || '') || bridge.current) return
@@ -90,6 +98,15 @@ export function ConnectionBridge() {
         } catch (error) { setMessage(error instanceof Error ? error.message : 'Connection unavailable.') }
         return
       }
+      if (data.type === 'scisure.gcai.received') {
+        const active = bridge.current
+        if (!active || data.nonce !== active.nonce || data.bridgeSessionId !== active.sessionId) return
+        ackReceived.current = true
+        if (ackTimeout.current) { window.clearTimeout(ackTimeout.current); ackTimeout.current = null }
+        const count = typeof data.count === 'number' ? data.count : 0
+        setMessage(`SciSure add-on acknowledged receipt of the reviewed decisions (${count} recommendation${count === 1 ? '' : 's'}). Supply ordering is a separate manual confirmation.`)
+        return
+      }
       if (data.type !== 'scisure.gcai.admission') return
       const admission = event.data as Admission; const active = bridge.current
       if (!active || admission.nonce !== active.nonce || admission.bridgeSessionId !== active.sessionId || returned.current) return
@@ -101,7 +118,7 @@ export function ConnectionBridge() {
       } catch (error) { fail(error instanceof Error ? error.message : 'Source admission failed.') }
     }
     window.addEventListener('message', receive)
-    return () => { stopPolling(); window.removeEventListener('message', receive) }
+    return () => { stopPolling(); if (ackTimeout.current) window.clearTimeout(ackTimeout.current); window.removeEventListener('message', receive) }
   }, [])
 
   async function decide(recommendation: Recommendation, decision: Review[string]) {

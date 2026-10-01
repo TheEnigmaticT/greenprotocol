@@ -172,3 +172,27 @@ test('bridge bounds reviewed snapshot to 100 selections and 64 KiB and flags los
   const normalized = x.w.greenchemistry_ai.debug().normalizeHtml('<p>H<sub>2</sub>O</p><img src=x><table><tr><td>A</td><td>B</td></tr></table>');
   assert.equal(normalized.text, 'H₂O\nA\tB'); assert.ok(normalized.warnings.length);
 });
+
+test('bridge sends a scisure.gcai.received acknowledgement to the popup after a valid terminal result, with the recommendation count, but never after a rejected one', async () => {
+  const x = boot({ config: { gcaiBridge: { enabled: true } }, api: (r) => r.onSuccess(null, 200, { user: { email: 'a@test' } }) });
+  await openReviewedExperiment(x); findButton(x.w, 'Connect reviewed source to GCai').click(); await tick();
+  const nonce = bootstrap(x); findButton(x.w, 'Send reviewed source').click();
+  const valid = { version: 1, type: 'gcai.scisure.result', nonce, bridgeSessionId: 'session-1', snapshot: { externalId: '7', externalVersionId: null, selectionIds: ['55'] }, sourceHash: 'a'.repeat(64), runId: 'run-1', revisionNumber: null, recommendations: [{ recommendationId: 'r-1', sourceStepId: null, originalChemical: 'DMF', alternativeChemical: 'Ethyl acetate', kind: 'chemical-substitution', decision: 'accepted', confidence: 'medium', caveats: 'Confirm suitability', requiresScientistReview: true }, { recommendationId: 'r-2', sourceStepId: null, originalChemical: 'DCM', alternativeChemical: 'Acetone', kind: 'chemical-substitution', decision: 'rejected', confidence: 'high', caveats: 'Keep current', requiresScientistReview: true }] };
+  const before = x.opened[0].popup.sent.length;
+  receive(x, valid);
+  const acks = x.opened[0].popup.sent.slice(before).filter((entry) => entry.message && entry.message.type === 'scisure.gcai.received');
+  assert.equal(acks.length, 1, 'one ack was sent');
+  assert.equal(acks[0].origin, 'https://greenchemistry.ai');
+  assert.equal(acks[0].message.nonce, nonce);
+  assert.equal(acks[0].message.bridgeSessionId, 'session-1');
+  assert.equal(acks[0].message.count, 2);
+  findButton(x.w, 'Close').click();
+  const y = boot({ config: { gcaiBridge: { enabled: true } }, api: (r) => r.onSuccess(null, 200, { user: { email: 'a@test' } }) });
+  await openReviewedExperiment(y); findButton(y.w, 'Connect reviewed source to GCai').click(); await tick();
+  bootstrap(y); findButton(y.w, 'Send reviewed source').click();
+  const before2 = y.opened[0].popup.sent.length;
+  receive(y, { version: 1, type: 'gcai.scisure.result', nonce: 'a'.repeat(64), bridgeSessionId: 'session-bad', snapshot: { externalId: '7', externalVersionId: null, selectionIds: ['55'] }, recommendations: [{ recommendationId: 'bad', alternativeChemical: '<img src=x>', kind: 'chemical-substitution', decision: 'accepted', requiresScientistReview: true }] });
+  const acks2 = y.opened[0].popup.sent.slice(before2).filter((entry) => entry.message && entry.message.type === 'scisure.gcai.received');
+  assert.equal(acks2.length, 0, 'no ack for a rejected result');
+  findButton(y.w, 'Close').click();
+});

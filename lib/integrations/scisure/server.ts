@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { createBridgeCredential, hashBridgeCredential } from './index'
 
-const CONNECTION_MINUTES = 10
+const CONNECTION_MINUTES = 15
 
 function configuredOrigins(): Set<string> {
   const raw = process.env.SCISURE_ALLOWED_ORIGINS || ''

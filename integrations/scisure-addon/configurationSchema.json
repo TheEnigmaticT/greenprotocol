@@ -15,14 +15,14 @@
   },
   "gcaiBridge": {
     "type": "object",
-    "title": "Automatic GCai connection (not yet available)",
-    "description": "Leave disabled until the GCai receiver is implemented and live-tested.",
+    "title": "GCai connection (live-tested in staging)",
+    "description": "Stay disabled by default. When enabled, a signed-in GreenChemistry.ai user is required and reviewed source content is retained server-side for up to 90 days. The popup posts decisions back to this add-on; the add-on acknowledges receipt before the connection is treated as complete.",
     "properties": {
       "enabled": {
         "type": "boolean",
         "format": "checkbox",
-        "title": "Enable automatic connection",
-        "enum": [false],
+        "title": "Enable connection to GCai receiver",
+        "description": "Opens the secure popup. Leave off to use the reviewed clipboard handoff instead. Once enabled, every reviewed source submitted through this add-on triggers a GCai connection.",
         "default": false
       },
       "origin": {
