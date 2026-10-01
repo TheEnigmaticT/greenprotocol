@@ -33,8 +33,8 @@ with tempfile.TemporaryDirectory(prefix='pg-', dir=str(scratch)) as temp:
              '-o', "-c listen_addresses='' -k " + str(root), '-w', 'start'])
         started = True
         run(['psql', '-h', str(root), '-U', 'scisure_test', '-d', 'postgres',
-             '-v', 'ON_ERROR_STOP=1', '-f', str(repo / 'tests/sql/scisure-bridge.sql')])
-        print('PASS: actual SciSure migration and SQL acceptance in isolated PostgreSQL')
+             '-v', 'ON_ERROR_STOP=1', '-f', str(repo / 'tests/sql/scisure-guest-admission.sql')])
+        print('PASS: actual SciSure migrations and SQL acceptance in isolated PostgreSQL')
     except Exception:
         log = root / 'postgres.log'
         if log.exists():

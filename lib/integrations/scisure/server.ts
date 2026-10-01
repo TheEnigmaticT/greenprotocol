@@ -1,10 +1,10 @@
+import { cookies } from 'next/headers'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { createBridgeCredential, hashBridgeCredential } from './index'
 
 const CONNECTION_MINUTES = 10
-const GUEST_DAYS = 90
 
 function configuredOrigins(): Set<string> {
   const raw = process.env.SCISURE_ALLOWED_ORIGINS || ''
@@ -25,35 +25,41 @@ function nonceHash(nonce: string) {
   return createHmac('sha256', key).update(nonce).digest('hex')
 }
 
-export type SciSurePrincipal = { id: string; kind: 'registered' | 'guest'; userId: string | null }
-export async function authenticatedPrincipal(guestAdmissionToken?: string): Promise<SciSurePrincipal> {
+export type SciSurePrincipal = { id: string; kind: 'registered' | 'guest'; userId: string | null; guestSubjectId: string | null }
+export async function authenticatedPrincipal(): Promise<SciSurePrincipal> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const admin = configuredAdmin()
   if (user) {
     const { data, error } = await admin.from('gpc_scisure_principals').upsert({ user_id: user.id, kind: 'registered' }, { onConflict: 'user_id' }).select('id, kind, user_id').single()
     if (error || !data) throw new Error('Could not establish account integration principal.')
-    return { id: data.id, kind: 'registered', userId: data.user_id }
+    return { id: data.id, kind: 'registered', userId: data.user_id, guestSubjectId: null }
   }
-  if (!guestAdmissionToken) throw new Error('Sign in or present a verified guest admission token.')
+  const jar = await cookies()
+  const guestAdmissionToken = jar.get('gcai_scisure_guest')?.value
+  const browserBinding = jar.get('gcai_scisure_guest_binding')?.value
+  if (!guestAdmissionToken || !browserBinding) throw new Error('Sign in or complete verified guest admission in this browser.')
   const secret = process.env.SCISURE_GUEST_ADMISSION_HMAC_KEY
   if (!secret) throw new Error('Guest admission is not configured.')
   const [payload, signature] = guestAdmissionToken.split('.')
   if (!payload || !signature || !/^[A-Za-z0-9_-]+$/.test(payload) || !/^[a-f0-9]{64}$/.test(signature)) throw new Error('Guest admission token is invalid.')
   const expected = createHmac('sha256', secret).update(payload).digest('hex')
   if (!timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) throw new Error('Guest admission token is invalid.')
-  let claims: { exp?: number; challenge?: string }
+  let claims: { exp?: number; sub?: string; bind?: string }
   try { claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) } catch { throw new Error('Guest admission token is invalid.') }
-  const expiresAtSeconds = claims.exp
-  if (typeof expiresAtSeconds !== 'number' || !Number.isSafeInteger(expiresAtSeconds) || expiresAtSeconds * 1000 <= Date.now() || typeof claims.challenge !== 'string' || claims.challenge.length < 16) throw new Error('Guest admission token expired or incomplete.')
+  if (typeof claims.exp !== 'number' || !Number.isSafeInteger(claims.exp) || claims.exp * 1000 <= Date.now() || typeof claims.sub !== 'string' || !/^[A-Za-z0-9-]{8,128}$/.test(claims.sub) || typeof claims.bind !== 'string') throw new Error('Guest admission token expired or incomplete.')
+  const bindingHash = await hashBridgeCredential(browserBinding)
+  if (!timingSafeEqual(Buffer.from(claims.bind), Buffer.from(bindingHash))) throw new Error('Guest admission is not bound to this browser.')
   const tokenHash = await hashBridgeCredential(guestAdmissionToken)
-  const { data, error } = await admin.from('gpc_scisure_principals').upsert({ kind: 'guest', guest_token_hash: tokenHash, expires_at: future(GUEST_DAYS * 24 * 60) }, { onConflict: 'guest_token_hash' }).select('id, kind, user_id').single()
+  const { data: admission, error: admissionError } = await admin.from('gpc_scisure_guest_admissions').select('subject_id').eq('token_hash', tokenHash).is('revoked_at', null).gt('expires_at', new Date().toISOString()).maybeSingle()
+  if (admissionError || !admission || String(admission.subject_id) !== claims.sub) throw new Error('Guest admission is unavailable.')
+  const { data, error } = await admin.from('gpc_scisure_principals').upsert({ kind: 'guest', guest_subject_id: claims.sub, expires_at: new Date(claims.exp * 1000).toISOString() }, { onConflict: 'guest_subject_id' }).select('id, kind, user_id, guest_subject_id').single()
   if (error || !data) throw new Error('Guest admission is unavailable; no principal was issued.')
-  return { id: data.id, kind: 'guest', userId: null }
+  return { id: data.id, kind: 'guest', userId: null, guestSubjectId: data.guest_subject_id }
 }
 
-export async function createConnection(input: { nonce: string; origin: string; guestAdmissionToken?: string }) {
-  const principal = await authenticatedPrincipal(input.guestAdmissionToken)
+export async function createConnection(input: { nonce: string; origin: string }) {
+  const principal = await authenticatedPrincipal()
   const admin = configuredAdmin()
   const credential = createBridgeCredential()
   const { data, error } = await admin.from('gpc_scisure_connections').insert({

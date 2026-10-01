@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { GuestAdmission } from './GuestAdmission'
 
 type Bridge = { nonce: string; sourceOrigin: string; sessionId: string; credential: string }
 type Source = { externalId?: string; externalVersionId?: string | null; selection?: Array<{ sectionId?: string; stepId?: string; order: number }> }
@@ -27,6 +28,8 @@ export function ConnectionBridge() {
   const [status, setStatus] = useState<Status | null>(null)
   const [reviews, setReviews] = useState<Review>({})
   const [reviewing, setReviewing] = useState<string | null>(null)
+  const [guestAdmissionNeeded, setGuestAdmissionNeeded] = useState(false)
+  const browserBinding = useRef(typeof crypto !== 'undefined' ? crypto.randomUUID() : `guest-${Math.random().toString(36).slice(2)}`)
   const bridge = useRef<Bridge | null>(null)
   const admittedSource = useRef<Source | undefined>(undefined)
   const returned = useRef(false)
@@ -77,8 +80,8 @@ export function ConnectionBridge() {
         try {
           const response = await fetch('/api/integrations/scisure/connections', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify({ nonce: data.nonce, sourceOrigin: event.origin }) })
           const payload = await response.json() as { bridgeSessionId?: string; credential?: string; error?: string; principalKind?: string }
-          if (!response.ok || !payload.bridgeSessionId || !payload.credential || payload.principalKind !== 'registered') {
-            if (response.status === 403 && /sign in/i.test(payload.error || '')) { setMessage('Sign in to connect your GreenChemistry.ai account, then this popup will repeat the SciSure handshake.'); window.opener.postMessage({ version: 1, type: 'gcai.scisure.login-required', nonce: data.nonce, loginUrl: '/login?next=%2Fintegrations%2Fscisure%2Fconnect' }, event.origin); return }
+          if (!response.ok || !payload.bridgeSessionId || !payload.credential || (payload.principalKind !== 'registered' && payload.principalKind !== 'guest')) {
+            if (response.status === 403 && /sign in|verified guest admission/i.test(payload.error || '')) { setGuestAdmissionNeeded(true); setMessage('Sign in, or complete guest mailbox verification below. After verification, reopen this SciSure connection to repeat the handshake.'); return }
             throw new Error(payload.error || 'Connection unavailable.')
           }
           bridge.current = { nonce: data.nonce!, sourceOrigin: event.origin, sessionId: payload.bridgeSessionId, credential: payload.credential }
@@ -118,6 +121,7 @@ export function ConnectionBridge() {
   const reviewed = recommendations.length > 0 && recommendations.every((recommendation) => reviews[recommendation.recommendationId])
   return <main className="min-h-screen p-8" style={{ background: '#FAF8F3', color: '#1C3822' }}><section className="mx-auto max-w-2xl rounded-lg border p-6" style={{ borderColor: '#D6D0C4' }}>
     <h1 className="text-2xl font-semibold">SciSure connection</h1><p className="mt-4" role="status">{message}</p>
+    {guestAdmissionNeeded && <GuestAdmission browserBinding={browserBinding.current} onAdmitted={() => setMessage('Guest mailbox proof is complete. Reopen the SciSure connection to start its fresh, origin-validated handshake.')} />}
     {recommendations.length > 0 && <section className="mt-6 space-y-4" aria-label="Scientist review"><h2 className="text-xl font-semibold">Scientist review required</h2><p className="text-sm" style={{ color: '#57534E' }}>These are model-generated, scientifically unreviewed options. Approval does not place or authorize a supply order.</p>
       {recommendations.map((recommendation) => <article key={recommendation.recommendationId} className="rounded border p-4" style={{ borderColor: '#D6D0C4' }}><p><strong>{recommendation.originalChemical}</strong> → <strong>{recommendation.alternativeChemical}</strong></p><p className="mt-2 text-sm">Confidence: {recommendation.confidence}. {recommendation.caveats}</p><p className="mt-2 text-sm">Source hash: {status?.sourceHash}; run: {status?.runId}; revision: {status?.revisionNumber ?? 'durable result'}.</p><div className="mt-3 flex gap-2"><button type="button" disabled={!!reviewing || !!reviews[recommendation.recommendationId]} onClick={() => void decide(recommendation, 'approved_for_experiment')} className="rounded border px-3 py-2 disabled:opacity-50">Approve for experiment</button><button type="button" disabled={!!reviewing || !!reviews[recommendation.recommendationId]} onClick={() => void decide(recommendation, 'rejected')} className="rounded border px-3 py-2 disabled:opacity-50">Reject</button></div>{reviews[recommendation.recommendationId] && <p className="mt-2 text-sm">Recorded: {reviews[recommendation.recommendationId] === 'approved_for_experiment' ? 'approved for experiment' : 'rejected'}.</p>}</article>)}
       {reviewed && <button type="button" onClick={() => status && sendResult.current(status, reviews)} className="rounded border px-3 py-2">Return reviewed decisions to SciSure</button>}

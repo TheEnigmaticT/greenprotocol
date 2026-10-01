@@ -28,12 +28,17 @@ export async function POST(request: Request) {
       if (events.length) await admin.from('gpc_scisure_email_events').upsert(events, { onConflict: 'snapshot_id,purpose' })
     }
     const limit = Number.parseInt(process.env.ANALYSIS_RUN_LIMIT || '10', 10)
-    const { data: reservation, error: reservationError } = await admin.rpc('gpc_reserve_scisure_job' as never, {
-      p_principal_id: connection.principal_id,
-      p_snapshot_id: snapshot.id,
-      p_idempotency_key: admission.requestId,
-      p_limit: Number.isSafeInteger(limit) && limit > 0 ? limit : 10,
-    } as never)
+    const normalizedLimit = Number.isSafeInteger(limit) && limit > 0 ? limit : 10
+    const { data: principal, error: principalError } = await admin.from('gpc_scisure_principals').select('kind, guest_subject_id').eq('id', connection.principal_id).maybeSingle()
+    if (principalError || !principal) throw new Error('Integration principal is unavailable.')
+    const { data: reservation, error: reservationError } = principal.kind === 'guest'
+      ? await admin.rpc('gpc_reserve_scisure_guest_job' as never, {
+        p_subject_id: principal.guest_subject_id, p_principal_id: connection.principal_id, p_snapshot_id: snapshot.id,
+        p_idempotency_key: admission.requestId, p_limit: Math.min(normalizedLimit, Number.parseInt(process.env.SCISURE_GUEST_TRIAL_LIMIT || '1', 10) || 1),
+      } as never)
+      : await admin.rpc('gpc_reserve_scisure_job' as never, {
+        p_principal_id: connection.principal_id, p_snapshot_id: snapshot.id, p_idempotency_key: admission.requestId, p_limit: normalizedLimit,
+      } as never)
     const row = Array.isArray(reservation) ? reservation[0] as { job_id?: string; replayed?: boolean } : undefined
     if (reservationError || !row?.job_id) throw new Error(reservationError?.message || 'Could not reserve analysis capacity.')
     return NextResponse.json({ version: 1, bridgeSessionId: connection.id, snapshotId: snapshot.id, sourceHash: admission.sourceHash, runId: row.job_id, status: 'queued', email: admission.email.address ? 'pending_configuration' : 'not_requested' }, { status: row.replayed ? 200 : 202, headers: { 'Cache-Control': 'private, no-store' } })
