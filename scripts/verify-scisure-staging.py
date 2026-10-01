@@ -19,6 +19,7 @@ MIGRATIONS = (
     ('20261001010000', 'supabase/migrations/20261001010000_add_scisure_guest_admission.sql'),
     ('20261001020000', 'supabase/migrations/20261001020000_create_partner_inquiry_mail_outbox.sql'),
     ('20261001030000', 'supabase/migrations/20261001030000_harden_scisure_registered_admission_and_review.sql'),
+    ('20261001040000', 'supabase/migrations/20261001040000_add_encrypted_guest_mail_outbox.sql'),
     ('20261001050000', 'supabase/migrations/20261001050000_enable_registered_quota_ledger_rls.sql'),
     ('20261001060000', 'supabase/migrations/20261001060000_record_mail_acceptance_not_delivery.sql'),
 )

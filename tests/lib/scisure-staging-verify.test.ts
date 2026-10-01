@@ -13,6 +13,19 @@ ${body}
 `], { encoding: 'utf8' })
 
 describe('SciSure staging verification script', () => {
+  it('includes every SciSure migration in source-hash verification', () => {
+    const output = verifierFailure(`
+from pathlib import Path
+versions = {version for version, _ in module.MIGRATIONS}
+files = Path(${JSON.stringify(process.cwd())}) / 'supabase/migrations'
+expected = {path.name.split('_', 1)[0] for path in files.glob('20261001*.sql')}
+missing = expected - versions
+if missing:
+    raise RuntimeError('unverified SciSure migrations: ' + ','.join(sorted(missing)))
+print('all included')
+`)
+    expect(output).toContain('all included')
+  })
   it('documents its fixed staging target without reading credentials for help', () => {
     const output = execFileSync('python3', [verifier, '--help'], { encoding: 'utf8' })
     expect(output).toContain('qqyzyezwlzvckjtggoes')
