@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { findChemical } from '@/lib/chemicals'
 import { calculateEquivalencies } from '@/lib/equivalencies'
@@ -53,26 +54,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  if (!hasUnlimitedAnalyses(user.email)) {
-    // Usage limit check — count existing analyses for this user
-    const { count, error: countError } = await supabase
-      .from('gpc_analyses')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-
-    if (countError) {
-      return NextResponse.json({ error: 'Failed to check usage limits' }, { status: 500 })
-    }
-
-    if (count !== null && count >= DEFAULT_RUN_LIMIT) {
-      return NextResponse.json({
-        error: 'run_limit_reached',
-        message: `You've reached your analysis limit of ${DEFAULT_RUN_LIMIT} runs. Contact us to get more.`,
-        current: count,
-        limit: DEFAULT_RUN_LIMIT,
-      }, { status: 429 })
-    }
-  }
+  // The quota reservation is made atomically immediately before creating the run.
+  // Never use a browser-visible count as an admission decision.
 
   // Parse request
   let protocolText: string
@@ -90,20 +73,32 @@ export async function POST(request: Request) {
   const candidateEngineSelected = isCandidateEngineSelected()
   const protocolInputTokens = await countProtocolTokens(protocolText)
   const runSource = isSentinelRequest(request) ? 'sentinel' : 'human'
-
-  const { data: analysisRun, error: analysisRunError } = await supabase
-    .from('gpc_analysis_runs')
-    .insert({
-      user_id: user.id,
-      status: 'running',
-      run_source: runSource,
-      protocol_input_tokens: protocolInputTokens,
-    })
-    .select('id')
-    .single()
+  const unlimited = hasUnlimitedAnalyses(user.email)
+  let analysisRun: { id: string } | null = null
+  let analysisRunError: { message?: string } | null = null
+  if (unlimited) {
+    const response = await supabase.from('gpc_analysis_runs').insert({ user_id: user.id, status: 'running', run_source: runSource, protocol_input_tokens: protocolInputTokens }).select('id').single()
+    analysisRun = response.data
+    analysisRunError = response.error
+  } else {
+    const { data, error } = await createAdminClient().rpc('gpc_reserve_registered_analysis_run' as never, {
+      p_user_id: user.id,
+      p_limit: Number.isSafeInteger(DEFAULT_RUN_LIMIT) && DEFAULT_RUN_LIMIT > 0 ? DEFAULT_RUN_LIMIT : 10,
+      p_run_source: runSource,
+    } as never)
+    if (error) {
+      return NextResponse.json({ error: error.message.includes('quota exhausted') ? 'run_limit_reached' : 'Failed to reserve analysis capacity', message: error.message }, { status: error.message.includes('quota exhausted') ? 429 : 500 })
+    }
+    analysisRun = typeof data === 'string' ? { id: data } : null
+  }
 
   if (analysisRunError || !analysisRun?.id) {
     return NextResponse.json({ error: 'Failed to create analysis audit run' }, { status: 500 })
+  }
+  // Token accounting is metadata on the same atomically-reserved run.
+  if (!unlimited && protocolInputTokens !== null) {
+    const { error } = await supabase.from('gpc_analysis_runs').update({ protocol_input_tokens: protocolInputTokens }).eq('id', analysisRun.id).eq('user_id', user.id)
+    if (error) console.error('[analyze] protocol token audit update failed:', error.message)
   }
 
   // Stream SSE events via ReadableStream — controller.enqueue() is synchronous,

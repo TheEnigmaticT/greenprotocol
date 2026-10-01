@@ -1,0 +1,15 @@
+{
+  "name": "scisure-greenchemistry-addon",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Standalone SciSure sandbox addon for reviewed GreenChemistry.ai clipboard handoffs.",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check add-on.js",
+    "test:browser": "node scripts/browser-smoke.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0",
+    "playwright": "1.59.1"
+  }
+}

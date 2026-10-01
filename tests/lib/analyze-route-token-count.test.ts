@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   anthropicCountTokens: vi.fn(),
   auditInsert: vi.fn(),
   createClient: vi.fn(),
+  createAdminClient: vi.fn(),
+  reserveRun: vi.fn(),
   from: vi.fn(),
   notifyAnalysis: vi.fn(),
   protocolFingerprint: vi.fn(),
@@ -22,6 +24,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mocks.createAdminClient }))
 vi.mock('@/lib/chemicals', () => ({ findChemical: vi.fn() }))
 vi.mock('@/lib/equivalencies', () => ({ calculateEquivalencies: vi.fn() }))
 vi.mock('@/lib/pipeline', () => ({
@@ -75,6 +78,8 @@ function configuredSupabase() {
     throw new Error(`Unexpected table: ${table}`)
   })
 
+  mocks.createAdminClient.mockReturnValue({ rpc: mocks.reserveRun })
+  mocks.reserveRun.mockResolvedValue({ data: 'run-1', error: null })
   mocks.createClient.mockResolvedValue({
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -119,9 +124,9 @@ describe('analyze route protocol token audit', () => {
     expect(response.status).toBe(200)
     expect(mocks.anthropicConstructors).not.toHaveBeenCalled()
     expect(mocks.anthropicCountTokens).not.toHaveBeenCalled()
-    expect(mocks.auditInsert).toHaveBeenCalledWith(expect.objectContaining({
-      user_id: 'user-1',
-      protocol_input_tokens: null,
+    expect(mocks.reserveRun).toHaveBeenCalledWith('gpc_reserve_registered_analysis_run', expect.objectContaining({
+      p_user_id: 'user-1',
+      p_run_source: 'human',
     }))
   })
 

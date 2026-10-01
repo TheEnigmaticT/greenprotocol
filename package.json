@@ -12,13 +12,16 @@
     "engine:analyze": "tsx scripts/run-engine-candidate.ts",
     "engine:chemistry": "uv run --with-requirements services/chemistry/requirements.txt python scripts/run-engine-chemistry.py",
     "benchmark:export-corpus": "tsx scripts/benchmarks/export-corpus.ts",
-    "benchmark:run": "tsx scripts/benchmarks/run-pipeline-benchmark.ts"
+    "benchmark:run": "tsx scripts/benchmarks/run-pipeline-benchmark.ts",
+    "scisure:worker": "tsx scripts/run-scisure-worker.ts",
+    "scisure:purge": "tsx scripts/purge-scisure-lineage.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.97.0",
     "next": "16.1.6",
+    "nodemailer": "10.0.13",
     "openai": "^6.38.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -31,8 +34,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/smtp-server": "3.5.13",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "smtp-server": "3.19.16",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
     "typescript": "^5",

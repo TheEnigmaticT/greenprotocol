@@ -1,0 +1,21 @@
+# Keep Cloud Build source upload aligned with the Docker build context.
+.gcloudignore
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.vercel
+.supabase
+node_modules
+.github
+.next
+coverage
+test-results
+tmp
+privatefixtures
+**/privatefixtures
+*.pem
+*.key
+*.sqlite
+*.sqlite-*

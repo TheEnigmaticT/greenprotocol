@@ -1,0 +1,10 @@
+{
+  "gcaiBaseUrl": "https://greenchemistry.ai",
+  "enableSuppliesOrders": false,
+  "gcaiBridge": {
+    "enabled": false,
+    "origin": "https://greenchemistry.ai",
+    "path": "/integrations/scisure/connect",
+    "deadlineMs": 900000
+  }
+}
