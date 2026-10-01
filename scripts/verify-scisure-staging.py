@@ -92,6 +92,14 @@ def expected_hashes(repo: Path) -> dict[str, str]:
     return {version: hashlib.sha256((repo / path).read_bytes()).hexdigest() for version, path in MIGRATIONS}
 
 
+def assert_migration_hashes(migrations: object, hashes: dict[str, str]) -> None:
+    if not isinstance(migrations, list):
+        raise RuntimeError('Staging migration readback is malformed.')
+    remote_hashes = {item.get('version'): item.get('source_sha256') for item in migrations if isinstance(item, dict)}
+    if remote_hashes != hashes:
+        raise RuntimeError('Staging migration source hashes do not match committed source bytes.')
+
+
 def assert_service_only_functions(functions: object) -> None:
     if not isinstance(functions, list):
         raise RuntimeError('Staging service-only RPC readback is malformed.')
@@ -179,9 +187,7 @@ def main() -> int:
     migrations = remote.get('migrations')
     if not isinstance(migrations, list):
         raise RuntimeError('Staging migration readback is malformed.')
-    remote_hashes = {item.get('version'): item.get('source_sha256') for item in migrations if isinstance(item, dict)}
-    if remote_hashes != hashes:
-        raise RuntimeError('Staging migration source hashes do not match committed source bytes.')
+    assert_migration_hashes(migrations, hashes)
     assert_service_only_functions(remote.get('functions'))
     output = {
         'project_ref': PROJECT_REF,
