@@ -5,6 +5,6 @@
     "enabled": false,
     "origin": "https://greenchemistry.ai",
     "path": "/integrations/scisure/connect",
-    "deadlineMs": 300000
+    "deadlineMs": 900000
   }
 }
