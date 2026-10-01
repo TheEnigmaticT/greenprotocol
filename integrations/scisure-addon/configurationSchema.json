@@ -41,15 +41,16 @@
         "type": "integer",
         "title": "Connection timeout (milliseconds)",
         "minimum": 1000,
-        "maximum": 600000,
-        "default": 300000
+        "maximum": 3600000,
+        "default": 900000,
+        "description": "How long the add-on keeps the connection open and waits for a reviewed result to come back. 15 min covers analysis plus human review; 1 hour is the hard cap."
       }
     },
     "default": {
       "enabled": false,
       "origin": "https://greenchemistry.ai",
       "path": "/integrations/scisure/connect",
-      "deadlineMs": 300000
+      "deadlineMs": 900000
     }
   }
 }
