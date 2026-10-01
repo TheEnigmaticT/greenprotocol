@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 const nonce = 'a'.repeat(64)
 const sourceHash = 'b'.repeat(64)
 
-test('receiver polls queued work, records an explicit review, and returns a non-empty accepted result', async ({ page, context }) => {
+test('guest receiver flow polls queued work, records an explicit review, and returns a non-empty accepted result', async ({ page, context }) => {
   let statusCalls = 0
   let reviewWrites = 0
   let releaseCompleted!: () => void
@@ -12,7 +12,7 @@ test('receiver polls queued work, records an explicit review, and returns a non-
     const request = route.request()
     const url = new URL(request.url())
     if (url.pathname.endsWith('/connections') && request.method() === 'POST') {
-      return route.fulfill({ json: { bridgeSessionId: 'bridge-1', credential: 'bridge-secret', principalKind: 'registered' } })
+      return route.fulfill({ json: { bridgeSessionId: 'bridge-1', credential: 'bridge-secret', principalKind: 'guest' } })
     }
     if (url.pathname.endsWith('/snapshots') && request.method() === 'POST') {
       return route.fulfill({ json: { snapshotId: 'snapshot-1', status: 'queued' } })
@@ -22,11 +22,13 @@ test('receiver polls queued work, records an explicit review, and returns a non-
       if (statusCalls > 1) await completedGate
       return route.fulfill({ json: statusCalls === 1
         ? { version: 1, bridgeSessionId: 'bridge-1', snapshotId: 'snapshot-1', sourceHash, runId: 'job-1', status: 'queued' }
-        : { version: 1, bridgeSessionId: 'bridge-1', snapshotId: 'snapshot-1', sourceHash, runId: 'job-1', status: 'completed', revisionNumber: 7, recommendations: [{ recommendationId: 'rec-safe', sourceStepId: 'prot-step-1', originalChemical: 'N,N-Dimethylformamide', alternativeChemical: 'Ethyl acetate', kind: 'chemical-substitution', decision: 'proposed', confidence: 'medium', caveats: 'Confirm compatibility before use.', requiresScientistReview: true }] } })
+        : { version: 1, bridgeSessionId: 'bridge-1', snapshotId: 'snapshot-1', sourceHash, runId: 'job-1', status: 'completed', recommendations: [{ recommendationId: 'rec-safe', sourceStepId: 'prot-step-1', originalChemical: 'N,N-Dimethylformamide', alternativeChemical: 'Ethyl acetate', kind: 'chemical-substitution', decision: 'proposed', confidence: 'medium', caveats: 'Confirm compatibility before use.', requiresScientistReview: true }] } })
     }
     if (url.pathname.endsWith('/decisions') && request.method() === 'POST') {
+      const expectedPath = '/api/integrations/scisure/guest/snapshots/snapshot-1/decisions'
+      if (url.pathname !== expectedPath) return route.fulfill({ status: 404, json: { error: 'Review endpoint does not match principal kind.' } })
       reviewWrites += 1
-      return route.fulfill({ json: { recommendationId: 'rec-safe', decision: 'approved_for_experiment', sourceHash, analysisRevision: 7 } })
+      return route.fulfill({ json: { recommendationId: 'rec-safe', decision: 'approved_for_experiment', sourceHash, analysisRevision: null } })
     }
     return route.fulfill({ status: 404, json: { error: 'Unexpected fixture request' } })
   })

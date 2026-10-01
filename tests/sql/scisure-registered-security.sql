@@ -20,6 +20,7 @@ CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE service_role NOLOGIN;
 \ir ../../supabase/migrations/20261001000000_create_scisure_bridge.sql
+\ir ../../supabase/migrations/20261001010000_add_scisure_guest_admission.sql
 \ir ../../supabase/migrations/20261001030000_harden_scisure_registered_admission_and_review.sql
 CREATE OR REPLACE FUNCTION assert_true(condition boolean, message text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN IF NOT condition THEN RAISE EXCEPTION '%', message; END IF; END $$;
 DO $$

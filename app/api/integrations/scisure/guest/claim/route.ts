@@ -12,8 +12,8 @@ export async function POST(request: Request) {
     if (typeof body.jobId !== 'string') throw new Error('A guest-owned result is required.')
     const session = await createClient()
     const { data: { user } } = await session.auth.getUser()
-    const token = (await cookies()).get('gcai_scisure_guest')?.value
-    const result = await configuredGuestAdmissionService().claimToAccount({ admissionToken: token || '', authenticatedUserId: user?.id || null, guestOwnedResultId: body.jobId })
+    const jar = await cookies()
+    const result = await configuredGuestAdmissionService().claimToAccount({ admissionToken: jar.get('gcai_scisure_guest')?.value || '', browserBinding: jar.get('gcai_scisure_guest_binding')?.value, authenticatedUserId: user?.id || null, guestOwnedResultId: body.jobId })
     return NextResponse.json(result, { status: result.state === 'claimed' ? 200 : 403, headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Guest account claim unavailable.' }, { status: 503, headers: { 'Cache-Control': 'private, no-store' } })

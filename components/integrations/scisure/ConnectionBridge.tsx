@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { GuestAdmission } from './GuestAdmission'
 
-type Bridge = { nonce: string; sourceOrigin: string; sessionId: string; credential: string }
+type Bridge = { nonce: string; sourceOrigin: string; sessionId: string; credential: string; principalKind: 'registered' | 'guest' }
 type Source = { externalId?: string; externalVersionId?: string | null; selection?: Array<{ sectionId?: string; stepId?: string; order: number }> }
 type Admission = { version: 1; type: 'scisure.gcai.admission'; nonce: string; bridgeSessionId: string; source?: Source }
 type Recommendation = { recommendationId: string; originalChemical: string; alternativeChemical: string; kind: 'chemical-substitution'; decision: 'proposed' | 'accepted' | 'rejected'; confidence: 'high' | 'medium' | 'low'; caveats: string; requiresScientistReview: true }
@@ -84,7 +84,7 @@ export function ConnectionBridge() {
             if (response.status === 403 && /sign in|verified guest admission/i.test(payload.error || '')) { setGuestAdmissionNeeded(true); setMessage('Sign in, or complete guest mailbox verification below. After verification, reopen this SciSure connection to repeat the handshake.'); return }
             throw new Error(payload.error || 'Connection unavailable.')
           }
-          bridge.current = { nonce: data.nonce!, sourceOrigin: event.origin, sessionId: payload.bridgeSessionId, credential: payload.credential }
+          bridge.current = { nonce: data.nonce!, sourceOrigin: event.origin, sessionId: payload.bridgeSessionId, credential: payload.credential, principalKind: payload.principalKind }
           window.opener.postMessage({ version: 1, type: 'gcai.scisure.ready', nonce: data.nonce, bridgeSessionId: payload.bridgeSessionId }, event.origin)
           setMessage('Signed-in connection ready. Review the selected source in SciSure, then submit it there.')
         } catch (error) { setMessage(error instanceof Error ? error.message : 'Connection unavailable.') }
@@ -109,7 +109,10 @@ export function ConnectionBridge() {
     if (!active || !status || status.status !== 'completed' || reviewing) return
     setReviewing(recommendation.recommendationId)
     try {
-      const response = await fetch(`/api/integrations/scisure/snapshots/${encodeURIComponent(status.snapshotId)}/decisions`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${active.credential}`, 'X-GCAI-Bridge-Session': active.sessionId, 'X-GCAI-SciSure-Origin': active.sourceOrigin, 'Cache-Control': 'no-store' }, body: JSON.stringify({ recommendationId: recommendation.recommendationId, decision, sourceHash: status.sourceHash, analysisRevision: status.revisionNumber ?? null }) })
+      const decisionPath = active.principalKind === 'guest'
+        ? `/api/integrations/scisure/guest/snapshots/${encodeURIComponent(status.snapshotId)}/decisions`
+        : `/api/integrations/scisure/snapshots/${encodeURIComponent(status.snapshotId)}/decisions`
+      const response = await fetch(decisionPath, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${active.credential}`, 'X-GCAI-Bridge-Session': active.sessionId, 'X-GCAI-SciSure-Origin': active.sourceOrigin, 'Cache-Control': 'no-store' }, body: JSON.stringify({ recommendationId: recommendation.recommendationId, decision, sourceHash: status.sourceHash, analysisRevision: status.revisionNumber ?? null }) })
       const payload = await response.json() as { decision?: Review[string]; error?: string }
       if (!response.ok || !payload.decision) throw new Error(payload.error || 'Could not record scientist decision.')
       setReviews((current) => ({ ...current, [recommendation.recommendationId]: payload.decision! }))

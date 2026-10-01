@@ -3,9 +3,10 @@
 \ir scisure-bridge.sql
 \ir ../../supabase/migrations/20261001010000_add_scisure_guest_admission.sql
 \ir ../../supabase/migrations/20261001020000_create_partner_inquiry_mail_outbox.sql
+\ir ../../supabase/migrations/20261001030000_harden_scisure_registered_admission_and_review.sql
 
 DO $$
-DECLARE v_subject_id uuid; principal_id uuid; connection_id uuid; snapshot_id uuid; first_job uuid; replay_job uuid; second_job uuid;
+DECLARE v_subject_id uuid; foreign_subject_id uuid; principal_id uuid; connection_id uuid; snapshot_id uuid; first_job uuid; replay_job uuid; second_job uuid;
 BEGIN
   INSERT INTO gpc_scisure_guest_subjects(subject_hash, expires_at) VALUES ('a' || repeat('0',63), now()+interval '90 days') RETURNING id INTO v_subject_id;
   -- A stable subject, not a freshly issued token hash, owns the guest principal.
@@ -13,7 +14,7 @@ BEGIN
   INSERT INTO gpc_scisure_connections(principal_id,allowed_origin,nonce_hash,credential_id,credential_hash,expires_at)
     VALUES (principal_id,'https://sandbox.scisure.test','guest-nonce','guest-credential','guest-secret',now()+interval '10 minutes') RETURNING id INTO connection_id;
   INSERT INTO gpc_external_source_snapshots(principal_id,connection_id,source_hash,source,protocol_text,expires_at)
-    VALUES (principal_id,connection_id,'guest-subject-source','{}','Add water.',now()+interval '90 days') RETURNING id INTO snapshot_id;
+    VALUES (principal_id,connection_id,repeat('a',64),'{"selection":[{"stepId":"guest-step-1","order":1}]}','Add water.',now()+interval '90 days') RETURNING id INTO snapshot_id;
 
   SELECT job_id INTO first_job FROM gpc_reserve_scisure_guest_job(v_subject_id,principal_id,snapshot_id,'guest-subject-request',1);
   SELECT job_id INTO replay_job FROM gpc_reserve_scisure_guest_job(v_subject_id,principal_id,snapshot_id,'guest-subject-request',1);
@@ -26,12 +27,26 @@ BEGIN
   END;
   PERFORM assert_true(EXISTS(SELECT 1 FROM gpc_scisure_jobs WHERE id=first_job AND status='queued'), 'job must be created in the same guest reservation transaction');
   PERFORM assert_true((SELECT count(*) FROM gpc_scisure_guest_subject_reservations r WHERE r.subject_id=v_subject_id)=1, 'subject allowance must be reserved exactly once');
+  UPDATE gpc_scisure_jobs SET status='completed', result='{"recommendations":[{"id":"guest-rec-safe","stepNumber":1,"cardKind":"swap","evidenceAssessment":{"eligibleForApplication":true}}]}'::jsonb, completed_at=now() WHERE id=first_job;
+  INSERT INTO gpc_scisure_guest_subjects(subject_hash, expires_at) VALUES ('b' || repeat('0',63), now()+interval '90 days') RETURNING id INTO foreign_subject_id;
+  PERFORM assert_true(gpc_record_scisure_guest_review_decision(snapshot_id,principal_id,v_subject_id,'guest-rec-safe','approved_for_experiment',repeat('a',64)), 'guest review must require and accept the server-derived owning subject proof');
+  PERFORM assert_true(NOT gpc_record_scisure_guest_review_decision(snapshot_id,principal_id,foreign_subject_id,'guest-rec-safe','rejected',repeat('a',64)), 'foreign subject must not review an existing guest result');
+  PERFORM assert_true(NOT gpc_record_scisure_guest_review_decision(snapshot_id,principal_id,v_subject_id,'guest-rec-other','approved_for_experiment',repeat('a',64)), 'guest review must prove recommendation eligibility from the completed result');
+  PERFORM assert_true(EXISTS(SELECT 1 FROM gpc_scisure_review_decisions WHERE job_id=first_job AND recommendation_id='guest-rec-safe' AND reviewer_principal_id=principal_id AND reviewer_user_id IS NULL), 'guest decision must persist the guest principal rather than a claimed account');
+  PERFORM gpc_claim_scisure_guest_result(v_subject_id,'00000000-0000-0000-0000-000000000010',first_job);
+  PERFORM assert_true(EXISTS(SELECT 1 FROM gpc_scisure_guest_claims WHERE subject_id=v_subject_id AND user_id='00000000-0000-0000-0000-000000000010' AND job_id=first_job), 'claim must persist only the owning subject and authenticated account');
+  BEGIN
+    PERFORM gpc_claim_scisure_guest_result(foreign_subject_id,'00000000-0000-0000-0000-000000000010',first_job);
+    RAISE EXCEPTION 'foreign subject claimed an existing result';
+  EXCEPTION WHEN others THEN
+    IF SQLERRM = 'foreign subject claimed an existing result' THEN RAISE; END IF;
+  END;
 END $$;
 
 DO $$
 DECLARE f regprocedure;
 BEGIN
-  FOREACH f IN ARRAY ARRAY['gpc_reserve_scisure_guest_job(uuid,uuid,uuid,text,integer)'::regprocedure,'gpc_claim_scisure_guest_result(uuid,uuid,uuid)'::regprocedure] LOOP
+  FOREACH f IN ARRAY ARRAY['gpc_reserve_scisure_guest_job(uuid,uuid,uuid,text,integer)'::regprocedure,'gpc_claim_scisure_guest_result(uuid,uuid,uuid)'::regprocedure,'gpc_record_scisure_guest_review_decision(uuid,uuid,uuid,text,text,text)'::regprocedure] LOOP
     PERFORM assert_true(NOT has_function_privilege('anon',f,'EXECUTE'), 'anon must not execute guest security definer RPC');
     PERFORM assert_true(NOT has_function_privilege('authenticated',f,'EXECUTE'), 'authenticated must not execute guest security definer RPC');
     PERFORM assert_true(has_function_privilege('service_role',f,'EXECUTE'), 'service role must execute guest security definer RPC');

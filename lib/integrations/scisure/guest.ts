@@ -147,9 +147,9 @@ export function createGuestAdmissionService(input: {
       const outcome = await input.store.reserve(admission.subjectId, inputValue.idempotencyKey, allowance)
       return outcome === 'reserved' ? { state: 'reserved' as const, replayed: false } : outcome === 'replayed' ? { state: 'reserved' as const, replayed: true } : { state: 'exhausted' as const }
     },
-    async claimToAccount(inputValue: { admissionToken: string; authenticatedUserId: string | null; guestOwnedResultId: string }) {
-      if (!inputValue.authenticatedUserId || !/^[A-Za-z0-9-]{8,128}$/.test(inputValue.authenticatedUserId) || !REQUEST_ID.test(inputValue.guestOwnedResultId)) return { state: 'rejected' as const }
-      const admission = await readAdmission(inputValue.admissionToken)
+    async claimToAccount(inputValue: { admissionToken: string; browserBinding?: string; authenticatedUserId: string | null; guestOwnedResultId: string }) {
+      if (!inputValue.authenticatedUserId || !/^[A-Za-z0-9-]{8,128}$/.test(inputValue.authenticatedUserId) || !REQUEST_ID.test(inputValue.guestOwnedResultId) || !inputValue.browserBinding) return { state: 'rejected' as const }
+      const admission = await readAdmission(inputValue.admissionToken, inputValue.browserBinding)
       if (!admission) return { state: 'rejected' as const }
       await input.store.claim(admission.subjectId, inputValue.authenticatedUserId, inputValue.guestOwnedResultId)
       return { state: 'claimed' as const, userId: inputValue.authenticatedUserId, resultId: inputValue.guestOwnedResultId }

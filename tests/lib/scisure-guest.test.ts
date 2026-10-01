@@ -71,7 +71,7 @@ describe('SciSure guest admission', () => {
     expect(await issuer.subjectForAdmission(admission.admissionToken, 'browser-b')).toBeNull()
   })
 
-  it('rejects an expired email proof and stolen account claim', async () => {
+  it('rejects an expired email proof and account claim without its bound browser proof', async () => {
     let time = new Date('2026-10-01T12:00:00.000Z')
     const mail = transport(); const issuer = service({ mail, now: () => time })
     await issuer.requestEmailChallenge({ address: 'chemist@example.test', captchaToken: 'captcha-ok' })
@@ -84,6 +84,8 @@ describe('SciSure guest admission', () => {
     if (admission.state !== 'issued') throw new Error('expected admission')
     expect(await issuer.claimToAccount({ admissionToken: admission.admissionToken, authenticatedUserId: null, guestOwnedResultId: 'job-1' })).toEqual({ state: 'rejected' })
     expect(await issuer.claimToAccount({ admissionToken: 'stolen.token', authenticatedUserId: '11111111-1111-4111-8111-111111111111', guestOwnedResultId: 'job-1' })).toEqual({ state: 'rejected' })
-    expect(await issuer.claimToAccount({ admissionToken: admission.admissionToken, authenticatedUserId: '11111111-1111-4111-8111-111111111111', guestOwnedResultId: 'job-1' })).toEqual({ state: 'claimed', userId: '11111111-1111-4111-8111-111111111111', resultId: 'job-1' })
+    expect(await issuer.claimToAccount({ admissionToken: admission.admissionToken, authenticatedUserId: '11111111-1111-4111-8111-111111111111', guestOwnedResultId: 'job-1' })).toEqual({ state: 'rejected' })
+    expect(await issuer.claimToAccount({ admissionToken: admission.admissionToken, browserBinding: 'browser-b', authenticatedUserId: '11111111-1111-4111-8111-111111111111', guestOwnedResultId: 'job-1' })).toEqual({ state: 'rejected' })
+    expect(await issuer.claimToAccount({ admissionToken: admission.admissionToken, browserBinding: 'browser-a', authenticatedUserId: '11111111-1111-4111-8111-111111111111', guestOwnedResultId: 'job-1' })).toEqual({ state: 'claimed', userId: '11111111-1111-4111-8111-111111111111', resultId: 'job-1' })
   })
 })

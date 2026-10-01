@@ -149,10 +149,43 @@ BEGIN
   RETURN true;
 END $$;
 
+CREATE OR REPLACE FUNCTION gpc_record_scisure_guest_review_decision(
+  p_snapshot_id UUID, p_principal_id UUID, p_subject_id UUID, p_recommendation_id TEXT,
+  p_decision TEXT, p_source_hash TEXT
+) RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_job_id UUID; v_result JSONB; v_source JSONB;
+BEGIN
+  IF p_decision NOT IN ('approved_for_experiment','rejected') OR p_recommendation_id !~ '^[A-Za-z0-9._:-]{1,160}$' OR p_source_hash !~ '^[a-f0-9]{64}$' THEN RETURN false; END IF;
+  SELECT j.id,j.result,s.source INTO v_job_id,v_result,v_source
+    FROM gpc_scisure_jobs j
+    JOIN gpc_scisure_principals p ON p.id=j.principal_id
+    JOIN gpc_external_source_snapshots s ON s.id=j.snapshot_id
+    WHERE j.snapshot_id=p_snapshot_id AND j.principal_id=p_principal_id AND j.status='completed'
+      AND p.kind='guest' AND p.guest_subject_id=p_subject_id AND s.source_hash=p_source_hash
+    FOR UPDATE OF j;
+  IF NOT FOUND THEN RETURN false; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(COALESCE(v_result->'recommendations','[]'::jsonb)) r
+    WHERE r->>'id'=p_recommendation_id AND r->>'cardKind'='swap'
+      AND r#>>'{evidenceAssessment,eligibleForApplication}'='true'
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(COALESCE(v_source->'selection','[]'::jsonb)) sel
+        WHERE sel ? 'stepId' AND (sel->>'order') ~ '^[0-9]+$' AND r->>'stepNumber' ~ '^[0-9]+$'
+          AND (sel->>'order')::integer=(r->>'stepNumber')::integer
+      )
+  ) THEN RETURN false; END IF;
+  INSERT INTO gpc_scisure_review_decisions(job_id,recommendation_id,reviewer_principal_id,decision)
+    VALUES(v_job_id,p_recommendation_id,p_principal_id,p_decision)
+  ON CONFLICT (job_id,recommendation_id) DO UPDATE
+    SET reviewer_user_id=NULL, reviewer_principal_id=EXCLUDED.reviewer_principal_id, decision=EXCLUDED.decision, created_at=now();
+  RETURN true;
+END $$;
+
 REVOKE ALL ON FUNCTION gpc_sync_registered_quota_run_state() FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION gpc_record_scisure_review_decision(UUID,UUID,UUID,TEXT,TEXT,TEXT,INTEGER) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION gpc_record_scisure_guest_review_decision(UUID,UUID,UUID,TEXT,TEXT,TEXT) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION gpc_reserve_scisure_job(UUID,UUID,TEXT,INTEGER) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION gpc_reserve_registered_analysis_run(UUID,INTEGER,TEXT) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION gpc_complete_scisure_job(UUID,UUID,UUID,UUID,JSONB) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION gpc_fail_scisure_job(UUID,UUID,TEXT,TEXT) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION gpc_record_scisure_review_decision(UUID,UUID,UUID,TEXT,TEXT,TEXT,INTEGER),gpc_reserve_scisure_job(UUID,UUID,TEXT,INTEGER),gpc_reserve_registered_analysis_run(UUID,INTEGER,TEXT),gpc_complete_scisure_job(UUID,UUID,UUID,UUID,JSONB),gpc_fail_scisure_job(UUID,UUID,TEXT,TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION gpc_record_scisure_review_decision(UUID,UUID,UUID,TEXT,TEXT,TEXT,INTEGER),gpc_record_scisure_guest_review_decision(UUID,UUID,UUID,TEXT,TEXT,TEXT),gpc_reserve_scisure_job(UUID,UUID,TEXT,INTEGER),gpc_reserve_registered_analysis_run(UUID,INTEGER,TEXT),gpc_complete_scisure_job(UUID,UUID,UUID,UUID,JSONB),gpc_fail_scisure_job(UUID,UUID,TEXT,TEXT) TO service_role;
