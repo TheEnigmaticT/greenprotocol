@@ -29,7 +29,7 @@ export function ConnectionBridge() {
   const [reviews, setReviews] = useState<Review>({})
   const [reviewing, setReviewing] = useState<string | null>(null)
   const [guestAdmissionNeeded, setGuestAdmissionNeeded] = useState(false)
-  const browserBinding = useRef(typeof crypto !== 'undefined' ? crypto.randomUUID() : `guest-${Math.random().toString(36).slice(2)}`)
+  const browserBinding = useRef(typeof window !== 'undefined' ? (() => { const key = 'gcai_scisure_guest_binding'; const existing = window.localStorage.getItem(key); if (existing && existing.length <= 512) return existing; const value = crypto.randomUUID(); window.localStorage.setItem(key, value); return value })() : 'guest-server-render')
   const bridge = useRef<Bridge | null>(null)
   const admittedSource = useRef<Source | undefined>(undefined)
   const returned = useRef(false)

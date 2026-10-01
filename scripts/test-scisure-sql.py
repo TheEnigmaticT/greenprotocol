@@ -10,12 +10,6 @@ import sys
 import tempfile
 
 repo = Path(__file__).resolve().parents[1]
-bin_dir = Path('/opt/homebrew/opt/postgresql@17/bin')
-for name in ('initdb', 'pg_ctl', 'psql'):
-    if not (bin_dir / name).is_file():
-        raise SystemExit('Missing local PostgreSQL executable: ' + name)
-scratch = Path.home() / '.hermes/cache/scratch'
-scratch.mkdir(parents=True, exist_ok=True)
 fixtures = (
     Path('tests/sql/scisure-bridge.sql'),
     Path('tests/sql/scisure-guest-admission.sql'),
@@ -26,6 +20,12 @@ if sys.argv[1:] == ['--list']:
     raise SystemExit(0)
 if len(sys.argv) != 1:
     raise SystemExit('Usage: test-scisure-sql.py [--list]')
+bin_dir = Path('/opt/homebrew/opt/postgresql@17/bin')
+for name in ('initdb', 'pg_ctl', 'psql'):
+    if not (bin_dir / name).is_file():
+        raise SystemExit('Missing local PostgreSQL executable: ' + name)
+scratch = Path.home() / '.hermes/cache/scratch'
+scratch.mkdir(parents=True, exist_ok=True)
 # Never inherit PG connection parameters from a production shell.
 env = {k: v for k, v in os.environ.items() if not k.startswith('PG')}
 env['LC_ALL'] = 'C'

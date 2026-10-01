@@ -11,7 +11,7 @@ type Admission = { tokenHash: string; subjectId: string; expiresAt: number }
 
 export type GuestCaptchaVerifier = { verify(token: string, context?: { ipSignal?: string }): Promise<{ ok: boolean }> }
 export type GuestMailTransport = {
-  queueMagicLink(input: { address: string; fragmentToken: string; purpose: 'admission' | 'recovery'; expiresAt: string }): Promise<{ state: 'queued' | 'pending_configuration' }>
+  queueMagicLink(input: { subjectId: string; address: string; fragmentToken: string; purpose: 'admission' | 'recovery'; expiresAt: string }): Promise<{ state: 'queued' | 'pending_configuration' }>
 }
 export type GuestAdmissionStore = {
   subjectForEmail(emailHash: string): Promise<Subject>
@@ -105,7 +105,7 @@ export function createGuestAdmissionService(input: {
     const expiresAt = now().getTime() + EMAIL_PROOF_MINUTES * 60_000
     await input.store.createChallenge({ tokenHash: hash(secret), subjectId: subject.id, expiresAt, consumedAt: null })
     if (!input.mail) { await input.store.recordPendingEmail?.(subject.id, purpose); return { state: 'pending_configuration' as const } }
-    const delivery = await input.mail.queueMagicLink({ address: normalized, fragmentToken: secret, purpose, expiresAt: new Date(expiresAt).toISOString() })
+    const delivery = await input.mail.queueMagicLink({ subjectId: subject.id, address: normalized, fragmentToken: secret, purpose, expiresAt: new Date(expiresAt).toISOString() })
     return { state: delivery.state }
   }
   const signAdmission = (subjectId: string, browserBinding: string) => {

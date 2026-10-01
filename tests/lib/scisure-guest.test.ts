@@ -10,9 +10,9 @@ const captcha: GuestCaptchaVerifier = {
   async verify(token) { return { ok: token === 'captcha-ok' } },
 }
 
-function transport(): GuestMailTransport & { messages: Array<{ address: string; fragmentToken: string }> } {
-  const messages: Array<{ address: string; fragmentToken: string }> = []
-  return { messages, async queueMagicLink(input) { messages.push({ address: input.address, fragmentToken: input.fragmentToken }); return { state: 'queued' } } }
+function transport(): GuestMailTransport & { messages: Array<{ address: string; fragmentToken: string; purpose: 'admission' | 'recovery' }> } {
+  const messages: Array<{ address: string; fragmentToken: string; purpose: 'admission' | 'recovery' }> = []
+  return { messages, async queueMagicLink(input) { messages.push({ address: input.address, fragmentToken: input.fragmentToken, purpose: input.purpose }); return { state: 'queued' } } }
 }
 
 function service(overrides: { now?: () => Date; mail?: GuestMailTransport; allowance?: number } = {}) {
@@ -48,7 +48,7 @@ describe('SciSure guest admission', () => {
     expect(await service().requestEmailChallenge({ address: 'chemist@example.test', captchaToken: 'captcha-ok' })).toEqual({ state: 'pending_configuration' })
   })
 
-  it('atomically enforces a stable subject trial allowance across reissue and recovery', async () => {
+  it('keeps admission and recovery on one ledger without optional marketing', async () => {
     const mail = transport(); const issuer = service({ mail, allowance: 1 })
     await issuer.requestEmailChallenge({ address: 'chemist@example.test', captchaToken: 'captcha-ok' })
     const first = await issuer.verifyEmailChallenge({ fragmentToken: mail.messages[0].fragmentToken, browserBinding: 'browser-a' })
@@ -56,6 +56,7 @@ describe('SciSure guest admission', () => {
     expect(await Promise.all([issuer.reserveTrial({ admissionToken: first.admissionToken, idempotencyKey: 'job-a' }), issuer.reserveTrial({ admissionToken: first.admissionToken, idempotencyKey: 'job-b' })])).toEqual(expect.arrayContaining([{ state: 'reserved', replayed: false }, { state: 'exhausted' }]))
 
     await issuer.requestRecovery({ address: 'chemist@example.test', captchaToken: 'captcha-ok' })
+    expect(mail.messages[1].purpose).toBe('recovery')
     const recovered = await issuer.verifyEmailChallenge({ fragmentToken: mail.messages[1].fragmentToken, browserBinding: 'browser-b' })
     expect(recovered).toMatchObject({ state: 'issued', subjectId: first.subjectId, remaining: 0 })
     if (recovered.state !== 'issued') throw new Error('expected recovery')

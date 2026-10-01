@@ -5,6 +5,7 @@ import {
   type GuestCaptchaVerifier,
   type GuestMailTransport,
 } from './guest'
+import { configuredGuestMailBaseUrl, configuredMail, createGuestMailPayloadCipher, createGuestMailTransport } from './mail'
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 const DAYS_90 = 90 * 86_400_000
@@ -72,8 +73,20 @@ function configuredStore(): GuestAdmissionStore {
   }
 }
 
-/** Mail is intentionally absent until the service-backed outbox transport is injected. */
-export function configuredGuestAdmissionService(mail?: GuestMailTransport) {
+function configuredGuestMailTransport(): GuestMailTransport | undefined {
+  if (!configuredMail() || !configuredGuestMailBaseUrl() || !process.env.SCISURE_GUEST_MAIL_OUTBOX_AES_256_GCM_KEY?.trim()) return undefined
+  const admin = createAdminClient()
+  return createGuestMailTransport({
+    cipher: createGuestMailPayloadCipher(process.env.SCISURE_GUEST_MAIL_OUTBOX_AES_256_GCM_KEY),
+    async queue(input) {
+      const { error } = await admin.rpc('gpc_queue_scisure_guest_mail' as never, { p_subject_id: input.subjectId, p_purpose: input.purpose, p_encrypted_payload: input.encryptedPayload, p_expires_at: input.expiresAt } as never)
+      if (error) throw new Error('Guest mail outbox is unavailable.')
+      return { state: 'queued' }
+    },
+  })
+}
+
+export function configuredGuestAdmissionService(mail: GuestMailTransport | undefined = configuredGuestMailTransport()) {
   const subjectKey = process.env.SCISURE_GUEST_SUBJECT_HASH_KEY || ''
   const tokenKey = process.env.SCISURE_GUEST_ADMISSION_HMAC_KEY || ''
   const allowance = Number.parseInt(process.env.SCISURE_GUEST_TRIAL_LIMIT || '1', 10)
