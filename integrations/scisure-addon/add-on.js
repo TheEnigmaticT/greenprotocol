@@ -102,6 +102,7 @@ var greenchemistry_ai = (function () {
   function cleanupBridge(message, error) { var bridge = state.bridge; if (!bridge) return; clearTimeout(bridge.deadlineTimer); clearInterval(bridge.closeTimer); window.removeEventListener('message', bridge.listener); if (message && bridge.modal && bridge.modal.dialog.isConnected) status(bridge.modal.dialog, message, error); state.bridge = null; }
   function showResults(bridge, recommendations) {
     var holder = element('section'); holder.append(element('h3', 'GCai returned recommendations — review required'));
+    var writebackResults = element('div');
     recommendations.forEach(function (rec) {
       var row = element('div'); row.style.cssText = 'border-top:1px solid #ccd8cf;padding:8px 0';
       row.append(element('p', rec.alternativeChemical));
@@ -109,7 +110,50 @@ var greenchemistry_ai = (function () {
       if (rec.kind === 'chemical-substitution' && rec.decision === 'accepted' && rec.requiresScientistReview === true) row.append(button('Prefill Supplies chemical', function () { openSupplyOrder({ chemical: rec.alternativeChemical, provenance: 'GCai recommendation ' + rec.recommendationId + ' for source ' + bridge.snapshot.externalId }); }));
       holder.append(row);
     });
+    var updatedProtocolText = buildUpdatedProtocolText(bridge.snapshot, recommendations);
+    var updateSection = element('section'); updateSection.style.cssText = 'border-top:2px solid #a6b9ac;margin-top:16px;padding-top:12px';
+    updateSection.append(element('h3', 'Write back to SciSure (review-only)'));
+    updateSection.append(element('p', 'GCai does not overwrite your procedure without an explicit choice. Pick one of the actions below; "Copy updated text" always works even if the SciSure write API rejects the call.'));
+    var copyBtn = button('Copy updated procedure text', function () {
+      copyText(updatedProtocolText).then(function () { status(writebackResults, 'Updated procedure copied. Paste it into a new or existing SciSure protocol manually.'); }).catch(function (e) { status(writebackResults, e.message, true); });
+    });
+    updateSection.append(copyBtn);
+    if (bridge.snapshot.kind === 'protocol' || bridge.snapshot.kind === 'protocol-step') {
+      var protID = parseInt(bridge.snapshot.externalId, 10);
+      if (Number.isSafeInteger(protID) && protID > 0) {
+        var replaceBtn = button('Replace this procedure in SciSure', function () { writebackProtocol('replace', { protID: protID, protVersionID: bridge.snapshot.externalVersionId, snapshot: bridge.snapshot, protocolText: updatedProtocolText, recommendations: recommendations }, writebackResults); });
+        replaceBtn.style.background = '#ffe5d4'; replaceBtn.style.borderColor = '#b8633a';
+        updateSection.append(replaceBtn);
+      }
+    }
+    var createBtn = button('Save as a new procedure in SciSure', function () { writebackProtocol('create', { snapshot: bridge.snapshot, protocolText: updatedProtocolText, recommendations: recommendations }, writebackResults); });
+    updateSection.append(createBtn);
+    updateSection.append(writebackResults);
+    holder.append(updateSection);
     bridge.modal.dialog.append(holder);
+  }
+  function buildUpdatedProtocolText(snapshot, recommendations) {
+    var header = (snapshot.kind === 'experiment' ? 'Experiment' : 'Protocol') + ': ' + snapshot.title + ' (ID ' + snapshot.externalId + (snapshot.externalVersionId ? ', version ' + snapshot.externalVersionId : '') + ')\n\nGCai-reviewed: ' + new Date().toISOString() + '\n\n';
+    var body = snapshot.protocolText || (snapshot.selection || []).map(function (s) { return '## ' + (s.title || 'Untitled selection') + '\n' + s.normalizedText; }).join('\n\n');
+    var review = '\n\n## GCai recommendations\n\n' + recommendations.map(function (r) {
+      return '- [' + r.kind + '] ' + r.alternativeChemical + (r.caveats ? '\n  Caveat: ' + r.caveats : '') + ' (decision: ' + r.decision + ', requires scientist review: ' + (r.requiresScientistReview === true ? 'yes' : 'no') + ')';
+    }).join('\n') + '\n\nA scientist must verify identity, grade, package, and suitability before any of these changes are applied.';
+    return header + body + review;
+  }
+  function writebackProtocol(mode, payload, results) {
+    var body = { name: payload.snapshot.title + ' — GCai updated ' + new Date().toISOString().slice(0, 10), description: 'Generated from GreenChemistry.ai review of ' + payload.snapshot.title + '. Scientist review required before applying any chemical or process change.', steps: [{ name: payload.snapshot.title || 'GCai-reviewed procedure', contents: payload.protocolText, order: 0 }] };
+    var path, method;
+    if (mode === 'replace' && payload.protID) {
+      method = 'PUT'; path = 'protocols/' + payload.protID;
+    } else {
+      method = 'POST'; path = 'protocols';
+    }
+    status(results, 'Calling SciSure ' + method + ' /' + path + '...');
+    apiCall({ method: method, path: path, body: body }).then(function (response) {
+      status(results, mode === 'replace' ? 'Replaced protocol in SciSure.' : 'Created new protocol in SciSure. Server returned: ' + (typeof response === 'object' ? JSON.stringify(response).slice(0, 240) : String(response)));
+    }).catch(function (error) {
+      status(results, 'SciSure write API rejected the call (' + method + ' /' + path + '): ' + error.message + '. Use "Copy updated procedure text" to paste manually.', true);
+    });
   }
   function startBridge(snapshot) {
     var config = state.config.gcaiBridge;
