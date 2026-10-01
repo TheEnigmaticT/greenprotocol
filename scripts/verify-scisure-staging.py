@@ -20,6 +20,7 @@ MIGRATIONS = (
     ('20261001020000', 'supabase/migrations/20261001020000_create_partner_inquiry_mail_outbox.sql'),
     ('20261001030000', 'supabase/migrations/20261001030000_harden_scisure_registered_admission_and_review.sql'),
     ('20261001050000', 'supabase/migrations/20261001050000_enable_registered_quota_ledger_rls.sql'),
+    ('20261001060000', 'supabase/migrations/20261001060000_record_mail_acceptance_not_delivery.sql'),
 )
 EXPECTED_RLS_TABLES = (
     'gpc_scisure_principals', 'gpc_scisure_connections', 'gpc_external_source_snapshots',
@@ -29,6 +30,18 @@ EXPECTED_RLS_TABLES = (
     'gpc_scisure_guest_subject_reservations', 'gpc_scisure_guest_claims',
     'gpc_partner_inquiries', 'gpc_partner_mail_outbox', 'gpc_partner_mail_tokens',
     'gpc_registered_analysis_quota_ledger',
+)
+EXPECTED_SERVICE_FUNCTIONS = (
+    'gpc_reserve_scisure_job', 'gpc_reserve_registered_analysis_run',
+    'gpc_lease_scisure_job', 'gpc_heartbeat_scisure_job',
+    'gpc_complete_scisure_job', 'gpc_fail_scisure_job',
+    'gpc_purge_expired_scisure_lineage', 'gpc_reserve_scisure_guest_job',
+    'gpc_consume_scisure_guest_email_challenge', 'gpc_reserve_scisure_guest_subject_trial',
+    'gpc_scisure_guest_subject_remaining', 'gpc_claim_scisure_guest_result',
+    'gpc_submit_partner_inquiry', 'gpc_lease_partner_mail', 'gpc_finalize_partner_mail',
+    'gpc_queue_scisure_mail', 'gpc_unsubscribe_scisure_marketing',
+    'gpc_sync_registered_quota_run_state', 'gpc_record_scisure_review_decision',
+    'gpc_record_scisure_guest_review_decision', 'gpc_queue_scisure_guest_mail',
 )
 
 
@@ -79,6 +92,37 @@ def expected_hashes(repo: Path) -> dict[str, str]:
     return {version: hashlib.sha256((repo / path).read_bytes()).hexdigest() for version, path in MIGRATIONS}
 
 
+def assert_service_only_functions(functions: object) -> None:
+    if not isinstance(functions, list):
+        raise RuntimeError('Staging service-only RPC readback is malformed.')
+    by_name: dict[str, list[dict[str, object]]] = {}
+    for entry in functions:
+        if not isinstance(entry, dict) or not isinstance(entry.get('signature'), str):
+            raise RuntimeError('Staging service-only RPC readback is malformed.')
+        name = entry['signature'].split('(')[0].rsplit('.', 1)[-1]
+        by_name.setdefault(name, []).append(entry)
+    expected = set(EXPECTED_SERVICE_FUNCTIONS)
+    problems: list[str] = []
+    if set(by_name) != expected:
+        problems.append('expected function set does not match')
+    for name in EXPECTED_SERVICE_FUNCTIONS:
+        entries = by_name.get(name, [])
+        if len(entries) != 1:
+            problems.append(f'{name}: expected one signature, got {len(entries)}')
+            continue
+        entry = entries[0]
+        if entry.get('security_definer') is not True:
+            problems.append(f'{name}: not SECURITY DEFINER')
+        if entry.get('anon_execute') is not False:
+            problems.append(f'{name}: anon EXECUTE is not revoked')
+        if entry.get('authenticated_execute') is not False:
+            problems.append(f'{name}: authenticated EXECUTE is not revoked')
+        if entry.get('service_role_execute') is not True:
+            problems.append(f'{name}: service_role EXECUTE is missing')
+    if problems:
+        raise RuntimeError('service-only RPC privilege invariant failed: ' + '; '.join(problems))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=f'Read-only SciSure verifier for staging project {PROJECT_REF}; never prints credentials.'
@@ -116,7 +160,7 @@ def main() -> int:
             'gpc_submit_partner_inquiry', 'gpc_lease_partner_mail', 'gpc_finalize_partner_mail',
             'gpc_queue_scisure_mail', 'gpc_unsubscribe_scisure_marketing',
             'gpc_sync_registered_quota_run_state', 'gpc_record_scisure_review_decision',
-            'gpc_record_scisure_guest_review_decision'
+            'gpc_record_scisure_guest_review_decision', 'gpc_queue_scisure_guest_mail'
           )
         ),
         'rls', (
@@ -138,6 +182,7 @@ def main() -> int:
     remote_hashes = {item.get('version'): item.get('source_sha256') for item in migrations if isinstance(item, dict)}
     if remote_hashes != hashes:
         raise RuntimeError('Staging migration source hashes do not match committed source bytes.')
+    assert_service_only_functions(remote.get('functions'))
     output = {
         'project_ref': PROJECT_REF,
         'migration_hashes': [{'version': version, 'sha256': hashes[version]} for version in hashes],

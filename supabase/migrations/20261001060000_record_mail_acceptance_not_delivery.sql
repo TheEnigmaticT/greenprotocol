@@ -24,6 +24,7 @@ BEGIN
   UPDATE gpc_partner_mail_outbox AS o SET state='leased', lease_token=v_token, lease_expires_at=now()+make_interval(secs=>p_lease_seconds) WHERE o.id=v_id;
   RETURN QUERY SELECT o.id,o.inquiry_id,o.scisure_email_event_id,o.guest_subject_id,o.purpose,o.encrypted_payload,o.expires_at,o.lease_token FROM gpc_partner_mail_outbox AS o WHERE o.id=v_id;
 END $$;
+REVOKE ALL ON FUNCTION gpc_lease_partner_mail(INTEGER) FROM PUBLIC,anon,authenticated;
 
 CREATE OR REPLACE FUNCTION gpc_finalize_partner_mail(p_outbox_id UUID,p_lease_token UUID,p_state TEXT,p_provider_message_id TEXT DEFAULT NULL,p_error_code TEXT DEFAULT NULL)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
@@ -34,3 +35,53 @@ BEGIN
     WHERE id=p_outbox_id AND state='leased' AND lease_token=p_lease_token AND lease_expires_at>now();
   RETURN FOUND;
 END $$;
+REVOKE ALL ON FUNCTION gpc_finalize_partner_mail(UUID,UUID,TEXT,TEXT,TEXT) FROM PUBLIC,anon,authenticated;
+
+-- Supabase grants EXECUTE to anon/authenticated by default. Reassert the complete
+-- server-only SciSure RPC surface after the final CREATE OR REPLACE statements.
+REVOKE ALL ON FUNCTION
+  gpc_reserve_scisure_job(UUID,UUID,TEXT,INTEGER),
+  gpc_reserve_registered_analysis_run(UUID,INTEGER,TEXT),
+  gpc_lease_scisure_job(INTEGER),
+  gpc_heartbeat_scisure_job(UUID,UUID,INTEGER),
+  gpc_complete_scisure_job(UUID,UUID,UUID,UUID,JSONB),
+  gpc_fail_scisure_job(UUID,UUID,TEXT,TEXT),
+  gpc_purge_expired_scisure_lineage(),
+  gpc_reserve_scisure_guest_job(UUID,UUID,UUID,TEXT,INTEGER),
+  gpc_consume_scisure_guest_email_challenge(TEXT,TIMESTAMPTZ),
+  gpc_reserve_scisure_guest_subject_trial(UUID,TEXT,INTEGER),
+  gpc_scisure_guest_subject_remaining(UUID,INTEGER),
+  gpc_claim_scisure_guest_result(UUID,UUID,UUID),
+  gpc_submit_partner_inquiry(TEXT,TEXT,TEXT,TEXT,TEXT,BOOLEAN),
+  gpc_lease_partner_mail(INTEGER),
+  gpc_finalize_partner_mail(UUID,UUID,TEXT,TEXT,TEXT),
+  gpc_queue_scisure_mail(UUID,TEXT,TEXT,TIMESTAMPTZ),
+  gpc_unsubscribe_scisure_marketing(TEXT),
+  gpc_sync_registered_quota_run_state(),
+  gpc_record_scisure_review_decision(UUID,UUID,UUID,TEXT,TEXT,TEXT,INTEGER),
+  gpc_record_scisure_guest_review_decision(UUID,UUID,UUID,TEXT,TEXT,TEXT),
+  gpc_queue_scisure_guest_mail(UUID,TEXT,TEXT,TIMESTAMPTZ)
+FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION
+  gpc_reserve_scisure_job(UUID,UUID,TEXT,INTEGER),
+  gpc_reserve_registered_analysis_run(UUID,INTEGER,TEXT),
+  gpc_lease_scisure_job(INTEGER),
+  gpc_heartbeat_scisure_job(UUID,UUID,INTEGER),
+  gpc_complete_scisure_job(UUID,UUID,UUID,UUID,JSONB),
+  gpc_fail_scisure_job(UUID,UUID,TEXT,TEXT),
+  gpc_purge_expired_scisure_lineage(),
+  gpc_reserve_scisure_guest_job(UUID,UUID,UUID,TEXT,INTEGER),
+  gpc_consume_scisure_guest_email_challenge(TEXT,TIMESTAMPTZ),
+  gpc_reserve_scisure_guest_subject_trial(UUID,TEXT,INTEGER),
+  gpc_scisure_guest_subject_remaining(UUID,INTEGER),
+  gpc_claim_scisure_guest_result(UUID,UUID,UUID),
+  gpc_submit_partner_inquiry(TEXT,TEXT,TEXT,TEXT,TEXT,BOOLEAN),
+  gpc_lease_partner_mail(INTEGER),
+  gpc_finalize_partner_mail(UUID,UUID,TEXT,TEXT,TEXT),
+  gpc_queue_scisure_mail(UUID,TEXT,TEXT,TIMESTAMPTZ),
+  gpc_unsubscribe_scisure_marketing(TEXT),
+  gpc_sync_registered_quota_run_state(),
+  gpc_record_scisure_review_decision(UUID,UUID,UUID,TEXT,TEXT,TEXT,INTEGER),
+  gpc_record_scisure_guest_review_decision(UUID,UUID,UUID,TEXT,TEXT,TEXT),
+  gpc_queue_scisure_guest_mail(UUID,TEXT,TEXT,TIMESTAMPTZ)
+TO service_role;

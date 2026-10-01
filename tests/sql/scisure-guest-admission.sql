@@ -5,7 +5,7 @@
 \ir ../../supabase/migrations/20261001020000_create_partner_inquiry_mail_outbox.sql
 \ir ../../supabase/migrations/20261001040000_add_encrypted_guest_mail_outbox.sql
 \ir ../../supabase/migrations/20261001030000_harden_scisure_registered_admission_and_review.sql
-\ir ../../supabase/migrations/20261001050000_record_mail_acceptance_not_delivery.sql
+\ir ../../supabase/migrations/20261001060000_record_mail_acceptance_not_delivery.sql
 
 DO $$
 DECLARE v_subject_id uuid; foreign_subject_id uuid; principal_id uuid; connection_id uuid; snapshot_id uuid; first_job uuid; replay_job uuid; second_job uuid; guest_outbox uuid; accepted_outbox uuid; acceptance_lease uuid;
@@ -54,7 +54,29 @@ END $$;
 DO $$
 DECLARE f regprocedure;
 BEGIN
-  FOREACH f IN ARRAY ARRAY['gpc_reserve_scisure_guest_job(uuid,uuid,uuid,text,integer)'::regprocedure,'gpc_claim_scisure_guest_result(uuid,uuid,uuid)'::regprocedure,'gpc_record_scisure_guest_review_decision(uuid,uuid,uuid,text,text,text)'::regprocedure] LOOP
+  FOREACH f IN ARRAY ARRAY[
+    'gpc_reserve_scisure_job(uuid,uuid,text,integer)'::regprocedure,
+    'gpc_reserve_registered_analysis_run(uuid,integer,text)'::regprocedure,
+    'gpc_lease_scisure_job(integer)'::regprocedure,
+    'gpc_heartbeat_scisure_job(uuid,uuid,integer)'::regprocedure,
+    'gpc_complete_scisure_job(uuid,uuid,uuid,uuid,jsonb)'::regprocedure,
+    'gpc_fail_scisure_job(uuid,uuid,text,text)'::regprocedure,
+    'gpc_purge_expired_scisure_lineage()'::regprocedure,
+    'gpc_reserve_scisure_guest_job(uuid,uuid,uuid,text,integer)'::regprocedure,
+    'gpc_consume_scisure_guest_email_challenge(text,timestamp with time zone)'::regprocedure,
+    'gpc_reserve_scisure_guest_subject_trial(uuid,text,integer)'::regprocedure,
+    'gpc_scisure_guest_subject_remaining(uuid,integer)'::regprocedure,
+    'gpc_claim_scisure_guest_result(uuid,uuid,uuid)'::regprocedure,
+    'gpc_submit_partner_inquiry(text,text,text,text,text,boolean)'::regprocedure,
+    'gpc_lease_partner_mail(integer)'::regprocedure,
+    'gpc_finalize_partner_mail(uuid,uuid,text,text,text)'::regprocedure,
+    'gpc_queue_scisure_mail(uuid,text,text,timestamp with time zone)'::regprocedure,
+    'gpc_unsubscribe_scisure_marketing(text)'::regprocedure,
+    'gpc_sync_registered_quota_run_state()'::regprocedure,
+    'gpc_record_scisure_review_decision(uuid,uuid,uuid,text,text,text,integer)'::regprocedure,
+    'gpc_record_scisure_guest_review_decision(uuid,uuid,uuid,text,text,text)'::regprocedure,
+    'gpc_queue_scisure_guest_mail(uuid,text,text,timestamp with time zone)'::regprocedure
+  ] LOOP
     PERFORM assert_true(NOT has_function_privilege('anon',f,'EXECUTE'), 'anon must not execute guest security definer RPC');
     PERFORM assert_true(NOT has_function_privilege('authenticated',f,'EXECUTE'), 'authenticated must not execute guest security definer RPC');
     PERFORM assert_true(has_function_privilege('service_role',f,'EXECUTE'), 'service role must execute guest security definer RPC');

@@ -27,6 +27,8 @@ CREATE TABLE public.gpc_canonical_scoring_snapshots (user_id uuid NOT NULL REFER
 CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE service_role NOLOGIN;
+-- Supabase's function defaults must not accidentally make server RPCs public.
+ALTER DEFAULT PRIVILEGES FOR ROLE scisure_test IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated;
 \ir ../../supabase/migrations/20261001000000_create_scisure_bridge.sql
 
 CREATE OR REPLACE FUNCTION assert_true(condition boolean, message text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN IF NOT condition THEN RAISE EXCEPTION '%', message; END IF; END $$;
