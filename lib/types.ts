@@ -174,7 +174,7 @@ export interface AnalysisSummary {
     chemistrySubdomain: string
     recommendations: Recommendation[]
   }
-  impact_delta: ImpactDelta
+  impact_delta: ImpactDelta | null
   created_at: string
 }
 
