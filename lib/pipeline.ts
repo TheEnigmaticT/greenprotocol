@@ -13,7 +13,7 @@ import { groundDeclaredProducts } from '@/lib/declared-products'
 import { getAnalysisMetadata } from '@/lib/version'
 import { CANDIDATE_PARSE_SYSTEM_PROMPT, PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
-import { buildAssemblePrompt } from '@/lib/prompts/assemble'
+import { buildAssemblePrompt, buildAssembleSourceData } from '@/lib/prompts/assemble'
 import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
 import { buildSdsReferences } from '@/lib/sds'
 import { logLLMTrace, logDedupTrace } from '@/lib/trace'
@@ -146,6 +146,8 @@ interface CallContext {
   analysisId?: string
   analysisRunId?: string
   supabase?: SupabaseClient
+  /** External guests are deliberately limited to provider/public evidence, never tenant-scoped persistence. */
+  retrievalScope?: 'public-only'
 }
 
 interface TransportMessage {
@@ -459,10 +461,11 @@ async function assembleResult(
     }
   }
 
-  const systemPrompt = buildAssemblePrompt(protocolText, steps, recommendations)
+  const systemPrompt = buildAssemblePrompt()
+  const sourceData = buildAssembleSourceData(protocolText, steps, recommendations)
 
   try {
-    const result = await callClaude<AssembleResult>(systemPrompt, 'Generate the revised protocol and overall assessment based on the recommendations above.', ASSEMBLE_SCHEMA, 'assemble', SONNET, context)
+    const result = await callClaude<AssembleResult>(systemPrompt, sourceData, ASSEMBLE_SCHEMA, 'assemble', SONNET, context)
     console.log('Phase 3 complete')
     return result
   } catch (err) {
