@@ -9,6 +9,7 @@ describe('SciSure SQL fixture runner', () => {
       'tests/sql/scisure-bridge.sql',
       'tests/sql/scisure-guest-admission.sql',
       'tests/sql/scisure-registered-security.sql',
+      'tests/sql/scisure-unlimited-admission.sql',
     ])
   })
 })
