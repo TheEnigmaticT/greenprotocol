@@ -26,7 +26,7 @@ export function createTurnstileVerifier(fetcher: typeof fetch = fetch): GuestCap
 }
 
 function configuredStore(): GuestAdmissionStore {
-  const admin = createAdminClient() as any
+  const admin = createAdminClient()
   return {
     async subjectForEmail(emailHash) {
       const { data, error } = await admin.from('gpc_scisure_guest_subjects').upsert({ subject_hash: emailHash, expires_at: new Date(Date.now() + DAYS_90).toISOString() }, { onConflict: 'subject_hash' }).select('id, subject_hash').single()
