@@ -22,6 +22,12 @@ MIGRATIONS = (
     ('20261001040000', 'supabase/migrations/20261001040000_add_encrypted_guest_mail_outbox.sql'),
     ('20261001050000', 'supabase/migrations/20261001050000_enable_registered_quota_ledger_rls.sql'),
     ('20261001060000', 'supabase/migrations/20261001060000_record_mail_acceptance_not_delivery.sql'),
+    ('20261001070000', 'supabase/migrations/20261001070000_fix_scisure_digest_type_casts.sql'),
+    ('20261001080000', 'supabase/migrations/20261001080000_fix_scisure_digest_qualified_path.sql'),
+    ('20261001090000', 'supabase/migrations/20261001090000_qualify_scisure_complete_fail_job_id.sql'),
+    ('20261001120000', 'supabase/migrations/20261001120000_lease_alias_qualify.sql'),
+    ('20261001130000', 'supabase/migrations/20261001130000_lease_drop_recreate_out_job_id.sql'),
+    ('20261001140000', 'supabase/migrations/20261001140000_lease_qualify_via_from_clause.sql'),
 )
 EXPECTED_RLS_TABLES = (
     'gpc_scisure_principals', 'gpc_scisure_connections', 'gpc_external_source_snapshots',

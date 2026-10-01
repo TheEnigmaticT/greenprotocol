@@ -12,11 +12,9 @@ function deny(message: string, status = 401) {
   return NextResponse.json({ ok: false, error: message }, { status })
 }
 
-/** Vercel Cron entry point. Processes at most one queued SciSure job per tick.
- *  Schedules a tick every minute via vercel.json; the same leased-job RPC used
- *  by the Cloud Run Job (scripts/run-scisure-worker.ts) guarantees no double
- *  processing even if both run. Forks/skip-locks in gpc_lease_scisure_job make
- *  this safe under overlap. */
+/** Authenticated manual worker entry point. Staging automatic processing is
+ *  owned by Cloud Scheduler -> gcai-scisure-worker, not production-only Vercel
+ *  Cron. The same lease RPC prevents duplicate processing under overlap. */
 export async function GET(request: Request) {
   // Vercel Cron sends an Authorization header; reject anything else.
   const auth = request.headers.get('authorization') || ''

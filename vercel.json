@@ -4,10 +4,6 @@
     {
       "path": "/api/operational-alerts/sentinel-daily",
       "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/scisure/worker-tick-202610011501",
-      "schedule": "* * * * *"
     }
   ]
 }

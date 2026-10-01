@@ -9,21 +9,12 @@ import { getAnalysisMetadata } from '@/lib/version'
 import { buildCanonicalScoringSnapshot, protocolFingerprint } from '@/lib/scoring-snapshot'
 import { notifyAnalysis } from '@/lib/operational-alerts'
 import { isCandidateEngineSelected } from '@/lib/model-runtime'
+import { hasUnlimitedAnalyses } from '@/lib/analysis-entitlements'
 import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 300
 
 const DEFAULT_RUN_LIMIT = parseInt(process.env.ANALYSIS_RUN_LIMIT || '10', 10)
-const UNLIMITED_ANALYSIS_EMAILS = new Set([
-  'trevor.longino+gc1@gmail.com',
-  'alana@concannon.ie',
-])
-
-function hasUnlimitedAnalyses(email?: string): boolean {
-  const normalized = email?.trim().toLowerCase()
-  if (!normalized) return false
-  return UNLIMITED_ANALYSIS_EMAILS.has(normalized) || normalized.endsWith('@greenchemistry.ai')
-}
 
 function isSentinelRequest(request: Request): boolean {
   const key = process.env.SENTINEL_ANALYSIS_KEY
