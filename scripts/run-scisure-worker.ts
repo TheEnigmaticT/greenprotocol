@@ -1,4 +1,5 @@
 import { analyzeProtocol } from '@/lib/pipeline'
+import { resolveQwenModelRuntime } from '@/lib/model-runtime'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runOneSciSureJob, type LeasedSciSureJob, type SciSureWorkerStore } from '@/lib/integrations/scisure/worker'
 
@@ -6,9 +7,11 @@ const LEASE_SECONDS = 900
 
 /** Server-only durable worker. Run with `npx tsx scripts/run-scisure-worker.ts`. */
 async function main() {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.SCISURE_NONCE_HASH_KEY) {
-    throw new Error('SciSure worker requires service role and nonce protection configuration.')
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.SCISURE_NONCE_HASH_KEY) {
+    throw new Error('SciSure worker requires staging Supabase URL, service role, and nonce protection configuration.')
   }
+  // Fail before leasing any work if the explicitly selected worker route cannot execute.
+  resolveQwenModelRuntime()
   const admin = createAdminClient()
   let leased: LeasedSciSureJob | null = null
   let analysisRunId: string | undefined

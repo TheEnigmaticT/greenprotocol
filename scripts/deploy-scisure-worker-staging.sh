@@ -5,7 +5,7 @@ fail() { printf '%s\n' "$*" >&2; exit 1; }
 
 [[ "${DEPLOY_ENV:-}" == "staging" ]] || fail 'DEPLOY_ENV=staging is required.'
 [[ "${GCP_PROJECT_ID:-}" == "greenchemistry-ai" ]] || fail 'GCP_PROJECT_ID must be the staging project greenchemistry-ai.'
-[[ "${SCISURE_WORKER_IMAGE:-}" =~ @sha256:[a-f0-9]{64}$ ]] || fail 'SCISURE_WORKER_IMAGE must be an immutable @sha256 image digest.'
+[[ "${SCISURE_WORKER_IMAGE:-}" =~ ^us-central1-docker\.pkg\.dev/greenchemistry-ai/greenchemistry/gcai-scisure-worker:[0-9a-f]{40}@sha256:[a-f0-9]{64}$ ]] || fail 'SCISURE_WORKER_IMAGE must be the staging worker SHA tag plus immutable digest.'
 [[ "${GIT_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'GIT_SHA must be an exact 40-character commit SHA.'
 [[ "${CONFIRM_STAGING_WORKER_DEPLOY:-}" == "yes" ]] || fail 'Set CONFIRM_STAGING_WORKER_DEPLOY=yes to mutate staging.'
 
@@ -15,12 +15,20 @@ RUNTIME_SA="${SCISURE_STAGING_RUNTIME_SERVICE_ACCOUNT:-gcai-staging-runtime@gree
 SUPABASE_URL_SECRET="${SCISURE_STAGING_SUPABASE_URL_SECRET:-staging-supabase-url}"
 SUPABASE_ROLE_SECRET="${SCISURE_STAGING_SUPABASE_SERVICE_ROLE_SECRET:-staging-supabase-service-role-key}"
 NONCE_SECRET="${SCISURE_STAGING_NONCE_SECRET:-staging-scisure-nonce-hash-key}"
-ORIGIN_SECRET="${SCISURE_STAGING_ORIGINS_SECRET:-staging-scisure-allowed-origins}"
+PROVIDER_SECRET="${SCISURE_STAGING_OPENROUTER_API_KEY_SECRET:-staging-greenchemistry-openrouter-api-key}"
+MODEL="${SCISURE_STAGING_OPENROUTER_MODEL:-qwen/qwen3.8-27b}"
+[[ "$MODEL" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]*$ ]] || fail 'SCISURE_STAGING_OPENROUTER_MODEL must be a provider/model identifier.'
+
+# Validate only staging resource names; secret values never enter this script or logs.
+for secret in "$SUPABASE_URL_SECRET" "$SUPABASE_ROLE_SECRET" "$NONCE_SECRET" "$PROVIDER_SECRET"; do
+  gcloud secrets describe "$secret" --project "$GCP_PROJECT_ID" >/dev/null || fail "Required staging secret is unavailable: $secret"
+done
+gcloud iam service-accounts describe "$RUNTIME_SA" --project "$GCP_PROJECT_ID" >/dev/null || fail 'Staging runtime service account is unavailable.'
 
 gcloud run jobs deploy "$JOB" --project "$GCP_PROJECT_ID" --region "$REGION" --image "$SCISURE_WORKER_IMAGE" \
-  --service-account "$RUNTIME_SA" --tasks 1 --max-retries 0 --task-timeout 20m \
-  --set-env-vars "GIT_SHA=$GIT_SHA,DEPLOY_ENV=staging" \
-  --set-secrets "SUPABASE_URL=${SUPABASE_URL_SECRET}:latest,SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_ROLE_SECRET}:latest,SCISURE_NONCE_HASH_KEY=${NONCE_SECRET}:latest,SCISURE_ALLOWED_ORIGINS=${ORIGIN_SECRET}:latest" \
+  --service-account "$RUNTIME_SA" --tasks 1 --max-retries 0 --task-timeout 20m --cpu 1 --memory 2Gi \
+  --set-env-vars "GIT_SHA=$GIT_SHA,DEPLOY_ENV=staging,GCAI_ENGINE_CANDIDATE=1,GCAI_LLM_BASE_URL=https://openrouter.ai/api/v1,GCAI_LLM_MODEL=$MODEL" \
+  --set-secrets "NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL_SECRET}:latest,SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_ROLE_SECRET}:latest,SCISURE_NONCE_HASH_KEY=${NONCE_SECRET}:latest,OPENROUTER_API_KEY=${PROVIDER_SECRET}:latest" \
   --command npx --args tsx,scripts/run-scisure-worker.ts \
   --labels "deploy-env=staging,release-sha=$GIT_SHA,worker=scisure"
 

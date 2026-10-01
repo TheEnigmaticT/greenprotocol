@@ -1,0 +1,19 @@
+# Never send secrets, local state, dependencies, or VCS metadata to Docker.
+.env
+.env.*
+!.env.example
+.vercel
+.supabase
+node_modules
+.git
+.github
+.next
+coverage
+test-results
+tmp
+privatefixtures
+**/privatefixtures
+*.pem
+*.key
+*.sqlite
+*.sqlite-*
