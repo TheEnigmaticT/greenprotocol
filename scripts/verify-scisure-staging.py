@@ -28,6 +28,7 @@ MIGRATIONS = (
     ('20261001120000', 'supabase/migrations/20261001120000_lease_alias_qualify.sql'),
     ('20261001130000', 'supabase/migrations/20261001130000_lease_drop_recreate_out_job_id.sql'),
     ('20261001140000', 'supabase/migrations/20261001140000_lease_qualify_via_from_clause.sql'),
+    ('20261001210000', 'supabase/migrations/20261001210000_scisure_private_workspace.sql'),
 )
 EXPECTED_RLS_TABLES = (
     'gpc_scisure_principals', 'gpc_scisure_connections', 'gpc_external_source_snapshots',
@@ -37,6 +38,7 @@ EXPECTED_RLS_TABLES = (
     'gpc_scisure_guest_subject_reservations', 'gpc_scisure_guest_claims',
     'gpc_partner_inquiries', 'gpc_partner_mail_outbox', 'gpc_partner_mail_tokens',
     'gpc_registered_analysis_quota_ledger',
+    'gpc_scisure_workspace_decisions',
 )
 EXPECTED_SERVICE_FUNCTIONS = (
     'gpc_reserve_scisure_job', 'gpc_reserve_registered_analysis_run',
@@ -49,6 +51,7 @@ EXPECTED_SERVICE_FUNCTIONS = (
     'gpc_queue_scisure_mail', 'gpc_unsubscribe_scisure_marketing',
     'gpc_sync_registered_quota_run_state', 'gpc_record_scisure_review_decision',
     'gpc_record_scisure_guest_review_decision', 'gpc_queue_scisure_guest_mail',
+    'gpc_get_scisure_workspace', 'gpc_record_scisure_workspace_decision',
 )
 
 
@@ -138,6 +141,11 @@ def assert_service_only_functions(functions: object) -> None:
         raise RuntimeError('service-only RPC privilege invariant failed: ' + '; '.join(problems))
 
 
+def assert_private_workspace(value: object) -> None:
+    if not isinstance(value, dict) or value.get('rls') is not True or value.get('browser_select') is not False or value.get('browser_write') is not False or value.get('policy_count') != 0:
+        raise RuntimeError('Private workspace RLS/table privilege invariant failed.')
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=f'Read-only SciSure verifier for staging project {PROJECT_REF}; never prints credentials.'
@@ -175,13 +183,23 @@ def main() -> int:
             'gpc_submit_partner_inquiry', 'gpc_lease_partner_mail', 'gpc_finalize_partner_mail',
             'gpc_queue_scisure_mail', 'gpc_unsubscribe_scisure_marketing',
             'gpc_sync_registered_quota_run_state', 'gpc_record_scisure_review_decision',
-            'gpc_record_scisure_guest_review_decision', 'gpc_queue_scisure_guest_mail'
+            'gpc_record_scisure_guest_review_decision', 'gpc_queue_scisure_guest_mail',
+            'gpc_get_scisure_workspace', 'gpc_record_scisure_workspace_decision'
           )
         ),
         'rls', (
           SELECT jsonb_build_object('expected', {len(EXPECTED_RLS_TABLES)}, 'enabled', count(*) FILTER (WHERE c.relrowsecurity))
           FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           WHERE n.nspname='public' AND c.relkind='r' AND c.relname IN ({table_names})
+        ),
+        'workspace_privacy', (
+          SELECT jsonb_build_object(
+            'rls', c.relrowsecurity,
+            'browser_select', has_table_privilege('anon',c.oid,'SELECT') OR has_table_privilege('authenticated',c.oid,'SELECT'),
+            'browser_write', has_table_privilege('anon',c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_table_privilege('authenticated',c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'),
+            'policy_count', (SELECT count(*) FROM pg_policy WHERE polrelid=c.oid)
+          ) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='public' AND c.relname='gpc_scisure_workspace_decisions'
         ),
         'quota_ledger', (
           SELECT jsonb_build_object('exists', to_regclass('public.gpc_registered_analysis_quota_ledger') IS NOT NULL)
@@ -196,12 +214,14 @@ def main() -> int:
         raise RuntimeError('Staging migration readback is malformed.')
     assert_migration_hashes(migrations, hashes)
     assert_service_only_functions(remote.get('functions'))
+    assert_private_workspace(remote.get('workspace_privacy'))
     output = {
         'project_ref': PROJECT_REF,
         'migration_hashes': [{'version': version, 'sha256': hashes[version]} for version in hashes],
         'functions': remote.get('functions'),
         'rls': remote.get('rls'),
         'quota_ledger': remote.get('quota_ledger'),
+        'workspace_privacy': remote.get('workspace_privacy'),
     }
     print(json.dumps(output, sort_keys=True, separators=(',', ':')))
     return 0
