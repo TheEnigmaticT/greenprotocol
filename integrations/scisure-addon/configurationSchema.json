@@ -1,0 +1,55 @@
+{
+  "gcaiBaseUrl": {
+    "type": "string",
+    "title": "GreenChemistry.ai destination",
+    "description": "Destination for the reviewed manual handoff.",
+    "enum": ["https://greenchemistry.ai"],
+    "default": "https://greenchemistry.ai"
+  },
+  "enableSuppliesOrders": {
+    "type": "boolean",
+    "format": "checkbox",
+    "title": "Allow pending Supplies orders",
+    "description": "Keep off initially. When enabled, a scientist must select a catalog item and explicitly confirm a persisted PENDING order. This does not enable automatic purchasing.",
+    "default": false
+  },
+  "gcaiBridge": {
+    "type": "object",
+    "title": "Automatic GCai connection (not yet available)",
+    "description": "Leave disabled until the GCai receiver is implemented and live-tested.",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "format": "checkbox",
+        "title": "Enable automatic connection",
+        "enum": [false],
+        "default": false
+      },
+      "origin": {
+        "type": "string",
+        "title": "Connection origin",
+        "enum": ["https://greenchemistry.ai"],
+        "default": "https://greenchemistry.ai"
+      },
+      "path": {
+        "type": "string",
+        "title": "Proposed receiver path",
+        "enum": ["/integrations/scisure/connect"],
+        "default": "/integrations/scisure/connect"
+      },
+      "deadlineMs": {
+        "type": "integer",
+        "title": "Connection timeout (milliseconds)",
+        "minimum": 1000,
+        "maximum": 600000,
+        "default": 300000
+      }
+    },
+    "default": {
+      "enabled": false,
+      "origin": "https://greenchemistry.ai",
+      "path": "/integrations/scisure/connect",
+      "deadlineMs": 300000
+    }
+  }
+}
