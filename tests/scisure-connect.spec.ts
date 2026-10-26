@@ -126,7 +126,7 @@ test('popup review, signed in: Ask opens a recommendation-scoped read-only chat 
   })
   await context.route('http://localhost:3000/api/talk-about-this', async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>; chatOpens.push(body)
-    return route.fulfill({ json: { conversationId: 'conversation-1', scope: body.scope, contextHash: 'ctx-1', noDirectEvidence: true, disposition: 'created', messages: [], evidenceReceipts: [], approvalReceipt: null } })
+    return route.fulfill({ json: { conversationId: 'conversation-1', scope: body.scope, contextHash: 'ctx-1', noDirectEvidence: true, disposition: 'created', messages: [], evidenceReceipts: [], decisionReceipt: null, proposals: [] } })
   })
   await context.route('https://sandbox.scisure.test/**', (route) => route.fulfill({ contentType: 'text/html', body: `
     <button id="open">Open receiver</button>
