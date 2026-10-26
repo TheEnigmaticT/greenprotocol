@@ -60,6 +60,18 @@
 - The workbench always renders, including before any recommendation has been decided. It applies accepted changes only and states that pending/rejected items remain as written.
 - Provide visible `Copy Procedure` and `Print Procedure` controls. Print hides the scorecard and decisions, leaving the procedure and its analysis heading.
 
+## Saved SciSure review (read-only recovery view)
+- `/analyze/[id]/scisure` renders `SavedWorkspace` from the owner-authenticated `GET /api/integrations/scisure/analyses/[id]/workspace`. It is linked from the analysis header only when the analysis payload has `scisureReview`.
+- Findings use the same cream card treatment as the score card (`#FAFAF8`, 1px `#D6D0C4`), mono kicker in gold, and a decision label in forest (Accepted), stone (Rejected) or amber (Not reviewed).
+- The view is read-only: it states that decisions and writeback need the live review popup, and never describes a non-eligible finding as changing the procedure. 401 redirects to login, 404 shows an honest "not available" message, other failures show a retryable error; none are conflated.
+
+## SciSure popup review workspace
+- `ConnectionBridge` owns the postMessage handshake and status polling only; once the analysis is `completed` it mounts `ReviewWorkspace`, which owns review state. Pure protocol and decision logic lives in `lib/integrations/scisure/popup-review.ts`.
+- Finding cards use a 1px `#D6D0C4` border, a gold uppercase kicker (step, kind, severity), a decision label in forest (decided) or amber (undecided), and 44px-minimum bordered buttons. Eligible swaps read "Accept change" / "Reject change"; non-eligible findings read "Acknowledge" / "Dismiss" so a review is never mistaken for an applied change.
+- Draft preparation stays disabled until every finding has a decision, and any new decision discards the prepared draft and its confirmation.
+- Writeback is create-only. The explicit checkbox gates the button, the status line shows waiting, saved, uncertain, conflict, unsupported or failed, and only a `failed` (nothing created) result allows another attempt. A saved or uncertain record freezes the review.
+- Ask and the Evidence Atlas render only for signed-in (registered) connections.
+
 ## Human-readable errors
 - Every user-visible error is a `HumanError` from `lib/errors/humanize.ts` (`humanizeError` / `toHumanError`): a bold title over a muted message, `role="alert"`, 44px action targets. API routes return a stable `code` plus safe text; raw detail stays server-side. Never show env var names, vendor/model names, HTTP codes, tool names or database text.
 - Orange notice card (`ChemistryDataNotice`): a lead sentence, "Step N · name · role" items grouped by reason, a "What to do:" line, then a "Chat about this" button. The chat opens with a seeded first message and a `chemistry-clarification` scope.

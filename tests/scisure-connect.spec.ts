@@ -1,39 +1,56 @@
 import { expect, test } from '@playwright/test'
 
+// Synthetic fixture: every API response is intercepted. This proves the popup UI and the
+// postMessage contract, not a live database, provider, or SciSure sandbox round trip.
 const nonce = 'a'.repeat(64)
 const sourceHash = 'b'.repeat(64)
+const bridgeSessionId = '00000000-0000-0000-0000-000000000001'
+const snapshotId = '00000000-0000-0000-0000-000000000002'
+const rec = (over: Record<string, unknown>) => ({
+  stepNumber: 1, principleNumbers: [5], principleNames: ['Safer solvents'], severity: 'high', confidenceLevel: 'medium',
+  original: { chemical: 'N,N-Dimethylformamide', issue: 'Reprotoxic solvent.' },
+  alternative: { chemical: 'Cyrene', rationale: 'Bio-derived dipolar aprotic solvent.', yieldImpact: 'Unknown', caveats: 'Validate experimentally.', evidenceBasis: 'Fixture' },
+  ...over,
+})
+const findings = [
+  { findingId: 'warn-1', recommendationIndex: 0, applicable: false, decision: null, recommendation: rec({ id: 'warn-1', cardKind: 'warning', alternative: { chemical: '', rationale: '', yieldImpact: '', caveats: 'No substitute.', evidenceBasis: 'Fixture' } }) },
+  { findingId: 'swap-1', recommendationIndex: 1, applicable: true, decision: null, recommendation: rec({ id: 'swap-1', cardKind: 'swap' }) },
+]
+const workspace = {
+  version: 2, bridgeSessionId, snapshotId, sourceHash, runId: '00000000-0000-0000-0000-000000000003', status: 'completed', principalKind: 'guest', analysisRevision: 0,
+  source: { version: 1, kind: 'protocol', externalId: 'protocol-7', externalVersionId: 'v2', title: 'Fixture amide coupling', retrievedAt: '2026-10-01T00:00:00Z', selection: [{ stepId: 'prot-step-1', order: 1, title: 'Couple', originalContent: 'Dissolve in DMF.', normalizedText: 'Dissolve in DMF.', warnings: [] }], protocolText: 'Dissolve in DMF.', importWarnings: [] },
+  analysis: { protocolTitle: 'Fixture', recommendations: [], steps: [] }, findings, retentionExpiresAt: '2099-01-01T00:00:00Z',
+}
+const bundle = { version: 2, snapshotId, sourceHash, runId: workspace.runId, analysisRevision: 0, source: workspace.source, title: 'Fixture amide coupling — reviewed GCai draft', draftText: 'Dissolve in Cyrene.', evidenceAppendixText: 'Private evidence appendix fixture.', appliedFindingIds: ['swap-1'], acknowledgedFindingIds: ['warn-1'], limitations: ['Fixture limitation: no section mapping.'], preparedAt: '2026-10-26T00:00:00Z', bundleHash: 'c'.repeat(64) }
 
-test('guest receiver flow polls queued work, records an explicit review, and returns a non-empty accepted result', async ({ page, context }) => {
-  let statusCalls = 0
-  let reviewWrites = 0
+test('popup review: every finding decided, draft previewed, explicit confirmation, create-only writeback verified by the add-on reply', async ({ page, context }) => {
+  const decisions: Array<Record<string, unknown>> = []
+  let draftCalls = 0
   let releaseCompleted!: () => void
   const completedGate = new Promise<void>((resolve) => { releaseCompleted = resolve })
+  let statusCalls = 0
   await context.route('http://localhost:3000/api/integrations/scisure/**', async (route) => {
-    const request = route.request()
-    const url = new URL(request.url())
-    if (url.pathname.endsWith('/connections') && request.method() === 'POST') {
-      return route.fulfill({ json: { bridgeSessionId: 'bridge-1', credential: 'bridge-secret', principalKind: 'guest' } })
-    }
-    if (url.pathname.endsWith('/snapshots') && request.method() === 'POST') {
-      return route.fulfill({ json: { snapshotId: 'snapshot-1', status: 'queued' } })
-    }
-    if (url.pathname.endsWith('/status') && request.method() === 'GET') {
+    const request = route.request(); const url = new URL(request.url()); const path = url.pathname
+    if (path.endsWith('/connections') && request.method() === 'POST') return route.fulfill({ json: { bridgeSessionId, credential: 'bridge-secret', principalKind: 'guest' } })
+    if (path.endsWith('/snapshots') && request.method() === 'POST') return route.fulfill({ json: { snapshotId, status: 'queued' } })
+    if (path.endsWith('/status')) {
       statusCalls += 1
       if (statusCalls > 1) await completedGate
-      return route.fulfill({ json: statusCalls === 1
-        ? { version: 1, bridgeSessionId: 'bridge-1', snapshotId: 'snapshot-1', sourceHash, runId: 'job-1', status: 'queued' }
-        : { version: 1, bridgeSessionId: 'bridge-1', snapshotId: 'snapshot-1', sourceHash, runId: 'job-1', status: 'completed', recommendations: [{ recommendationId: 'rec-safe', sourceStepId: 'prot-step-1', originalChemical: 'N,N-Dimethylformamide', alternativeChemical: 'Ethyl acetate', kind: 'chemical-substitution', decision: 'proposed', confidence: 'medium', caveats: 'Confirm compatibility before use.', requiresScientistReview: true }] } })
+      return route.fulfill({ json: { version: 1, bridgeSessionId, snapshotId, sourceHash, runId: workspace.runId, status: statusCalls === 1 ? 'queued' : 'completed' } })
     }
-    if (url.pathname.endsWith('/decisions') && request.method() === 'POST') {
-      const expectedPath = '/api/integrations/scisure/guest/snapshots/snapshot-1/decisions'
-      if (url.pathname !== expectedPath) return route.fulfill({ status: 404, json: { error: 'Review endpoint does not match principal kind.' } })
-      reviewWrites += 1
-      return route.fulfill({ json: { recommendationId: 'rec-safe', decision: 'approved_for_experiment', sourceHash, analysisRevision: null } })
+    if (path.endsWith('/workspace') && request.method() === 'GET') {
+      expect(request.headers().authorization).toBe('Bearer bridge-secret')
+      return route.fulfill({ json: { ...workspace, findings: findings.map(f => ({ ...f, decision: decisions.find(d => d.findingId === f.findingId)?.decision ?? null })) } })
     }
+    if (path.endsWith('/workspace/decisions') && request.method() === 'POST') {
+      const body = request.postDataJSON() as Record<string, unknown>; decisions.push(body)
+      return route.fulfill({ json: { findingId: body.findingId, decision: body.decision, analysisRevision: 0 } })
+    }
+    if (path.endsWith('/workspace/draft') && request.method() === 'POST') { draftCalls += 1; return route.fulfill({ json: bundle }) }
     return route.fulfill({ status: 404, json: { error: 'Unexpected fixture request' } })
   })
   await context.route('https://sandbox.scisure.test/**', (route) => route.fulfill({ contentType: 'text/html', body: `
-    <button id="open">Open receiver</button><pre id="result"></pre>
+    <button id="open">Open receiver</button><pre id="writeback"></pre>
     <script>
       const nonce = '${nonce}';
       const source = { externalId: 'protocol-7', externalVersionId: 'v2', selection: [{ stepId: 'prot-step-1', order: 1 }] };
@@ -43,7 +60,10 @@ test('guest receiver flow polls queued work, records an explicit review, and ret
         if (!data || typeof data.type !== 'string') return;
         if (data.type === 'gcai.scisure.loaded') receiver.postMessage({ version: 1, type: 'scisure.gcai.hello', nonce }, 'http://localhost:3000');
         if (data.type === 'gcai.scisure.ready') receiver.postMessage({ version: 1, type: 'scisure.gcai.admission', nonce, bridgeSessionId: data.bridgeSessionId, requestId: 'request-1', source }, 'http://localhost:3000');
-        if (data.type === 'gcai.scisure.result') document.querySelector('#result').textContent = JSON.stringify(data);
+        if (data.type === 'gcai.scisure.writeback') {
+          document.querySelector('#writeback').textContent = JSON.stringify({ mode: data.mode, snapshot: data.snapshot, nonce: data.nonce, bundleHash: data.bundle.bundleHash });
+          receiver.postMessage({ version: 2, type: 'scisure.gcai.writeback-result', nonce: data.nonce, bridgeSessionId: data.bridgeSessionId, requestId: data.requestId, status: 'saved', message: 'New protocol verified by exact ID readback.', targetId: 'protocol-99', targetKind: 'protocol' }, 'http://localhost:3000');
+        }
       });
       document.querySelector('#open').addEventListener('click', () => { receiver = window.open('http://localhost:3000/integrations/scisure/connect', 'receiver'); });
     </script>` }))
@@ -52,14 +72,92 @@ test('guest receiver flow polls queued work, records an explicit review, and ret
   const [receiver] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: 'Open receiver' }).click()])
   await expect(receiver.getByText('Source admitted. Analysis is queued; this connection remains open.')).toBeVisible({ timeout: 15_000 })
   releaseCompleted()
-  await expect(receiver.getByRole('heading', { name: 'Scientist review required' })).toBeVisible({ timeout: 15_000 })
-  await receiver.getByRole('button', { name: 'Approve for experiment' }).click()
-  await expect(receiver.getByText('Recorded: approved for experiment.')).toBeVisible()
-  await receiver.getByRole('button', { name: 'Return reviewed decisions to SciSure' }).click()
-  await expect(receiver.getByText('Scientist decisions returned to SciSure.')).toBeVisible()
-  await expect.poll(() => page.locator('#result').textContent()).toContain('"recommendationId":"rec-safe"')
-  await expect(page.locator('#result')).toContainText('"decision":"accepted"')
-  expect(reviewWrites).toBe(1)
-  expect(statusCalls).toBeGreaterThanOrEqual(2)
-  await receiver.screenshot({ path: 'test-results/scisure-connect-reviewed-return.png', fullPage: true })
+  await expect(receiver.getByRole('heading', { name: 'Scientist review' })).toBeVisible({ timeout: 15_000 })
+  await expect(receiver.getByText('Hazard warning', { exact: false })).toBeVisible()
+  await expect(receiver.getByText('Acknowledging this finding never changes the procedure.')).toBeVisible()
+
+  // A draft is impossible until both findings, including the warning, have a decision.
+  const prepare = receiver.getByRole('button', { name: 'Prepare reviewed draft' })
+  await expect(prepare).toBeDisabled()
+  await receiver.getByRole('button', { name: 'Acknowledge' }).click()
+  await expect(prepare).toBeDisabled()
+  await receiver.getByRole('button', { name: 'Accept change' }).click()
+  await expect(prepare).toBeEnabled()
+  expect(decisions).toEqual([
+    { sourceHash, analysisRevision: 0, findingId: 'warn-1', decision: 'accepted' },
+    { sourceHash, analysisRevision: 0, findingId: 'swap-1', decision: 'accepted' },
+  ])
+  await prepare.click()
+  await expect(receiver.getByText('Dissolve in Cyrene.')).toBeVisible()
+  await expect(receiver.getByText('1 change applied, 1 finding acknowledged only.')).toBeVisible()
+  await expect(receiver.getByText('Fixture limitation: no section mapping.')).toBeVisible()
+  await expect(receiver.getByText(/Updating the existing record is unavailable/)).toBeVisible()
+
+  // Nothing reaches SciSure until the scientist explicitly confirms.
+  const create = receiver.getByRole('button', { name: 'Create new protocol in SciSure' })
+  await expect(create).toBeDisabled()
+  await expect(page.locator('#writeback')).toHaveText('')
+  await receiver.getByRole('checkbox').check()
+  await create.click()
+  await expect(receiver.getByText(/Saved\. New protocol verified by exact ID readback\. Record ID: protocol-99\./)).toBeVisible()
+  const sent = JSON.parse(await page.locator('#writeback').textContent() ?? '{}')
+  expect(sent).toMatchObject({ mode: 'create', nonce, bundleHash: bundle.bundleHash, snapshot: { externalId: 'protocol-7', externalVersionId: 'v2', selectionIds: ['prot-step-1'] } })
+  expect(draftCalls).toBe(1)
+  // After a saved record the review is frozen: no retry and no changed decisions.
+  await expect(create).toBeDisabled()
+  await expect(receiver.getByRole('button', { name: 'Reject change' })).toBeDisabled()
+  await receiver.screenshot({ path: 'test-results/scisure-connect-v2-review.png', fullPage: true })
+})
+
+test('popup review, signed in: Ask opens a recommendation-scoped read-only chat and the private Evidence Atlas renders inline', async ({ page, context }) => {
+  const analysisId = '00000000-0000-0000-0000-0000000000a1'
+  const chatOpens: Array<Record<string, unknown>> = []
+  const analysis = {
+    protocolTitle: 'Fixture amide coupling', chemistrySubdomain: 'Organic synthesis', steps: [], recommendations: [],
+    overallAssessment: { summary: 'Fixture', overallGrade: 'B', principleGrades: [] },
+  }
+  await context.route('http://localhost:3000/api/integrations/scisure/**', async (route) => {
+    const request = route.request(); const path = new URL(request.url()).pathname
+    if (path.endsWith('/connections')) return route.fulfill({ json: { bridgeSessionId, credential: 'bridge-secret', principalKind: 'registered' } })
+    if (path.endsWith('/snapshots')) return route.fulfill({ json: { snapshotId, status: 'queued' } })
+    if (path.endsWith('/status')) return route.fulfill({ json: { version: 1, bridgeSessionId, snapshotId, sourceHash, runId: workspace.runId, status: 'completed' } })
+    if (path.endsWith('/workspace')) return route.fulfill({ json: { ...workspace, principalKind: 'registered', analysisId, analysis, findings } })
+    return route.fulfill({ status: 404, json: { error: 'Unexpected fixture request' } })
+  })
+  await context.route('http://localhost:3000/api/talk-about-this', async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>; chatOpens.push(body)
+    return route.fulfill({ json: { conversationId: 'conversation-1', scope: body.scope, contextHash: 'ctx-1', noDirectEvidence: true, disposition: 'created', messages: [], evidenceReceipts: [], decisionReceipt: null, proposals: [] } })
+  })
+  await context.route('https://sandbox.scisure.test/**', (route) => route.fulfill({ contentType: 'text/html', body: `
+    <button id="open">Open receiver</button>
+    <script>
+      const nonce = '${nonce}';
+      let receiver;
+      window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data || typeof data.type !== 'string') return;
+        if (data.type === 'gcai.scisure.loaded') receiver.postMessage({ version: 1, type: 'scisure.gcai.hello', nonce }, 'http://localhost:3000');
+        if (data.type === 'gcai.scisure.ready') receiver.postMessage({ version: 1, type: 'scisure.gcai.admission', nonce, bridgeSessionId: data.bridgeSessionId, requestId: 'request-1', source: { externalId: 'protocol-7', externalVersionId: 'v2', selection: [{ stepId: 'prot-step-1', order: 1 }] } }, 'http://localhost:3000');
+      });
+      document.querySelector('#open').addEventListener('click', () => { receiver = window.open('http://localhost:3000/integrations/scisure/connect', 'receiver'); });
+    </script>` }))
+
+  await page.goto('https://sandbox.scisure.test/opener.html')
+  const [receiver] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: 'Open receiver' }).click()])
+  await expect(receiver.getByRole('heading', { name: 'Scientist review' })).toBeVisible({ timeout: 15_000 })
+  await expect(receiver.getByText(/Ask and the Evidence Atlas require a signed-in account/)).toHaveCount(0)
+  await expect(receiver.getByRole('button', { name: /^Ask\./ })).toHaveCount(2)
+
+  // Ask is scoped to the finding by index and is read-only, so chat cannot accept a change behind the scientist's decision.
+  await receiver.getByRole('button', { name: /^Ask\./ }).nth(1).click()
+  await expect(receiver.getByRole('dialog', { name: 'Chat about Step 1: N,N-Dimethylformamide' })).toBeVisible()
+  expect(chatOpens).toEqual([{ analysisId, scope: { kind: 'recommendation', recommendationIndex: 1, readOnly: true }, newConversation: false }])
+  await receiver.getByRole('button', { name: 'Close chat' }).click()
+
+  await receiver.getByText('Private Evidence Atlas').click()
+  // The Atlas is embedded: the app navigation would navigate the popup away and drop its in-memory credential.
+  await expect(receiver.getByRole('tab', { name: /Chemicals/i })).toBeVisible()
+  await expect(receiver.getByRole('link', { name: /dashboard|new analysis/i })).toHaveCount(0)
+  await expect(receiver.getByRole('banner')).toHaveCount(0)
+  await receiver.screenshot({ path: 'test-results/scisure-connect-v2-signed-in.png', fullPage: true })
 })

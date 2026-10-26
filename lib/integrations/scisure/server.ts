@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { createBridgeCredential, hashBridgeCredential } from './index'
 
-const CONNECTION_MINUTES = 15
+const CONNECTION_MINUTES = 67
 
 function configuredOrigins(): Set<string> {
   const raw = process.env.SCISURE_ALLOWED_ORIGINS || ''
@@ -25,7 +25,7 @@ function nonceHash(nonce: string) {
   return createHmac('sha256', key).update(nonce).digest('hex')
 }
 
-export type SciSurePrincipal = { id: string; kind: 'registered' | 'guest'; userId: string | null; guestSubjectId: string | null }
+export type SciSurePrincipal = { id: string; kind: 'registered' | 'guest'; userId: string | null; guestSubjectId: string | null; expiresAt?: string }
 export async function authenticatedPrincipal(): Promise<SciSurePrincipal> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -51,20 +51,27 @@ export async function authenticatedPrincipal(): Promise<SciSurePrincipal> {
   const bindingHash = await hashBridgeCredential(browserBinding)
   if (!timingSafeEqual(Buffer.from(claims.bind), Buffer.from(bindingHash))) throw new Error('Guest admission is not bound to this browser.')
   const tokenHash = await hashBridgeCredential(guestAdmissionToken)
-  const { data: admission, error: admissionError } = await admin.from('gpc_scisure_guest_admissions').select('subject_id').eq('token_hash', tokenHash).is('revoked_at', null).gt('expires_at', new Date().toISOString()).maybeSingle()
+  const { data: admission, error: admissionError } = await admin.from('gpc_scisure_guest_admissions').select('subject_id, expires_at').eq('token_hash', tokenHash).is('revoked_at', null).gt('expires_at', new Date().toISOString()).maybeSingle()
   if (admissionError || !admission || String(admission.subject_id) !== claims.sub) throw new Error('Guest admission is unavailable.')
-  const { data, error } = await admin.from('gpc_scisure_principals').upsert({ kind: 'guest', guest_subject_id: claims.sub, expires_at: new Date(claims.exp * 1000).toISOString() }, { onConflict: 'guest_subject_id' }).select('id, kind, user_id, guest_subject_id').single()
+  const { data: subject, error: subjectError } = await admin.from('gpc_scisure_guest_subjects').select('expires_at').eq('id', claims.sub).gt('expires_at', new Date().toISOString()).maybeSingle()
+  const expires = Math.min(claims.exp * 1000, Date.parse(admission.expires_at), Date.parse(subject?.expires_at || ''))
+  if (subjectError || !Number.isFinite(expires) || expires <= Date.now()) throw new Error('Guest admission is unavailable.')
+  const expiresAt = new Date(expires).toISOString()
+  const { data, error } = await admin.from('gpc_scisure_principals').upsert({ kind: 'guest', guest_subject_id: claims.sub, expires_at: expiresAt }, { onConflict: 'guest_subject_id' }).select('id, kind, user_id, guest_subject_id').single()
   if (error || !data) throw new Error('Guest admission is unavailable; no principal was issued.')
-  return { id: data.id, kind: 'guest', userId: null, guestSubjectId: data.guest_subject_id }
+  return { id: data.id, kind: 'guest', userId: null, guestSubjectId: data.guest_subject_id, expiresAt }
 }
 
 export async function createConnection(input: { nonce: string; origin: string }) {
   const principal = await authenticatedPrincipal()
   const admin = configuredAdmin()
   const credential = createBridgeCredential()
+  const expiresAt = principal.kind === 'guest'
+    ? new Date(Math.min(Date.parse(future(CONNECTION_MINUTES)), Date.parse(principal.expiresAt || ''))).toISOString()
+    : future(CONNECTION_MINUTES)
   const { data, error } = await admin.from('gpc_scisure_connections').insert({
     principal_id: principal.id, owner_user_id: principal.userId, allowed_origin: requireSciSureOrigin(input.origin), nonce_hash: nonceHash(input.nonce),
-    credential_id: credential.id, credential_hash: await hashBridgeCredential(credential.secret), expires_at: future(CONNECTION_MINUTES),
+    credential_id: credential.id, credential_hash: await hashBridgeCredential(credential.secret), expires_at: expiresAt,
   }).select('id, expires_at').single()
   if (error || !data) throw new Error('Could not create a SciSure connection.')
   return { bridgeSessionId: data.id, credential: credential.secret, expiresAt: data.expires_at, principal }

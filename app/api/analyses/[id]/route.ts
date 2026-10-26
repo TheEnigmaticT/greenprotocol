@@ -25,7 +25,8 @@ export async function GET(
     return NextResponse.json({ error: 'Analysis not found' }, { status: 404 })
   }
 
-  const equivalencies = calculateEquivalencies(data.impact_delta)
+  // Integration analyses may have no calculated impact; missing data is not zero savings.
+  const equivalencies = data.impact_delta ? calculateEquivalencies(data.impact_delta) : []
 
   return NextResponse.json({
     id: data.id,
@@ -33,8 +34,9 @@ export async function GET(
     analysis: data.analysis_result,
     impactDelta: data.impact_delta,
     revisionNumber: data.revision_number,
+    scisureReview: Boolean(data.source_snapshot_hash),
     equivalencies,
-  })
+  }, { headers: { 'Cache-Control': 'private, no-store' } })
 }
 
 export async function PATCH(

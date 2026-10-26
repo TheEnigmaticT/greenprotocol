@@ -3,20 +3,14 @@
     "type": "string",
     "title": "GreenChemistry.ai destination",
     "description": "Destination for the reviewed manual handoff.",
-    "enum": ["https://greenchemistry.ai"],
-    "default": "https://greenchemistry.ai"
+    "enum": ["https://staging.greenchemistry.ai", "https://greenchemistry.ai"],
+    "default": "https://staging.greenchemistry.ai"
   },
-  "enableSuppliesOrders": {
-    "type": "boolean",
-    "format": "checkbox",
-    "title": "Allow pending Supplies orders",
-    "description": "Keep off initially. When enabled, a scientist must select a catalog item and explicitly confirm a persisted PENDING order. This does not enable automatic purchasing.",
-    "default": false
-  },
+
   "gcaiBridge": {
     "type": "object",
-    "title": "GCai connection (live-tested in staging)",
-    "description": "Stay disabled by default. When enabled, a signed-in GreenChemistry.ai user is required and reviewed source content is retained server-side for up to 90 days. The popup posts decisions back to this add-on; the add-on acknowledges receipt before the connection is treated as complete.",
+    "title": "GCai private review connection",
+    "description": "Disabled by default. Signed-in GCai account required. Private review and final choice remain in the popup. Create-new uses exact target/evidence readback; update-existing and SMTP guest recovery are unavailable. Source retention remains up to 90 days.",
     "properties": {
       "enabled": {
         "type": "boolean",
@@ -28,8 +22,11 @@
       "origin": {
         "type": "string",
         "title": "Connection origin",
-        "enum": ["https://greenchemistry.ai"],
-        "default": "https://greenchemistry.ai"
+        "enum": [
+          "https://staging.greenchemistry.ai",
+          "https://greenchemistry.ai"
+        ],
+        "default": "https://staging.greenchemistry.ai"
       },
       "path": {
         "type": "string",
@@ -40,17 +37,17 @@
       "deadlineMs": {
         "type": "integer",
         "title": "Connection timeout (milliseconds)",
-        "minimum": 1000,
-        "maximum": 3600000,
-        "default": 900000,
-        "description": "How long the add-on keeps the connection open and waits for a reviewed result to come back. 15 min covers analysis plus human review; 1 hour is the hard cap."
+        "minimum": 3900000,
+        "maximum": 3900000,
+        "default": 3900000,
+        "description": "Fixed 65-minute listener lifetime. Parent integration must provide at least 67-minute backend credentials (subject to verified guest expiry)."
       }
     },
     "default": {
       "enabled": false,
-      "origin": "https://greenchemistry.ai",
+      "origin": "https://staging.greenchemistry.ai",
       "path": "/integrations/scisure/connect",
-      "deadlineMs": 900000
+      "deadlineMs": 3900000
     }
   }
 }

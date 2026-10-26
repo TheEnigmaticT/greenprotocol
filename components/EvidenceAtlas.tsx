@@ -157,12 +157,18 @@ function getActivePrinciples(analysis: AnalysisResult): number[] {
 
 type Mode = 'chemicals' | 'principles'
 
+function Frame({ embedded, analysisId, children }: { embedded: boolean; analysisId: string; children: React.ReactNode }) {
+  return embedded ? <>{children}</> : <AppShell analysisId={analysisId} activeTab="atlas">{children}</AppShell>
+}
+
 interface EvidenceAtlasProps {
   analysisId: string
   analysis: AnalysisResult
+  /** Render inside another page (such as the SciSure popup) without the app navigation, which would navigate that page away. */
+  embedded?: boolean
 }
 
-export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasProps) {
+export default function EvidenceAtlas({ analysisId, analysis, embedded = false }: EvidenceAtlasProps) {
   const activePrinciples = getActivePrinciples(analysis)
   const metadata = analysis.analysisMetadata
   const quietGrade = buildQuietGradeLine(analysis)
@@ -283,9 +289,11 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
     ? analysis.enrichedChemicals?.find(e => e.name.toLowerCase() === selectedChemical.toLowerCase())
     : undefined
 
+  const Main = embedded ? 'div' : 'main'
+
   return (
-    <AppShell analysisId={analysisId} activeTab="atlas">
-      <main id="main-content" className="mx-auto max-w-6xl px-4 sm:px-6 py-7 space-y-5">
+    <Frame embedded={embedded} analysisId={analysisId}>
+      <Main id={embedded ? undefined : 'main-content'} className="mx-auto max-w-6xl px-4 sm:px-6 py-7 space-y-5">
         <div className="atlas-mast">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -697,7 +705,7 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
             </details>
           </section>
         </div>
-      </main>
+      </Main>
 
       <footer className="hidden print:block border-t px-6 py-4 text-center" style={{ borderColor: '#D6D0C4' }}>
         {metadata && (
@@ -706,6 +714,6 @@ export default function EvidenceAtlas({ analysisId, analysis }: EvidenceAtlasPro
           </p>
         )}
       </footer>
-    </AppShell>
+    </Frame>
   )
 }
