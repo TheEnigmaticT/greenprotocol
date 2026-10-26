@@ -173,7 +173,7 @@ export function ReviewWorkspace({ auth, snapshotId, nonce, admittedSource }: { a
       {registered && workspace.analysis && (
         <details className="rounded border p-4" style={{ borderColor: border }}>
           <summary className="cursor-pointer text-sm font-semibold">Private Evidence Atlas</summary>
-          <div className="mt-4"><EvidenceAtlas analysisId={workspace.analysisId!} analysis={workspace.analysis} /></div>
+          <div className="mt-4"><EvidenceAtlas analysisId={workspace.analysisId!} analysis={workspace.analysis} embedded /></div>
         </details>
       )}
 

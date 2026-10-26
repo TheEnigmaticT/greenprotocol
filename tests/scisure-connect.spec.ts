@@ -108,3 +108,56 @@ test('popup review: every finding decided, draft previewed, explicit confirmatio
   await expect(receiver.getByRole('button', { name: 'Reject change' })).toBeDisabled()
   await receiver.screenshot({ path: 'test-results/scisure-connect-v2-review.png', fullPage: true })
 })
+
+test('popup review, signed in: Ask opens a recommendation-scoped read-only chat and the private Evidence Atlas renders inline', async ({ page, context }) => {
+  const analysisId = '00000000-0000-0000-0000-0000000000a1'
+  const chatOpens: Array<Record<string, unknown>> = []
+  const analysis = {
+    protocolTitle: 'Fixture amide coupling', chemistrySubdomain: 'Organic synthesis', steps: [], recommendations: [],
+    overallAssessment: { summary: 'Fixture', overallGrade: 'B', principleGrades: [] },
+  }
+  await context.route('http://localhost:3000/api/integrations/scisure/**', async (route) => {
+    const request = route.request(); const path = new URL(request.url()).pathname
+    if (path.endsWith('/connections')) return route.fulfill({ json: { bridgeSessionId, credential: 'bridge-secret', principalKind: 'registered' } })
+    if (path.endsWith('/snapshots')) return route.fulfill({ json: { snapshotId, status: 'queued' } })
+    if (path.endsWith('/status')) return route.fulfill({ json: { version: 1, bridgeSessionId, snapshotId, sourceHash, runId: workspace.runId, status: 'completed' } })
+    if (path.endsWith('/workspace')) return route.fulfill({ json: { ...workspace, principalKind: 'registered', analysisId, analysis, findings } })
+    return route.fulfill({ status: 404, json: { error: 'Unexpected fixture request' } })
+  })
+  await context.route('http://localhost:3000/api/talk-about-this', async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>; chatOpens.push(body)
+    return route.fulfill({ json: { conversationId: 'conversation-1', scope: body.scope, contextHash: 'ctx-1', noDirectEvidence: true, disposition: 'created', messages: [], evidenceReceipts: [], approvalReceipt: null } })
+  })
+  await context.route('https://sandbox.scisure.test/**', (route) => route.fulfill({ contentType: 'text/html', body: `
+    <button id="open">Open receiver</button>
+    <script>
+      const nonce = '${nonce}';
+      let receiver;
+      window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data || typeof data.type !== 'string') return;
+        if (data.type === 'gcai.scisure.loaded') receiver.postMessage({ version: 1, type: 'scisure.gcai.hello', nonce }, 'http://localhost:3000');
+        if (data.type === 'gcai.scisure.ready') receiver.postMessage({ version: 1, type: 'scisure.gcai.admission', nonce, bridgeSessionId: data.bridgeSessionId, requestId: 'request-1', source: { externalId: 'protocol-7', externalVersionId: 'v2', selection: [{ stepId: 'prot-step-1', order: 1 }] } }, 'http://localhost:3000');
+      });
+      document.querySelector('#open').addEventListener('click', () => { receiver = window.open('http://localhost:3000/integrations/scisure/connect', 'receiver'); });
+    </script>` }))
+
+  await page.goto('https://sandbox.scisure.test/opener.html')
+  const [receiver] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: 'Open receiver' }).click()])
+  await expect(receiver.getByRole('heading', { name: 'Scientist review' })).toBeVisible({ timeout: 15_000 })
+  await expect(receiver.getByText(/Ask and the Evidence Atlas require a signed-in account/)).toHaveCount(0)
+  await expect(receiver.getByRole('button', { name: /^Ask\./ })).toHaveCount(2)
+
+  // Ask is scoped to the finding by index and is read-only, so chat cannot accept a change behind the scientist's decision.
+  await receiver.getByRole('button', { name: /^Ask\./ }).nth(1).click()
+  await expect(receiver.getByRole('dialog', { name: 'Chat about Step 1: N,N-Dimethylformamide' })).toBeVisible()
+  expect(chatOpens).toEqual([{ analysisId, scope: { kind: 'recommendation', recommendationIndex: 1, readOnly: true }, newConversation: false }])
+  await receiver.getByRole('button', { name: 'Close chat' }).click()
+
+  await receiver.getByText('Private Evidence Atlas').click()
+  // The Atlas is embedded: the app navigation would navigate the popup away and drop its in-memory credential.
+  await expect(receiver.getByRole('tab', { name: /Chemicals/i })).toBeVisible()
+  await expect(receiver.getByRole('link', { name: /dashboard|new analysis/i })).toHaveCount(0)
+  await expect(receiver.getByRole('banner')).toHaveCount(0)
+  await receiver.screenshot({ path: 'test-results/scisure-connect-v2-signed-in.png', fullPage: true })
+})
