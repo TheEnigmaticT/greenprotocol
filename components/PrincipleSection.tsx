@@ -3,6 +3,8 @@
 import type { PrincipleScore, Recommendation, WasteAnalysis, EnrichedChemical, ScoreProvenance } from '@/lib/types'
 import { buildRecommendationCitationString, formatCitationACS } from '@/lib/citation'
 import { TalkAboutThis } from './TalkAboutThis'
+import type { RecommendationDecisionReceipt } from '@/lib/talk-about-this/decisions'
+import type { ProcedureProposal } from '@/lib/talk-about-this/procedure-proposal'
 
 const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
   A: { bg: '#DCFCE7', text: '#166534' },
@@ -169,6 +171,8 @@ interface PrincipleSectionProps {
   // P1-specific: waste analysis data
   wasteAnalysis?: WasteAnalysis
   analysisId?: string
+  onRecommendationDecided?: (receipt: RecommendationDecisionReceipt) => void
+  onProcedureProposalApply?: (proposal: ProcedureProposal) => void | Promise<void>
 }
 
 export default function PrincipleSection({
@@ -179,6 +183,8 @@ export default function PrincipleSection({
   enrichedChemicals,
   wasteAnalysis,
   analysisId,
+  onRecommendationDecided,
+  onProcedureProposalApply,
 }: PrincipleSectionProps) {
   const anchorId = `p${principleNumber}`
 
@@ -201,6 +207,8 @@ export default function PrincipleSection({
           title={`P${principleNumber}: ${principleName}`}
           evidenceState={recommendations.some(recommendation => (recommendation.evidence?.citations.length ?? 0) > 0) ? 'sourced' : 'inferred'}
           buttonLabel="Ask"
+          onRecommendationDecided={onRecommendationDecided}
+          onProcedureProposalApply={onProcedureProposalApply}
         />
       </div>
 

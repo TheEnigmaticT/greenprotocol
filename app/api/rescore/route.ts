@@ -2,18 +2,19 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { scoreProtocol, batchConvert, isServiceAvailable } from '@/lib/chemistry-service'
 import { AnalysisResult } from '@/lib/types'
+import { humanErrorPayload } from '@/lib/errors/humanize'
 
 export async function POST(request: Request) {
   // Auth check
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json(humanErrorPayload('unauthorized'), { status: 401 })
   }
 
   const serviceUp = await isServiceAvailable()
   if (!serviceUp) {
-    return NextResponse.json({ error: 'Chemistry service unavailable' }, { status: 503 })
+    return NextResponse.json(humanErrorPayload('chemistry_service_unavailable'), { status: 503 })
   }
 
   let analysis: AnalysisResult
@@ -21,10 +22,10 @@ export async function POST(request: Request) {
     const body = await request.json()
     analysis = body.analysis
     if (!analysis?.steps || !analysis?.recommendations) {
-      return NextResponse.json({ error: 'Invalid analysis data' }, { status: 400 })
+      return NextResponse.json(humanErrorPayload('invalid_analysis'), { status: 400 })
     }
   } catch {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    return NextResponse.json(humanErrorPayload('invalid_analysis'), { status: 400 })
   }
 
   // Build the chemical list with accepted swaps applied
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
   })
 
   if (!scoreResult) {
-    return NextResponse.json({ error: 'Scoring failed' }, { status: 500 })
+    return NextResponse.json(humanErrorPayload('scoring_failed'), { status: 500 })
   }
 
   return NextResponse.json(scoreResult)

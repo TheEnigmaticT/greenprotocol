@@ -1,8 +1,23 @@
-import type { AnalysisStep, EnrichedChemical } from '@/lib/types'
+import type { AnalysisStep, EnrichedChemical, UnresolvedMaterialDetail, UnresolvedMaterialReason } from '@/lib/types'
 import type { BatchResult, ConvertResult } from '@/lib/chemistry-service'
 
 const identity = (name: string) => name.trim().toLowerCase()
 const positive = (value: number | null | undefined) => typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+
+/**
+ * Why the reference lookup could not give a usable record, or null when it did.
+ * Separates a name nobody recognises from a lookup that failed or is queued for
+ * retry, because the person has to do different things in each case.
+ */
+export function classifyUnresolvedReason(conversion: ConvertResult | undefined): UnresolvedMaterialReason | null {
+  if (!conversion || conversion.data_source === 'error') return 'provider_error'
+  if (conversion.data_source === 'indefinite') return 'indefinite'
+  if (conversion.reference_status === 'queued') return 'provider_error'
+  if (conversion.reference_status === 'terminal_not_found') return 'not_recognized'
+  if (conversion.reference_status === 'unavailable') return 'reference_missing'
+  if (conversion.data_source === 'not_found') return 'not_recognized'
+  return null
+}
 
 /** Join conversions to material occurrences, never to the first matching name. */
 export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult | null) {
@@ -12,6 +27,7 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
   const remaining = new Set((batch?.results ?? []).map((_, index) => index))
   const unresolvedChemicals = new Set<string>()
   const indefiniteChemicals = new Set<string>()
+  const unresolvedDetails: UnresolvedMaterialDetail[] = []
   const enrichedChemicals: EnrichedChemical[] = []
   const scoreChemicals = occurrences.map(({ step, chemical, occurrenceId }) => {
     const quantity = chemical.quantity || ''
@@ -27,11 +43,12 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
       conversion = batch!.results[matching[0]]
       remaining.delete(matching[0])
     }
-    const indefinite = conversion?.data_source === 'indefinite'
-    const unavailable = !conversion || ['not_found', 'error'].includes(conversion.data_source)
-      || ['queued', 'unavailable', 'terminal_not_found'].includes(conversion.reference_status ?? '')
+    const reason = classifyUnresolvedReason(conversion)
+    const indefinite = reason === 'indefinite'
+    const unavailable = reason !== null && !indefinite
     if (indefinite) indefiniteChemicals.add(chemical.name)
     else if (unavailable) unresolvedChemicals.add(chemical.name)
+    if (reason) unresolvedDetails.push({ name: chemical.name, reason, stepNumber: step.stepNumber, role: chemical.role })
     const referenceStatus = indefinite ? 'indefinite' : unavailable ? conversion?.reference_status ?? 'unavailable' : 'available'
     const kg = quantity ? positive(conversion?.quantity_kg) : null
     const mol = quantity ? positive(conversion?.quantity_mol) : null
@@ -62,5 +79,5 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
       reference_provenance: conversion?.data_source ?? null,
     }
   })
-  return { enrichedChemicals, scoreChemicals, unresolvedChemicals, indefiniteChemicals }
+  return { enrichedChemicals, scoreChemicals, unresolvedChemicals, indefiniteChemicals, unresolvedDetails }
 }

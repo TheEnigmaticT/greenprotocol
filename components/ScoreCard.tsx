@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { PrincipleScore, DeterministicScores, ScoreProvenance } from '@/lib/types'
+import { describeUnavailableScore } from '@/lib/errors/score-unavailable'
 
 // Canonical provenance labels for UI display
 const PROVENANCE_LABELS: Record<ScoreProvenance, string> = {
@@ -151,7 +152,7 @@ function ScoreBar({ score }: { score: PrincipleScore }) {
       {/* Unavailable explanation */}
       {isUnavailable && (
         <p className="text-xs italic mt-0.5" style={{ color: '#A8A29E' }}>
-          {(score.details?.error as string) || 'Data unavailable'}
+          {describeUnavailableScore(score.details)}
         </p>
       )}
     </div>

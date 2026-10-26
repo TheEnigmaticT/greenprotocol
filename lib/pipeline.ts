@@ -2,13 +2,15 @@ import { randomUUID } from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { boundLiteratureQuery } from './literature-query'
 import { QWEN_MODEL, callQwen } from '@/lib/qwen-adapter'
-import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type LiteratureEvidenceMatch, type EvidenceBackedCandidate } from '@/lib/types'
+import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type UnresolvedMaterialDetail, type LiteratureEvidenceMatch, type EvidenceBackedCandidate } from '@/lib/types'
 import { buildEvidenceBackedCandidates, buildHypothesisRecommendation, evidenceCandidateKey, isPhraseableDisposition, isEligibleToReviseProcedure } from '@/lib/recommendation-candidates'
 import { applyAcsGciprRecommendations } from '@/lib/acs-gcipr'
 import { buildHazardWarnings } from '@/lib/hazard-warnings'
 import { normalizeParsedMaterials } from '@/lib/material-names'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
 import { prepareChemicalInputs } from '@/lib/chemical-inputs'
+import { AnalysisError } from '@/lib/errors/classify'
+import { buildChemistryStatusMessage } from '@/lib/chemistry-status-message'
 import { groundDeclaredProducts } from '@/lib/declared-products'
 import { getAnalysisMetadata } from '@/lib/version'
 import { CANDIDATE_PARSE_SYSTEM_PROMPT, PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
@@ -242,7 +244,7 @@ async function callClaude<T>(
   }
 
   if (!message) {
-    throw new Error(`Claude API call failed for ${label}`)
+    throw new AnalysisError('provider_unavailable', `Claude API call failed for ${label}`)
   }
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1)
@@ -250,7 +252,7 @@ async function callClaude<T>(
 
   const toolBlock = message.content.find(b => b.type === 'tool_use')
   if (!toolBlock || toolBlock.type !== 'tool_use') {
-    throw new Error(`Claude did not return a tool_use block for ${label} (stop_reason=${message.stop_reason})`)
+    throw new AnalysisError('analysis_incomplete', `Claude did not return a tool_use block for ${label} (stop_reason=${message.stop_reason})`)
   }
 
   return toolBlock.input as T
@@ -280,7 +282,7 @@ async function parseProtocol(protocolText: string, context?: CallContext): Promi
     !step || typeof step.description !== 'string' || !Array.isArray(step.chemicals) ||
     step.chemicals.some(chemical => !chemical || typeof chemical.name !== 'string' || !chemical.name.trim())
   )) {
-    throw new Error('Protocol parsing returned no usable steps')
+    throw new AnalysisError('analysis_incomplete', 'Protocol parsing returned no usable steps')
   }
 
   result.steps = normalizeParsedMaterials(result.steps)
@@ -407,7 +409,7 @@ async function evaluateAllPrinciples(
     }
   }
 
-  if (succeeded === 0) throw new Error('All evidence-backed recommendation evaluations failed')
+  if (succeeded === 0) throw new AnalysisError('analysis_incomplete', 'All evidence-backed recommendation evaluations failed')
   return allRecommendations
 }
 
@@ -675,6 +677,7 @@ export async function analyzeProtocol(
   let wasteAnalysis: WasteAnalysis | undefined
   const unresolvedChemicals = new Set<string>()
   const indefiniteChemicals = new Set<string>()
+  let unresolvedDetails: UnresolvedMaterialDetail[] = []
 
   const serviceUp = await isServiceAvailable()
   if (serviceUp) {
@@ -688,6 +691,7 @@ export async function analyzeProtocol(
     enrichedChemicals = prepared.enrichedChemicals
     for (const name of prepared.unresolvedChemicals) unresolvedChemicals.add(name)
     for (const name of prepared.indefiniteChemicals) indefiniteChemicals.add(name)
+    unresolvedDetails = prepared.unresolvedDetails
 
     // A missing or indefinite material limits only principles that require that
     // material's reference data. It must not suppress protocol-level scoring
@@ -954,13 +958,12 @@ export async function analyzeProtocol(
       deterministicScoringAvailable: deterministicScores !== undefined,
       unresolvedChemicals: Array.from(unresolvedChemicals).sort((a, b) => a.localeCompare(b)),
       indefiniteChemicals: Array.from(indefiniteChemicals).sort((a, b) => a.localeCompare(b)),
-      message: deterministicScores === undefined
-        ? 'Deterministic chemistry scoring was unavailable because the chemistry service did not return a score. Re-run when the service is available.'
-        : unresolvedChemicals.size > 0
-          ? 'Partial deterministic scoring completed. Some material-level calculations are unavailable because chemical reference records could not be retrieved for the listed materials.'
-          : indefiniteChemicals.size > 0
-            ? 'Partial deterministic scoring completed. Materials with indefinite composition cannot be analyzed as single chemicals, so only dependent calculations may be unavailable.'
-            : 'All requested chemical reference data was available from cache or bundled sources.',
+      ...(unresolvedDetails.length > 0 ? { unresolvedDetails } : {}),
+      message: buildChemistryStatusMessage({
+        scoringAvailable: deterministicScores !== undefined,
+        unresolvedCount: unresolvedChemicals.size,
+        indefiniteCount: indefiniteChemicals.size,
+      }),
     },
     // v0.7: Re-evaluation statistics
     reevaluationStats,

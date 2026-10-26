@@ -3,10 +3,12 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { parseTalkAboutScope, type TalkAboutScope } from '@/lib/talk-about-this/scope'
+import { canDecideRecommendation, parseTalkAboutScope, scopesEqual, type TalkAboutScope } from '@/lib/talk-about-this/scope'
 import type { LiteratureEvidenceMatch } from '@/lib/types'
 import { isPersistedEvidence, type PersistedEvidenceReceipt } from '@/lib/talk-about-this/evidence'
-import type { PersistedChatMessage } from '@/lib/talk-about-this/repository'
+import type { PersistedChatMessage, PersistedRecommendationDecisionReceipt } from '@/lib/talk-about-this/repository'
+import { parseRecommendationDecisionReceipt, type RecommendationDecisionReceipt } from '@/lib/talk-about-this/decisions'
+import { parseProcedureProposal, type ProcedureProposal } from '@/lib/talk-about-this/procedure-proposal'
 type ChatMessage = PersistedChatMessage
 
 interface ChatActivity {
@@ -20,17 +22,7 @@ interface ChatActivity {
 type EvidenceReceipt = PersistedEvidenceReceipt
 type TerminalStatus = 'complete' | 'failed' | 'cancelled'
 
-export interface RecommendationApprovalReceipt {
-  recommendationId: string
-  label: string
-  alreadyAccepted: boolean
-  actionId: string
-  revisionNumber: number
-}
-
-export interface PersistedRecommendationApprovalReceipt extends RecommendationApprovalReceipt {
-  receivedAt: string
-}
+export type { RecommendationDecisionReceipt, ProcedureProposal }
 
 export interface VerificationNote {
   source: string
@@ -50,7 +42,8 @@ interface OpenConversationResponse {
   disposition: 'created' | 'resumed'
   messages: ChatMessage[]
   evidenceReceipts: EvidenceReceipt[]
-  approvalReceipt: PersistedRecommendationApprovalReceipt | null
+  decisionReceipt: PersistedRecommendationDecisionReceipt | null
+  proposals: ProcedureProposal[]
 }
 
 export function isNewConversationCommand(value: string): boolean {
@@ -150,9 +143,12 @@ export function parseOpenConversationResponse(
 ): OpenConversationResponse | null {
   if (!value || typeof value !== 'object') return null
   const response = value as Record<string, unknown>
-  const approvalReceipt = response.approvalReceipt === null
+  const decisionReceipt = response.decisionReceipt === null
     ? null
-    : parsePersistedRecommendationApprovalReceipt(scope, response.approvalReceipt)
+    : parsePersistedRecommendationDecisionReceipt(scope, response.decisionReceipt)
+  const proposals = Array.isArray(response.proposals)
+    ? response.proposals.map(parseProcedureProposal)
+    : null
 
   let responseScope: TalkAboutScope
   try {
@@ -161,21 +157,10 @@ export function parseOpenConversationResponse(
     return null
   }
 
-  const scopesMatch = scope.kind === responseScope.kind
-    && (scope.kind === 'no-recommendations'
-      ? true
-      : scope.kind === 'principle'
-        ? scope.principleNumber === (responseScope as Extract<TalkAboutScope, { kind: 'principle' }>).principleNumber
-        : 'recommendationId' in scope && 'recommendationId' in responseScope
-          ? scope.recommendationId === responseScope.recommendationId
-          : 'recommendationIndex' in scope && 'recommendationIndex' in responseScope
-            ? scope.recommendationIndex === responseScope.recommendationIndex
-            : false)
-
   if (
     typeof response.conversationId !== 'string'
     || !response.conversationId.trim()
-    || !scopesMatch
+    || !scopesEqual(scope, responseScope)
     || typeof response.contextHash !== 'string'
     || !response.contextHash.trim()
     || typeof response.noDirectEvidence !== 'boolean'
@@ -184,7 +169,9 @@ export function parseOpenConversationResponse(
     || !response.messages.every(isPersistedChatMessage)
     || !Array.isArray(response.evidenceReceipts)
     || !response.evidenceReceipts.every(isEvidenceReceipt)
-    || (response.approvalReceipt !== null && !approvalReceipt)
+    || (response.decisionReceipt !== null && !decisionReceipt)
+    || !proposals
+    || proposals.some(proposal => proposal === null)
   ) return null
 
   return {
@@ -195,65 +182,38 @@ export function parseOpenConversationResponse(
     disposition: response.disposition,
     messages: response.messages,
     evidenceReceipts: response.evidenceReceipts,
-    approvalReceipt,
+    decisionReceipt,
+    proposals: proposals.filter((proposal): proposal is ProcedureProposal => proposal !== null),
   }
 }
 
-export function parsePersistedRecommendationApprovalReceipt(
+export function parsePersistedRecommendationDecisionReceipt(
   scope: TalkAboutScope,
   receipt: unknown,
-): PersistedRecommendationApprovalReceipt | null {
+): PersistedRecommendationDecisionReceipt | null {
   if (!receipt || typeof receipt !== 'object') return null
   const { receivedAt, ...event } = receipt as Record<string, unknown>
-  const approval = parseRecommendationApprovedEvent(scope, event)
-  if (!approval || typeof receivedAt !== 'string' || !receivedAt.trim()) return null
-  return { ...approval, receivedAt }
+  const decision = parseRecommendationDecidedEvent(scope, event)
+  if (!decision || typeof receivedAt !== 'string' || !receivedAt.trim()) return null
+  return { ...decision, receivedAt }
 }
 
-export function approvalFromEvent(
-  data: Record<string, unknown>,
-  scope: TalkAboutScope,
-): { recommendationId: string; label: string; revisionNumber: number } | null {
-  if (scope.kind !== 'recommendation' || !('recommendationId' in scope)) return null
-
-  const recommendationId = data.recommendationId
-  const label = data.label
-  const revisionNumber = data.revisionNumber
-  if (
-    recommendationId !== scope.recommendationId
-    || typeof label !== 'string'
-    || !label.trim()
-    || typeof revisionNumber !== 'number'
-    || !Number.isSafeInteger(revisionNumber)
-    || revisionNumber < 0
-  ) return null
-
-  return { recommendationId, label, revisionNumber }
-}
-
-export function parseRecommendationApprovedEvent(
+/** A receipt only counts for the stable recommendation this conversation is about. */
+export function parseRecommendationDecidedEvent(
   scope: TalkAboutScope,
   data: Record<string, unknown>,
-): RecommendationApprovalReceipt | null {
-  const approval = approvalFromEvent(data, scope)
-  const alreadyAccepted = data.alreadyAccepted
-  const actionId = data.actionId
-  if (
-    !approval
-    || typeof alreadyAccepted !== 'boolean'
-    || typeof actionId !== 'string'
-    || !actionId.trim()
-  ) return null
-
-  return { ...approval, alreadyAccepted, actionId }
+): RecommendationDecisionReceipt | null {
+  if (!canDecideRecommendation(scope)) return null
+  const receipt = parseRecommendationDecisionReceipt(data)
+  return receipt && receipt.recommendationId === scope.recommendationId ? receipt : null
 }
 
-export function applyRecommendationApprovedEvent(
+export function applyRecommendationDecidedEvent(
   scope: TalkAboutScope,
   data: Record<string, unknown>,
   notifiedActionIds: ReadonlySet<string>,
-): { receipt: RecommendationApprovalReceipt | null; shouldNotifyParent: boolean } {
-  const receipt = parseRecommendationApprovedEvent(scope, data)
+): { receipt: RecommendationDecisionReceipt | null; shouldNotifyParent: boolean } {
+  const receipt = parseRecommendationDecidedEvent(scope, data)
   return {
     receipt,
     shouldNotifyParent: Boolean(receipt && !notifiedActionIds.has(receipt.actionId)),
@@ -333,6 +293,11 @@ function measurementSummary(data: Record<string, unknown>): string | null {
 export function activityForEvent(event: string, data: Record<string, unknown>): ChatActivity | null {
   const callId = typeof data.callId === 'string' ? data.callId : `activity-${event}`
   const tool = typeof data.tool === 'string' ? data.tool : 'scientific_source'
+  if (tool === 'propose_procedure_edit') {
+    if (event === 'tool-start') return { callId, state: 'running', label: 'Preparing a proposed change to your procedure' }
+    if (event === 'tool-complete') return { callId, state: 'complete', label: 'Proposed change ready for your review' }
+    if (event === 'tool-failed') return { callId, state: 'failed', label: 'The proposed change could not be matched to your procedure' }
+  }
   if (event === 'activity') return { callId, state: 'thinking', label: 'Thinking with the scoped evidence' }
   if (event === 'tool-start') return { callId, state: 'running', label: `Looking up ${tool.replaceAll('_', ' ')}` }
   if (event === 'tool-complete') {
@@ -376,13 +341,16 @@ export function activityForEvent(event: string, data: Record<string, unknown>): 
 }
 
 export function DiscussionScopeInstruction({ scope }: { scope: TalkAboutScope }) {
-  const canApprove = scope.kind === 'recommendation' && 'recommendationId' in scope
+  let guidance: string
+  if (canDecideRecommendation(scope)) {
+    guidance = 'You can approve or reject this recommendation with the buttons under the message box, or by sending ‘approve this’ or ‘reject this’. If you ask for a change to your procedure, you review it first; nothing changes until you press Apply.'
+  } else if (scope.kind === 'recommendation') {
+    guidance = 'This discussion is read-only. It does not change the analysis or its recommendations.'
+  } else {
+    guidance = 'This chat does not change your analysis by itself. If you ask for a change to your procedure, you review it first; nothing changes until you press Apply.'
+  }
   return (
-    <p className="mt-3 text-xs" style={{ color: '#78716C' }}>
-      {canApprove
-        ? 'You may explicitly approve this scoped recommendation by sending ‘approve this’; other analysis changes are unavailable.'
-        : 'This discussion does not change the analysis or its acceptance state.'}
-    </p>
+    <p className="mt-3 text-xs" style={{ color: '#78716C' }}>{guidance}</p>
   )
 }
 
@@ -408,20 +376,210 @@ export function ClosedConversationError({ error, isOpen }: { error: string | nul
   return <p role="alert" className="mt-2 text-xs" style={{ color: '#B45309' }}>{error}</p>
 }
 
-export function ApprovalReceiptCard({
+export function DecisionReceiptCard({
   receipt,
   receivedAt,
 }: {
-  receipt: RecommendationApprovalReceipt
+  receipt: RecommendationDecisionReceipt
   receivedAt: string | null
 }) {
+  const verb = receipt.decision === 'approved' ? 'approved' : 'rejected'
   return (
-    <p className="rounded border p-3 text-xs" style={{ borderColor: '#BBF7D0', background: '#F0FDF4', color: '#166534' }}>
-      {receipt.label} {receipt.alreadyAccepted ? 'was already approved.' : 'has been approved.'}
-      {' '}Receipt {receipt.actionId} · revision {receipt.revisionNumber}
+    <p
+      className="rounded border p-3 text-xs"
+      style={receipt.decision === 'approved'
+        ? { borderColor: '#BBF7D0', background: '#F0FDF4', color: '#166534' }
+        : { borderColor: '#D6D0C4', background: '#F6F3EB', color: '#44403C' }}
+    >
+      {receipt.label} {receipt.alreadyDecided ? `was already ${verb}.` : `has been ${verb}.`}
+      {' '}Saved to your analysis
       {receivedAt && ` · ${new Date(receivedAt).toLocaleString()}`}
     </p>
   )
+}
+
+const APPROVE_PHRASE = 'approve this'
+const REJECT_PHRASE = 'reject this'
+
+/** Quick actions that send the exact phrases the server recognises; the model is never involved. */
+export function DecisionActions({
+  scope,
+  disabled,
+  onDecide,
+}: {
+  scope: TalkAboutScope
+  disabled: boolean
+  onDecide: (phrase: string) => void
+}) {
+  if (!canDecideRecommendation(scope)) return null
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Decide on this recommendation">
+      <button
+        type="button"
+        onClick={() => onDecide(APPROVE_PHRASE)}
+        disabled={disabled}
+        className="min-h-11 rounded px-4 text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+        style={{ background: '#1C3822', color: '#F6F3EB' }}
+      >
+        Approve this
+      </button>
+      <button
+        type="button"
+        onClick={() => onDecide(REJECT_PHRASE)}
+        disabled={disabled}
+        className="min-h-11 rounded border px-4 text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+        style={{ borderColor: '#D6D0C4', background: '#FFFFFF', color: '#1C1917' }}
+      >
+        Reject this
+      </button>
+    </div>
+  )
+}
+
+export function diffLines(diff: string): { kind: 'add' | 'remove' | 'hunk' | 'context'; text: string }[] {
+  return diff.split('\n').map(line => {
+    if (line.startsWith('@@')) return { kind: 'hunk', text: line }
+    if (line.startsWith('+')) return { kind: 'add', text: line.slice(1) }
+    if (line.startsWith('-')) return { kind: 'remove', text: line.slice(1) }
+    return { kind: 'context', text: line.slice(1) }
+  })
+}
+
+const DIFF_LINE_STYLES = {
+  add: { background: '#F0FDF4', color: '#166534' },
+  remove: { background: '#FEF2F2', color: '#991B1B' },
+  hunk: { background: '#F6F3EB', color: '#78716C' },
+  context: { color: '#44403C' },
+} satisfies Record<string, CSSProperties>
+
+const DIFF_LINE_PREFIX = { add: '+ ', remove: '− ', hunk: '', context: '  ' } as const
+
+export function ProposalCard({
+  proposal,
+  status,
+  error,
+  canApply,
+  onApply,
+  onCancel,
+}: {
+  proposal: ProcedureProposal
+  status: ProposalStatus
+  error: string | null
+  canApply: boolean
+  onApply: () => void
+  onCancel: () => void
+}) {
+  const isBusy = status === 'applying' || status === 'cancelling'
+  const isOpen = status === 'pending' || status === 'confirmed' || isBusy
+  return (
+    <section aria-label="Proposed procedure change" className="rounded-lg border p-3 text-xs space-y-2" style={{ borderColor: '#ECB815', background: '#FFFDF5', color: '#1C1917' }}>
+      <p className="font-bold" style={{ color: '#1C3822' }}>Proposed change to your procedure</p>
+      <p>{proposal.summary}</p>
+      <pre className="max-h-64 overflow-auto rounded border p-2 font-[family-name:var(--font-mono)] text-[11px] leading-5" style={{ borderColor: '#D6D0C4', background: '#FFFFFF' }} aria-label="Changes">
+        {diffLines(proposal.diff).map((line, index) => (
+          <span key={index} className="block whitespace-pre-wrap" style={DIFF_LINE_STYLES[line.kind]}>{DIFF_LINE_PREFIX[line.kind]}{line.text}</span>
+        ))}
+      </pre>
+      {isOpen && (
+        <>
+          <p style={{ color: '#57534E' }}>
+            {canApply
+              ? 'Nothing has changed yet. Applying creates a new analysis from this edited procedure and uses one of your analysis runs. Your current analysis stays as it is.'
+              : 'Nothing has changed. Open this analysis page to apply the change as a new analysis.'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {canApply && (
+              <button
+                type="button"
+                onClick={onApply}
+                disabled={isBusy}
+                className="min-h-11 rounded px-4 text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                style={{ background: '#1C3822', color: '#F6F3EB' }}
+              >
+                {status === 'applying' ? 'Starting…' : status === 'confirmed' ? 'Try again' : 'Apply and re-run analysis'}
+              </button>
+            )}
+            {status !== 'confirmed' && (
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={isBusy}
+                className="min-h-11 rounded border px-4 text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                style={{ borderColor: '#D6D0C4', background: '#FFFFFF', color: '#1C1917' }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      {status === 'applied' && <p role="status" style={{ color: '#166534' }}>Re-running the analysis with this edited procedure.</p>}
+      {status === 'cancelled' && <p role="status" style={{ color: '#57534E' }}>Cancelled. Your procedure was not changed.</p>}
+      {status === 'superseded' && <p role="status" style={{ color: '#57534E' }}>This proposal is out of date and can no longer be applied.</p>}
+      {error && <p role="alert" style={{ color: '#B45309' }}>{error}</p>}
+    </section>
+  )
+}
+
+export type ProposalStatus = 'pending' | 'applying' | 'confirmed' | 'applied' | 'cancelling' | 'cancelled' | 'superseded'
+
+/**
+ * One reviewable proposal at a time: a newer one supersedes any still-open older card. The same
+ * proposal arriving twice (a deduplicated tool call) is ignored rather than shown twice.
+ */
+export function withIncomingProposal(entries: ProposalEntry[], proposal: ProcedureProposal): ProposalEntry[] {
+  if (entries.some(entry => entry.proposal.proposalId === proposal.proposalId)) return entries
+  return [
+    ...entries.map((entry): ProposalEntry => (
+      entry.status === 'pending' ? { ...entry, status: 'superseded', error: null } : entry
+    )),
+    { proposal, status: 'pending', error: null },
+  ]
+}
+
+export interface ProposalEntry {
+  proposal: ProcedureProposal
+  status: ProposalStatus
+  error: string | null
+}
+
+/** Server codes meaning this proposal can never be applied (as opposed to a retryable failure). */
+const FINAL_PROPOSAL_CODES: Record<string, true> = {
+  proposal_closed: true,
+  procedure_changed: true,
+  proposal_not_found: true,
+}
+
+function messageFromBody(body: unknown, fallback: string): string {
+  return body && typeof body === 'object' && typeof (body as Record<string, unknown>).error === 'string'
+    ? String((body as Record<string, unknown>).error)
+    : fallback
+}
+
+/**
+ * Decides whether the seeded first message goes out now. It is sent once, only into a brand-new
+ * empty conversation the scientist has not started typing in; the caller records `consume` so a
+ * re-render, a reopened drawer or a "new chat" can never send it again.
+ */
+export function initialMessageAction(input: {
+  initialMessage: string | undefined
+  consumed: boolean
+  isOpen: boolean
+  conversationId: string | null
+  disposition: 'created' | 'resumed' | null
+  messageCount: number
+  draft: string
+  isSending: boolean
+}): { send: string | null; consume: boolean } {
+  const message = input.initialMessage?.trim()
+  if (!message || input.consumed || !input.isOpen || !input.conversationId || input.disposition === null) {
+    return { send: null, consume: false }
+  }
+  if (input.disposition === 'resumed' || input.messageCount > 0 || input.draft.trim()) {
+    return { send: null, consume: true }
+  }
+  return input.isSending ? { send: null, consume: false } : { send: message, consume: true }
 }
 
 interface TalkAboutThisProps {
@@ -432,7 +590,14 @@ interface TalkAboutThisProps {
   buttonLabel?: string
   className?: string
   buttonStyle?: CSSProperties
-  onRecommendationApproved?: (receipt: RecommendationApprovalReceipt) => void
+  /** Sent automatically, once, when the drawer opens on a new empty conversation. */
+  initialMessage?: string
+  onRecommendationDecided?: (receipt: RecommendationDecisionReceipt) => void
+  /**
+   * Called after the server confirms the scientist's Apply. The parent re-runs the edited text as a
+   * new analysis; if it throws, its message is shown and the scientist can try again.
+   */
+  onProcedureProposalApply?: (proposal: ProcedureProposal) => void | Promise<void>
 }
 
 function parseSseEvent(block: string): { event: string; data: Record<string, unknown> } | null {
@@ -449,7 +614,19 @@ function parseSseEvent(block: string): { event: string; data: Record<string, unk
     return null
   }
 }
-export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecommendationApproved, buttonLabel = 'Ask', className, buttonStyle }: TalkAboutThisProps) {
+
+export function TalkAboutThis({
+  analysisId,
+  scope,
+  title,
+  evidenceState,
+  initialMessage,
+  onRecommendationDecided,
+  onProcedureProposalApply,
+  buttonLabel = 'Ask',
+  className,
+  buttonStyle,
+}: TalkAboutThisProps) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
@@ -459,15 +636,18 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
   const [draft, setDraft] = useState('')
   const [activities, setActivities] = useState<ChatActivity[]>([])
   const [notifyOnReady, setNotifyOnReady] = useState(false)
-  const [approvalReceipt, setApprovalReceipt] = useState<RecommendationApprovalReceipt | null>(null)
+  const [decisionReceipt, setDecisionReceipt] = useState<RecommendationDecisionReceipt | null>(null)
   const [evidenceReceipts, setEvidenceReceipts] = useState<EvidenceReceipt[]>([])
-  const [approvalReceivedAt, setApprovalReceivedAt] = useState<string | null>(null)
+  const [decisionReceivedAt, setDecisionReceivedAt] = useState<string | null>(null)
   const [conversationDisposition, setConversationDisposition] = useState<'created' | 'resumed' | null>(null)
   const [verificationNotes, setVerificationNotes] = useState<VerificationNote[]>([])
+  const [proposals, setProposals] = useState<ProposalEntry[]>([])
   const abortRef = useRef<AbortController | null>(null)
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null)
   const sendLockedRef = useRef(false)
-  const approvedActionIdsRef = useRef(new Set<string>())
+  const notifiedActionIdsRef = useRef(new Set<string>())
+  const proposalsInFlightRef = useRef(new Set<string>())
+  const initialMessageConsumedRef = useRef(false)
 
   const close = () => {
     abortRef.current?.abort()
@@ -495,22 +675,20 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ analysisId, scope, newConversation }),
       })
-      const body = await response.json() as unknown
+      const body = await response.json().catch(() => null) as unknown
       const conversation = parseOpenConversationResponse(scope, body)
       if (!response.ok || !conversation) {
-        const failure = body && typeof body === 'object' && typeof (body as Record<string, unknown>).error === 'string'
-          ? String((body as Record<string, unknown>).error)
-          : 'Unable to open chat'
-        throw new Error(failure)
+        throw new Error(messageFromBody(body, 'We could not open the chat. Please try again.'))
       }
 
       setConversationId(conversation.conversationId)
       setConversationDisposition(conversation.disposition)
       setMessages(conversation.messages)
       setEvidenceReceipts(conversation.evidenceReceipts)
-      setApprovalReceipt(conversation.approvalReceipt)
-      setApprovalReceivedAt(conversation.approvalReceipt?.receivedAt ?? null)
-      approvedActionIdsRef.current = new Set(conversation.approvalReceipt ? [conversation.approvalReceipt.actionId] : [])
+      setDecisionReceipt(conversation.decisionReceipt)
+      setDecisionReceivedAt(conversation.decisionReceipt?.receivedAt ?? null)
+      setProposals(conversation.proposals.map(proposal => ({ proposal, status: 'pending', error: null })))
+      notifiedActionIdsRef.current = new Set(conversation.decisionReceipt ? [conversation.decisionReceipt.actionId] : [])
       if (newConversation) {
         setDraft('')
         setActivities([])
@@ -520,25 +698,81 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
       focusMessageComposer(messageInputRef)
       setIsOpen(true)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to open chat')
+      setError(caught instanceof Error ? caught.message : 'We could not open the chat. Please try again.')
     } finally {
       setIsStarting(false)
     }
   }
 
-  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const content = draft.trim()
-    if (isNewConversationCommand(content)) {
-      await openConversation(true)
-      return
+  const updateProposal = (proposalId: string, change: Partial<Omit<ProposalEntry, 'proposal'>>) => {
+    setProposals(current => current.map(entry => (
+      entry.proposal.proposalId === proposalId ? { ...entry, ...change } : entry
+    )))
+  }
+
+  const applyProposal = async (entry: ProposalEntry) => {
+    const proposalId = entry.proposal.proposalId
+    if (!conversationId || proposalsInFlightRef.current.has(proposalId)) return
+    proposalsInFlightRef.current.add(proposalId)
+    updateProposal(proposalId, { status: 'applying', error: null })
+    // Once the server has confirmed Apply it will not confirm again; a retry only re-runs.
+    let confirmed = entry.status === 'confirmed' ? entry.proposal : null
+    try {
+      if (!confirmed) {
+        const response = await fetch(`/api/talk-about-this/${conversationId}/proposals/${proposalId}/apply`, { method: 'POST' })
+        const body = await response.json().catch(() => null) as Record<string, unknown> | null
+        if (!response.ok || typeof body?.proposedText !== 'string' || !body.proposedText) {
+          const code = typeof body?.code === 'string' ? body.code : ''
+          updateProposal(proposalId, {
+            status: Object.hasOwn(FINAL_PROPOSAL_CODES, code) ? 'superseded' : 'pending',
+            error: messageFromBody(body, 'We could not apply that change. Please try again.'),
+          })
+          return
+        }
+        confirmed = { ...entry.proposal, proposedText: body.proposedText }
+      }
+      await onProcedureProposalApply?.(confirmed)
+      updateProposal(proposalId, { status: 'applied', error: null })
+    } catch (caught) {
+      updateProposal(proposalId, {
+        status: confirmed ? 'confirmed' : 'pending',
+        error: caught instanceof Error && caught.message
+          ? caught.message
+          : 'We could not start the new analysis. Please try again.',
+      })
+    } finally {
+      proposalsInFlightRef.current.delete(proposalId)
     }
+  }
+
+  const cancelProposal = async (entry: ProposalEntry) => {
+    const proposalId = entry.proposal.proposalId
+    if (!conversationId || proposalsInFlightRef.current.has(proposalId)) return
+    proposalsInFlightRef.current.add(proposalId)
+    updateProposal(proposalId, { status: 'cancelling', error: null })
+    try {
+      const response = await fetch(`/api/talk-about-this/${conversationId}/proposals/${proposalId}/cancel`, { method: 'POST' })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as unknown
+        throw new Error(messageFromBody(body, 'We could not cancel that proposal. Please try again.'))
+      }
+      updateProposal(proposalId, { status: 'cancelled' })
+    } catch (caught) {
+      updateProposal(proposalId, {
+        status: 'pending',
+        error: caught instanceof Error ? caught.message : 'We could not cancel that proposal. Please try again.',
+      })
+    } finally {
+      proposalsInFlightRef.current.delete(proposalId)
+    }
+  }
+
+  const sendContent = async (content: string, options: { clearDraft: boolean }) => {
     if (!conversationId || !content || isSending || sendLockedRef.current) return
     sendLockedRef.current = true
-    // Keep a durable approval receipt visible while the follow-up response streams.
 
     const createdAt = new Date().toISOString()
-    setDraft('')
+    if (options.clearDraft) setDraft('')
     setActivities([])
     setError(null)
     setIsSending(true)
@@ -570,8 +804,8 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
         signal: abortController.signal,
       })
       if (!response.ok || !response.body) {
-        const body = await response.json().catch(() => ({ error: 'Unable to start chat' })) as { error?: string }
-        throw new Error(body.error || 'Unable to start chat')
+        const body = await response.json().catch(() => null) as unknown
+        throw new Error(messageFromBody(body, 'We could not send that message. Please try again.'))
       }
       let terminalStatus: TerminalStatus | null = null
       const reader = response.body.getReader()
@@ -626,16 +860,20 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
                 : message,
             ))
           }
-          if (parsed.event === 'recommendation-approved') {
-            const approval = applyRecommendationApprovedEvent(scope, parsed.data, approvedActionIdsRef.current)
-            if (approval.receipt) {
-              setApprovalReceipt(approval.receipt)
-              if (approval.shouldNotifyParent) {
-                approvedActionIdsRef.current.add(approval.receipt.actionId)
-                setApprovalReceivedAt(new Date().toISOString())
-                onRecommendationApproved?.(approval.receipt)
+          if (parsed.event === 'recommendation-decided') {
+            const decision = applyRecommendationDecidedEvent(scope, parsed.data, notifiedActionIdsRef.current)
+            if (decision.receipt) {
+              setDecisionReceipt(decision.receipt)
+              if (decision.shouldNotifyParent) {
+                notifiedActionIdsRef.current.add(decision.receipt.actionId)
+                setDecisionReceivedAt(new Date().toISOString())
+                onRecommendationDecided?.(decision.receipt)
               }
             }
+          }
+          if (parsed.event === 'procedure-proposal') {
+            const proposal = parseProcedureProposal(parsed.data)
+            if (proposal) setProposals(current => withIncomingProposal(current, proposal))
           }
           if (parsed.event === 'error' && typeof parsed.data.error === 'string') {
             const errorMessage = parsed.data.error
@@ -659,7 +897,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
       if (terminalStatus && notifyOnReady) showReadyNotification(title, terminalStatus)
     } catch (caught) {
       if (!abortController.signal.aborted) {
-        setError(caught instanceof Error ? caught.message : 'Unable to send message')
+        setError(caught instanceof Error ? caught.message : 'We could not send that message. Please try again.')
       }
     } finally {
       abortRef.current = null
@@ -668,6 +906,32 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
     }
   }
 
+  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const content = draft.trim()
+    if (isNewConversationCommand(content)) {
+      await openConversation(true)
+      return
+    }
+    await sendContent(content, { clearDraft: true })
+  }
+
+  const initialAction = initialMessageAction({
+    initialMessage,
+    consumed: initialMessageConsumedRef.current,
+    isOpen,
+    conversationId,
+    disposition: conversationDisposition,
+    messageCount: messages.length,
+    draft,
+    isSending,
+  })
+  useEffect(() => {
+    // The ref is checked again here so a repeated effect run (Strict Mode, re-render) cannot send twice.
+    if (initialMessageConsumedRef.current || !initialAction.consume) return
+    initialMessageConsumedRef.current = true
+    if (initialAction.send) void sendContent(initialAction.send, { clearDraft: false })
+  }, [initialAction.consume, initialAction.send])
 
   const groupedNotes = groupVerificationNotes(verificationNotes)
 
@@ -712,7 +976,7 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
               <DiscussionScopeInstruction scope={scope} />
             </header>
             <div className="flex-1 space-y-4 overflow-y-auto p-5" aria-live="polite">
-              {approvalReceipt && <ApprovalReceiptCard receipt={approvalReceipt} receivedAt={approvalReceivedAt} />}
+              {decisionReceipt && <DecisionReceiptCard receipt={decisionReceipt} receivedAt={decisionReceivedAt} />}
               {evidenceReceipts.map(receipt => (
                 <EvidenceReceiptCard key={receipt.evidence.id} {...receipt} />
               ))}
@@ -734,6 +998,17 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
                     : <p className="whitespace-pre-wrap">{message.content}</p>}
                   {message.citations && message.citations.length > 0 && <p className="mt-2 text-[10px]" style={{ color: '#78716C' }}>Sources: {message.citations.join(' · ')}</p>}
                 </article>
+              ))}
+              {proposals.map(entry => (
+                <ProposalCard
+                  key={entry.proposal.proposalId}
+                  proposal={entry.proposal}
+                  status={entry.status}
+                  error={entry.error}
+                  canApply={onProcedureProposalApply !== undefined}
+                  onApply={() => void applyProposal(entry)}
+                  onCancel={() => void cancelProposal(entry)}
+                />
               ))}
               {(isSending || activities.length > 0) && (
                 <section aria-label="Scientific lookup activity" className="rounded-lg border p-3 text-xs" style={{ borderColor: '#D6D0C4', background: '#F6F3EB', color: '#57534E' }}>
@@ -785,7 +1060,8 @@ export function TalkAboutThis({ analysisId, scope, title, evidenceState, onRecom
                   Notify me when a background response is ready
                 </label>
               )}
-              <textarea ref={messageInputRef} id="talk-about-this-message" value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => handleComposerKeyDown(event, isSending, draft)} maxLength={4000} rows={3} placeholder="Ask about this recommendation…" className="w-full rounded border p-3 text-sm" style={{ borderColor: '#D6D0C4', color: '#1C1917' }} disabled={isSending} />
+              <textarea ref={messageInputRef} id="talk-about-this-message" value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => handleComposerKeyDown(event, isSending, draft)} maxLength={4000} rows={3} placeholder={scope.kind === 'recommendation' ? 'Ask about this recommendation…' : scope.kind === 'chemistry-clarification' ? 'Describe the material, or ask what to change…' : 'Ask about this analysis…'} className="w-full rounded border p-3 text-sm" style={{ borderColor: '#D6D0C4', color: '#1C1917' }} disabled={isSending} />
+              <DecisionActions scope={scope} disabled={isSending || !conversationId} onDecide={phrase => void sendContent(phrase, { clearDraft: false })} />
               <div className="mt-2 flex items-center justify-between gap-3">
                 <button type="button" onClick={() => abortRef.current?.abort()} disabled={!isSending} className="text-xs font-bold uppercase tracking-wider disabled:opacity-50" style={{ color: '#78716C' }}>Stop</button>
                 <button type="submit" disabled={!draft.trim() || isSending} className="rounded px-4 py-2 text-xs font-bold uppercase tracking-wider disabled:opacity-50" style={{ background: '#1C3822', color: '#F6F3EB' }}>{isSending ? 'Responding…' : 'Send'}</button>
