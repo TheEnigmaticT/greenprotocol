@@ -71,6 +71,18 @@ describe('private SciSure workspace (synthetic fixtures)', () => {
     expect(bundle.draftText).toBe(w.source.protocolText)
     expect(bundle.limitations.join(' ')).toMatch(/map/i)
   })
+  it('maps a parsed step by exact source text even when experiment section order is zero', async () => {
+    const { prepareWorkspaceDraft, workspaceFindings } = await module()
+    const w = workspace()
+    w.source.kind = 'experiment'; w.source.selection[0].sectionId = 'section-1'; delete w.source.selection[0].stepId
+    w.source.selection[0].order = 0
+    w.analysis!.recommendations = [recommendation({ id: 'text-bound', stepNumber: 9, cardKind: 'swap', evidenceAssessment: { disposition: 'supported_applicable', directness: 'direct', supportingReferenceCount: 1, applicability: 'strong', eligibleForApplication: true, eligibilityReason: 'Explicit synthetic fixture' } })]
+    w.analysis!.steps = [{ stepNumber: 9, description: w.source.selection[0].normalizedText, chemicals: [], conditions: { temperature: null, duration: null, atmosphere: null } }]
+    w.findings = workspaceFindings(w.analysis!, { 'text-bound': 'accepted' })
+    const bundle = prepareWorkspaceDraft(w, { sourceHash: w.sourceHash, analysisRevision: 1 })
+    expect(bundle.appliedFindingIds).toEqual(['text-bound'])
+    expect(bundle.draftText).toBe('## Mix\nAdd Water. Keep 5 mL and 20 °C.')
+  })
   it('does not apply absent evidence, warning, ACS nonmutating or noneligible cards', async () => {
     const { workspaceFindings } = await module()
     const a = analysis(); a.recommendations = [recommendation({ cardKind: 'swap' }), ...a.recommendations]

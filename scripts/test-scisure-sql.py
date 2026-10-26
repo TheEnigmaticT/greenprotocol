@@ -16,6 +16,7 @@ fixtures = (
     Path('tests/sql/scisure-registered-security.sql'),
     Path('tests/sql/scisure-unlimited-admission.sql'),
     Path('tests/sql/scisure-workspace.sql'),
+    Path('tests/sql/scisure-owned-workspace-recovery.sql'),
 )
 if sys.argv[1:] == ['--list']:
     print('\n'.join(str(fixture) for fixture in fixtures))

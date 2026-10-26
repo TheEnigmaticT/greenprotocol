@@ -63,10 +63,17 @@ export function prepareWorkspaceDraft(workspace: SciSureWorkspace, binding: { so
       limitations.push(`${finding.findingId}: accepted as acknowledgement only; scientific applicability does not permit procedure mutation.`)
       continue
     }
-    const matches = selected.map((s, index) => ({ s, index })).filter(({ s }) => s.order === rec.stepNumber)
-    const match = matches.length === 1 ? matches[0] : undefined
+    // Parsed step numbers are not ELN section/step identities. Prove the
+    // parsed step's exact text occurs once in one immutable source selection.
+    const parsed = workspace.analysis.steps.filter(step => step.stepNumber === rec.stepNumber)
+    const description = parsed.length === 1 && typeof parsed[0].description === 'string' ? parsed[0].description.trim() : ''
+    const matches = description ? selected.map((s, index) => {
+      const start = s.normalizedText.indexOf(description)
+      return { s, index, start, end: start + description.length, unique: start >= 0 && s.normalizedText.lastIndexOf(description) === start }
+    }).filter(match => match.start >= 0) : []
+    const match = matches.length === 1 && matches[0].unique ? matches[0] : undefined
     const span = match ? occurrence(match.s.normalizedText, rec.original.chemical.trim()) : null
-    if (!safeAssembly || !match || !span || !rec.alternative.chemical.trim() || /[$<>\n\r]/.test(rec.alternative.chemical) || rec.original.chemical.trim().toLowerCase() === rec.alternative.chemical.trim().toLowerCase()) {
+    if (!safeAssembly || !match || !span || span.start < match.start || span.end > match.end || !rec.alternative.chemical.trim() || /[$<>\n\r]/.test(rec.alternative.chemical) || rec.original.chemical.trim().toLowerCase() === rec.alternative.chemical.trim().toLowerCase()) {
       acknowledgedFindingIds.push(finding.findingId)
       limitations.push(`${finding.findingId}: accepted change cannot safely map to one original source occurrence; source retained, not applied.`)
       continue

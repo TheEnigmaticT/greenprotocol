@@ -29,6 +29,7 @@ MIGRATIONS = (
     ('20261001130000', 'supabase/migrations/20261001130000_lease_drop_recreate_out_job_id.sql'),
     ('20261001140000', 'supabase/migrations/20261001140000_lease_qualify_via_from_clause.sql'),
     ('20261001210000', 'supabase/migrations/20261001210000_scisure_private_workspace.sql'),
+    ('20261001220000', 'supabase/migrations/20261001220000_scisure_owned_workspace_recovery.sql'),
 )
 EXPECTED_RLS_TABLES = (
     'gpc_scisure_principals', 'gpc_scisure_connections', 'gpc_external_source_snapshots',
@@ -52,6 +53,7 @@ EXPECTED_SERVICE_FUNCTIONS = (
     'gpc_sync_registered_quota_run_state', 'gpc_record_scisure_review_decision',
     'gpc_record_scisure_guest_review_decision', 'gpc_queue_scisure_guest_mail',
     'gpc_get_scisure_workspace', 'gpc_record_scisure_workspace_decision',
+    'gpc_get_owned_scisure_workspace',
 )
 
 
