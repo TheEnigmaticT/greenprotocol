@@ -1,4 +1,13 @@
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
+import { canProposeProcedureEdit } from '@/lib/talk-about-this/scope'
+import {
+  MAX_EDIT_FIND_CHARS,
+  MAX_EDIT_RATIONALE_CHARS,
+  MAX_EDIT_REPLACE_CHARS,
+  MAX_PROCEDURE_EDITS,
+  MAX_PROPOSAL_SUMMARY_CHARS,
+  type ProcedureEdit,
+} from '@/lib/talk-about-this/procedure-edit'
 import {
   citationFromEvidenceMatch,
   searchLiteratureEvidence,
@@ -14,6 +23,7 @@ export const TOOL_NAMES = [
   'lookup_solvent_hazard_profile',
   'screen_solvent_candidates',
   'search_scoped_literature_evidence',
+  'propose_procedure_edit',
 ] as const
 
 export type ToolName = (typeof TOOL_NAMES)[number]
@@ -79,10 +89,20 @@ export interface LiteratureEvidenceToolCall extends BaseScopedToolCall {
   signalGroups?: EvidenceSignalGroup[]
 }
 
-export type ScopedToolCall = ChemicalToolCall | EvidenceToolCall | HazardToolCall | ScreeningToolCall | LiteratureEvidenceToolCall
+/**
+ * Proposal only: the server validates the edits against the saved procedure, stores a
+ * reviewable proposal, and nothing is applied until the scientist presses Apply.
+ */
+export interface ProposalToolCall extends BaseScopedToolCall {
+  name: 'propose_procedure_edit'
+  summary: string
+  edits: ProcedureEdit[]
+}
+
+export type ScopedToolCall = ChemicalToolCall | EvidenceToolCall | HazardToolCall | ScreeningToolCall | LiteratureEvidenceToolCall | ProposalToolCall
 
 export interface ToolResult {
-  operation: 'chem21' | 'pubchem' | 'rdkit' | 'solvent_evidence' | 'solvent_hazard' | 'solvent_screening' | 'literature_evidence'
+  operation: 'chem21' | 'pubchem' | 'rdkit' | 'solvent_evidence' | 'solvent_hazard' | 'solvent_screening' | 'literature_evidence' | 'procedure_proposal'
   chemical_name: string
   status: 'ok' | 'not_found' | 'unavailable'
   source: string
@@ -101,6 +121,19 @@ type ToolParameter =
   | { type: 'string'; enum?: readonly string[] }
   | { type: 'number'; enum?: readonly string[] }
   | { type: 'array'; enum?: readonly string[]; items: { type: 'string'; enum: readonly string[] } }
+  | {
+      type: 'array'
+      enum?: undefined
+      minItems: number
+      maxItems: number
+      items: {
+        type: 'object'
+        additionalProperties: false
+        properties: Record<string, { type: 'string'; maxLength: number }>
+        required: string[]
+      }
+    }
+  | { type: 'string'; enum?: undefined; maxLength: number }
 
 interface ToolSchemaVariant {
   properties: Record<string, ToolParameter>
@@ -196,6 +229,30 @@ export function buildChatTools(context: TalkAboutContext): ChatToolDefinition[] 
         signalGroups: { type: 'array', items: { type: 'string', enum: ['comparison', 'process', 'outcome', 'hazard'] } },
       }, ['query']),
     } },
+    ...(context.scope && canProposeProcedureEdit(context.scope)
+      ? [{ type: 'function' as const, function: {
+          name: 'propose_procedure_edit' as const,
+          description: 'Propose edits to the scientist’s saved procedure text for them to review as a diff. Use only when the scientist asks for, or agrees to, a change to the written procedure. Each find must be copied exactly from the saved procedure and occur exactly once. This only PROPOSES: nothing is applied or re-analysed until the scientist presses Apply in the chat, so never say the change was made.',
+          parameters: parameters({
+            summary: { type: 'string', maxLength: MAX_PROPOSAL_SUMMARY_CHARS },
+            edits: {
+              type: 'array',
+              minItems: 1,
+              maxItems: MAX_PROCEDURE_EDITS,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  find: { type: 'string', maxLength: MAX_EDIT_FIND_CHARS },
+                  replace: { type: 'string', maxLength: MAX_EDIT_REPLACE_CHARS },
+                  rationale: { type: 'string', maxLength: MAX_EDIT_RATIONALE_CHARS },
+                },
+                required: ['find', 'replace', 'rationale'],
+              },
+            },
+          }, ['summary', 'edits']),
+        } }]
+      : []),
   ]
 }
 
@@ -216,7 +273,7 @@ function assertFiniteTemperature(temperatureK: number): void {
   if (!Number.isFinite(temperatureK)) throw new Error('Tool request requires a finite temperatureK')
 }
 
-function requestFor(call: Exclude<ScopedToolCall, LiteratureEvidenceToolCall>): Record<string, unknown> {
+function requestFor(call: Exclude<ScopedToolCall, LiteratureEvidenceToolCall | ProposalToolCall>): Record<string, unknown> {
   switch (call.name) {
     case 'lookup_chem21_solvent': return { operation: 'chem21', chemical_name: call.chemical }
     case 'lookup_pubchem_profile': return { operation: 'pubchem', chemical_name: call.chemical }
@@ -244,6 +301,9 @@ function requestFor(call: Exclude<ScopedToolCall, LiteratureEvidenceToolCall>): 
 export async function executeScopedTool(context: TalkAboutContext, call: ScopedToolCall, signal?: AbortSignal): Promise<ToolResult> {
   const scoped = scopedChemicals(context)
   switch (call.name) {
+    case 'propose_procedure_edit':
+      // Needs the saved procedure and the user's session; the conversation executor owns it.
+      throw new Error('Procedure proposals are not a lookup tool')
     case 'lookup_chem21_solvent':
       if (!matches([...scoped, ...LOCAL_INDEXED_SOLVENTS], call.chemical)) throw new Error('Requested chemical is outside this scoped discussion')
       break

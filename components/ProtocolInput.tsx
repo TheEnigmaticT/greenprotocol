@@ -1,10 +1,15 @@
 'use client'
 
+import { stashCompletedAnalysis } from '@/lib/rerun-from-proposal'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { EXAMPLE_PROTOCOLS } from '@/lib/prompts'
-import { ProgressEvent } from '@/lib/types'
 import { AnalysisStreamRecovery } from '@/components/AnalysisStreamRecovery'
+import { runAnalysis, validateProtocolText, type AnalysisProgressEvent } from '@/lib/run-analysis'
+import type { HumanError } from '@/lib/errors/humanize'
+import { MAX_PROTOCOL_CHARS } from '@/lib/protocol-limits'
+import { PdfImportButton, PdfImportNotice } from '@/components/PdfImport'
+import type { PdfImportResult } from '@/lib/pdf-import'
 
 const EXAMPLES = [
   { label: 'Organic Extraction', key: 'organicExtraction' as const },
@@ -144,15 +149,29 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
 export default function ProtocolInput() {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<HumanError | null>(null)
   const [streamInterrupted, setStreamInterrupted] = useState(false)
   const [completed, setCompleted] = useState(0)
   const [total, setTotal] = useState(0)
+  const [pdfImport, setPdfImport] = useState<PdfImportResult | null>(null)
+  const [pdfChecked, setPdfChecked] = useState(false)
   const router = useRouter()
 
+  function handleProgress(event: AnalysisProgressEvent) {
+    if (event.type === 'phase') {
+      if (event.phase === 2) setCompleted(1)
+      else if (event.phase === 3) setCompleted(13)
+    } else if (event.type === 'principle') {
+      if (event.status === 'complete' || event.status === 'failed') {
+        setCompleted(prev => prev + 1)
+      }
+    }
+  }
+
   async function handleSubmit() {
-    if (!text.trim() || text.trim().length < 20) {
-      setError('Please enter a chemistry protocol (at least a few sentences).')
+    const invalid = validateProtocolText(text)
+    if (invalid) {
+      setError(invalid)
       return
     }
 
@@ -162,90 +181,28 @@ export default function ProtocolInput() {
     setCompleted(0)
     setTotal(14)
 
-    try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ protocolText: text }),
-      })
+    const outcome = await runAnalysis({ protocolText: text, onProgress: handleProgress })
 
-      if (res.status === 401) {
-        router.push('/login')
-        return
-      }
-
-      const contentType = res.headers.get('content-type') || ''
-      if (!contentType.includes('text/event-stream')) {
-        const data = await res.json()
-        if (data.error === 'not_chemistry') {
-          setError("This doesn't look like a chemistry protocol. Try one of our examples!")
-        } else if (data.error === 'run_limit_reached') {
-          setError(`You've used all ${data.limit} of your available analyses. Contact us at hello@greenchemistry.ai to unlock more.`)
-        } else {
-          setError(data.error || 'Analysis failed. Please try again.')
-        }
-        setLoading(false)
-        return
-      }
-
-      const reader = res.body!.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          let event: ProgressEvent
-          try {
-            event = JSON.parse(line.slice(6))
-          } catch {
-            continue
-          }
-
-          if (event.type === 'phase') {
-            if (event.phase === 2) setCompleted(1)
-            else if (event.phase === 3) setCompleted(13)
-          } else if (event.type === 'principle') {
-            if (event.status === 'complete' || event.status === 'failed') {
-              setCompleted(prev => prev + 1)
-            }
-          } else if (event.type === 'result') {
-            setCompleted(14)
-            sessionStorage.setItem('gpc_analysis', JSON.stringify({ ...event.data, protocolText: text }))
-            sessionStorage.setItem('gpc_protocol', text)
-            await new Promise(r => setTimeout(r, 400))
-            if (event.data.id) {
-              router.push(`/analyze/${event.data.id}`)
-            } else {
-              router.push('/analyze')
-            }
-            return
-          } else if (event.type === 'error') {
-            if (event.code === 'not_chemistry') {
-              setError("This doesn't look like a chemistry protocol. Try one of our examples!")
-            } else {
-              setError(event.error)
-            }
-            setLoading(false)
-            return
-          }
-        }
-      }
-
-      setStreamInterrupted(true)
-      setLoading(false)
-    } catch {
-      setStreamInterrupted(true)
-      setLoading(false)
+    if (outcome.kind === 'unauthorized') {
+      router.push('/login')
+      return
     }
+
+    if (outcome.kind === 'completed') {
+      setCompleted(14)
+      stashCompletedAnalysis(outcome, sessionStorage)
+      // Let the progress bar visibly reach 100% before leaving the page.
+      setTimeout(() => router.push(`/analyze/${outcome.analysisId}`), 400)
+      return
+    }
+
+    if (outcome.kind === 'failed') setError(outcome.error)
+    else setStreamInterrupted(true)
+    setLoading(false)
   }
+
+  const overLimit = text.length > MAX_PROTOCOL_CHARS
+  const nearLimit = text.length >= MAX_PROTOCOL_CHARS * 0.9
 
   return (
     <div className="w-full max-w-3xl space-y-4">
@@ -253,7 +210,7 @@ export default function ProtocolInput() {
         {EXAMPLES.map((ex) => (
           <button
             key={ex.key}
-            onClick={() => { setText(EXAMPLE_PROTOCOLS[ex.key]); setError(null) }}
+            onClick={() => { setText(EXAMPLE_PROTOCOLS[ex.key]); setPdfImport(null); setError(null) }}
             className="px-3 py-1.5 text-sm rounded-lg border transition-colors cursor-pointer font-[family-name:var(--font-mono)]"
             style={{ color: '#1C3822', borderColor: '#D6D0C4' }}
             onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#1C3822')}
@@ -262,7 +219,14 @@ export default function ProtocolInput() {
             {ex.label}
           </button>
         ))}
+        <PdfImportButton
+          disabled={loading}
+          onImported={(result) => { setText(result.text); setPdfImport(result); setPdfChecked(false); setError(null) }}
+          onError={(message) => setError({ code: 'unknown', title: "That PDF couldn't be imported", message, action: 'none' })}
+        />
       </div>
+
+      {pdfImport && <PdfImportNotice result={pdfImport} acknowledged={pdfChecked} onAcknowledgedChange={setPdfChecked} />}
 
       <textarea
         value={text}
@@ -276,17 +240,33 @@ export default function ProtocolInput() {
         disabled={loading}
       />
 
+      <p
+        className="text-right text-xs font-[family-name:var(--font-mono)] tabular-nums"
+        style={{ color: overLimit ? '#B91C1C' : nearLimit ? '#9A3412' : '#78716C' }}
+        role={nearLimit ? 'status' : undefined}
+      >
+        {text.length.toLocaleString('en-US')} / {MAX_PROTOCOL_CHARS.toLocaleString('en-US')} characters
+        {overLimit && ` — ${(text.length - MAX_PROTOCOL_CHARS).toLocaleString('en-US')} too many`}
+      </p>
+
       {streamInterrupted && (
         <AnalysisStreamRecovery onOpenDashboard={() => router.push('/dashboard')} />
       )}
 
       {error && (
-        <p className="text-sm" style={{ color: '#EF4444' }}>{error}</p>
+        <div role="alert" className="text-sm space-y-1">
+          <p className="font-semibold" style={{ color: '#B91C1C' }}>{error.title}</p>
+          <p style={{ color: '#7F1D1D' }}>{error.message}</p>
+        </div>
+      )}
+
+      {pdfImport && !pdfChecked && (
+        <p className="text-sm" style={{ color: '#78716C' }}>Tick the box above to confirm you checked the imported text, then analyze.</p>
       )}
 
       <button
         onClick={handleSubmit}
-        disabled={loading || !text.trim()}
+        disabled={loading || !text.trim() || overLimit || (pdfImport !== null && !pdfChecked)}
         className="w-full px-6 py-3 rounded-lg font-semibold text-lg transition-all disabled:opacity-50 cursor-pointer"
         style={{ background: loading ? '#2D4A3A' : '#1C3822', color: '#F6F3EB' }}
       >

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { prepareChemicalInputs } from '@/lib/chemical-inputs'
+import { classifyUnresolvedReason, prepareChemicalInputs } from '@/lib/chemical-inputs'
 import type { AnalysisStep } from '@/lib/types'
 import type { ConvertResult } from '@/lib/chemistry-service'
 
@@ -47,5 +47,45 @@ describe('occurrence-local scoring inputs', () => {
     const result = prepareChemicalInputs(input, { results: [conversion('', .005)] })
     expect(result.scoreChemicals[0].quantity_kg).toBeNull()
     expect(result.scoreChemicals[0].quantity_mol).toBeNull()
+  })
+})
+
+describe('why a material could not be scored', () => {
+  const lookup = (overrides: Partial<ConvertResult>): ConvertResult => ({
+    ...conversion('5 mL', .005), smiles: null, molecular_weight: null, ...overrides,
+  })
+
+  it.each([
+    ['a name nobody recognises', { data_source: 'not_found', reference_status: 'terminal_not_found' }, 'not_recognized'],
+    ['a not-found lookup with no retry status', { data_source: 'not_found', reference_status: undefined }, 'not_recognized'],
+    ['a lookup that failed and was queued for retry', { data_source: 'not_found', reference_status: 'queued' }, 'provider_error'],
+    ['a lookup that threw in the service', { data_source: 'error', reference_status: 'available' }, 'provider_error'],
+    ['a finished lookup that returned no usable record', { data_source: 'not_found', reference_status: 'unavailable' }, 'reference_missing'],
+    ['a mixture', { data_source: 'indefinite', reference_status: 'indefinite' }, 'indefinite'],
+    ['a resolved chemical', { data_source: 'pubchem', reference_status: 'available' }, null],
+  ] as const)('classifies %s', (_label, overrides, expected) => {
+    expect(classifyUnresolvedReason(lookup(overrides))).toBe(expected)
+  })
+
+  it('treats a missing batch response as a provider failure', () => {
+    expect(classifyUnresolvedReason(undefined)).toBe('provider_error')
+  })
+
+  it('records the reason, step and role for every unscored occurrence, separately per step', () => {
+    const result = prepareChemicalInputs(steps(), { results: [
+      lookup({ input_quantity: '5 mL', data_source: 'not_found', reference_status: 'terminal_not_found' }),
+      lookup({ input_quantity: '20 mL', data_source: 'not_found', reference_status: 'queued' }),
+    ] })
+
+    expect(result.unresolvedDetails).toEqual([
+      { name: 'water', reason: 'not_recognized', stepNumber: 1, role: 'solvent' },
+      { name: 'water', reason: 'provider_error', stepNumber: 2, role: 'workup' },
+    ])
+    expect([...result.unresolvedChemicals]).toEqual(['water'])
+  })
+
+  it('lists nothing when every material resolved', () => {
+    const result = prepareChemicalInputs(steps(), { results: [conversion('5 mL', .005), conversion('20 mL', .020)] })
+    expect(result.unresolvedDetails).toEqual([])
   })
 })

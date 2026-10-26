@@ -2,19 +2,25 @@ import { runScopedToolChat } from '@/lib/talk-about-this/agent'
 import { firstForwardedDeltaMs } from '@/lib/talk-about-this/latency'
 import { createConfiguredChatProvider, type ChatMessage } from '@/lib/talk-about-this/chat-provider'
 import { executeScopedTool } from '@/lib/talk-about-this/tools'
+import { executeProposalTool } from '@/lib/talk-about-this/proposals'
+import { normalizeProcedureText } from '@/lib/talk-about-this/procedure-edit'
+import { isProtocolTruncated } from '@/lib/talk-about-this/context'
+import { canProposeProcedureEdit } from '@/lib/talk-about-this/scope'
 import {
   assistantMessageCitations,
   createMessage,
   createToolRun,
   linkToolRunsToAssistantMessage,
   listConversationMessages,
+  loadOwnedAnalysis,
   loadOwnedConversation,
   type RetrievalAttemptTelemetry,
   type StoredMessageTelemetry,
 } from '@/lib/talk-about-this/repository'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { approveScopedRecommendation, isExplicitScopedApprovalRequest } from '@/lib/talk-about-this/actions'
+import { decideScopedRecommendation, decisionMessage, explicitRecommendationDecision } from '@/lib/talk-about-this/actions'
+import { talkActionFailure } from '@/lib/talk-about-this/action-errors'
 import type { Citation, LiteratureEvidenceMatch } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -156,35 +162,36 @@ export async function POST(
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    return Response.json({ error: 'Please sign in to use chat.', code: 'unauthorized' }, { status: 401 })
   }
 
   let content: string
   try {
     const body = await request.json() as { content?: unknown }
     if (typeof body.content !== 'string' || !body.content.trim()) {
-      return Response.json({ error: 'Message content is required' }, { status: 400 })
+      return Response.json({ error: 'Type a message first.', code: 'message_required' }, { status: 400 })
     }
     content = body.content.trim()
     if (content.length > 4_000) {
-      return Response.json({ error: 'Message content must be 4,000 characters or fewer' }, { status: 400 })
+      return Response.json({ error: 'That message is too long. Please keep it under 4,000 characters.', code: 'message_too_long' }, { status: 400 })
     }
   } catch {
-    return Response.json({ error: 'Invalid request body' }, { status: 400 })
+    return Response.json({ error: 'We could not read that message. Please try again.', code: 'invalid_request' }, { status: 400 })
   }
 
   const conversation = await loadOwnedConversation(supabase, user.id, conversationId)
   if (!conversation) {
-    return Response.json({ error: 'Conversation not found' }, { status: 404 })
+    return Response.json({ error: 'We could not find this chat. Close it and open it again from the analysis.', code: 'conversation_not_found' }, { status: 404 })
   }
   if (conversation.status !== 'active') {
-    return Response.json({ error: 'Conversation is closed' }, { status: 409 })
+    return Response.json({ error: 'This chat has been closed. Start a new chat to keep talking.', code: 'conversation_closed' }, { status: 409 })
   }
 
 
-  if (isExplicitScopedApprovalRequest(content)) {
+  const decision = explicitRecommendationDecision(content)
+  if (decision) {
     try {
-      const receipt = await approveScopedRecommendation({ supabase, conversationId })
+      const receipt = await decideScopedRecommendation({ supabase, conversationId, decision })
       await createMessage(supabase, user.id, conversationId, {
         role: 'user',
         content,
@@ -194,9 +201,7 @@ export async function POST(
       })
       await createMessage(supabase, user.id, conversationId, {
         role: 'assistant',
-        content: receipt.alreadyAccepted
-          ? `${receipt.label} was already approved from this scoped conversation.`
-          : `${receipt.label} has been approved from this scoped conversation.`,
+        content: decisionMessage(receipt),
         citations: [],
         status: 'complete',
         ttft_ms: null,
@@ -209,18 +214,12 @@ export async function POST(
             controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
           }
           send('conversation', { conversationId })
-          send('recommendation-approved', {
-            recommendationId: receipt.recommendationId,
-            label: receipt.label,
-            alreadyAccepted: receipt.alreadyAccepted,
-            actionId: receipt.actionId,
-            revisionNumber: receipt.revisionNumber,
-          })
+          send('recommendation-decided', { ...receipt })
           send('done', {
             status: 'complete',
             ttftMs: null,
             citationIds: [],
-            action: 'approve_recommendation',
+            action: decision === 'approved' ? 'approve_recommendation' : 'reject_recommendation',
           })
           controller.close()
         },
@@ -235,16 +234,16 @@ export async function POST(
         },
       })
     } catch (error) {
-      return Response.json({
-        error: error instanceof Error ? error.message : 'Unable to approve this recommendation',
-      }, { status: 409 })
+      console.error('Scoped recommendation decision failed', { conversationId, decision, error })
+      const failure = talkActionFailure(error, 'decision')
+      return Response.json({ error: failure.message, code: failure.code }, { status: failure.status })
     }
   }
   let provider
   try {
     provider = createConfiguredChatProvider()
   } catch {
-    return Response.json({ error: 'Open-model chat is not configured' }, { status: 503 })
+    return Response.json({ error: 'Chat is not available right now. Please try again in a few minutes.', code: 'chat_unavailable' }, { status: 503 })
   }
 
   const previousMessages = await listConversationMessages(supabase, user.id, conversationId)
@@ -256,6 +255,13 @@ export async function POST(
     ttft_ms: null,
   })
   const turnId = crypto.randomUUID()
+  // The frozen snapshot keeps only the first part of a long procedure. A model that may
+  // propose exact-match edits needs the whole saved text.
+  const fullProcedureText = isProtocolTruncated(conversation.context_snapshot) && canProposeProcedureEdit(conversation.scope)
+    ? await loadOwnedAnalysis(supabase, user.id, conversation.analysis_id)
+      .then(analysis => (analysis ? normalizeProcedureText(analysis.protocol_text) : undefined))
+      .catch(() => undefined)
+    : undefined
 
   const encoder = new TextEncoder()
   const abortController = new AbortController()
@@ -293,7 +299,12 @@ export async function POST(
             context: conversation.context_snapshot,
             messages,
             signal: abortController.signal,
-            executeTool: (call, signal) => executeScopedTool(conversation.context_snapshot, call, signal),
+            fullProcedureText,
+            executeTool: (call, signal) => (
+              call.name === 'propose_procedure_edit'
+                ? executeProposalTool({ supabase, userId: user.id, conversation, call })
+                : executeScopedTool(conversation.context_snapshot, call, signal)
+            ),
             onToolRun: async input => {
               try {
                 await createToolRun(createAdminClient(), user.id, {
@@ -327,7 +338,7 @@ export async function POST(
           status = abortController.signal.aborted ? 'cancelled' : 'failed'
           console.error('Chat response failed', error)
           send('error', {
-            error: status === 'cancelled' ? 'Response cancelled' : 'Chat response failed',
+            error: status === 'cancelled' ? 'Response cancelled' : 'The reply did not finish. Please try again.',
           })
         } finally {
           const snapshotCitationIds = conversation.context_snapshot.citations
