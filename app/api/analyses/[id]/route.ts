@@ -34,6 +34,7 @@ export async function GET(
     analysis: data.analysis_result,
     impactDelta: data.impact_delta,
     revisionNumber: data.revision_number,
+    scisureReview: Boolean(data.source_snapshot_hash),
     equivalencies,
   }, { headers: { 'Cache-Control': 'private, no-store' } })
 }

@@ -59,3 +59,8 @@
 - Keep recommendation decisions above the scorecard and render the `ProcedureWorkbench` immediately below it on both new and persisted analysis routes.
 - The workbench always renders, including before any recommendation has been decided. It applies accepted changes only and states that pending/rejected items remain as written.
 - Provide visible `Copy Procedure` and `Print Procedure` controls. Print hides the scorecard and decisions, leaving the procedure and its analysis heading.
+
+## Saved SciSure review (read-only recovery view)
+- `/analyze/[id]/scisure` renders `SavedWorkspace` from the owner-authenticated `GET /api/integrations/scisure/analyses/[id]/workspace`. It is linked from the analysis header only when the analysis payload has `scisureReview`.
+- Findings use the same cream card treatment as the score card (`#FAFAF8`, 1px `#D6D0C4`), mono kicker in gold, and a decision label in forest (Accepted), stone (Rejected) or amber (Not reviewed).
+- The view is read-only: it states that decisions and writeback need the live review popup, and never describes a non-eligible finding as changing the procedure. 401 redirects to login, 404 shows an honest "not available" message, other failures show a retryable error; none are conflated.

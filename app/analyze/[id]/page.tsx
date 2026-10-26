@@ -24,6 +24,8 @@ export interface AnalysisData {
   impactDelta: ImpactDelta
   equivalencies: Equivalency[]
   revisionNumber: number
+  /** True when a private SciSure review was saved for this analysis. */
+  scisureReview?: boolean
 }
 
 export function reconcilePersistedRevision(
@@ -183,6 +185,13 @@ export default function AnalysisByIdPage() {
           >
             {quietGrade}
           </p>
+          {data.scisureReview && (
+            <p className="mt-2 mb-0 text-sm">
+              <Link href={`/analyze/${id}/scisure`} className="underline" style={{ color: '#1C3822' }}>
+                Saved SciSure review
+              </Link>
+            </p>
+          )}
           {persistError && (
             <p className="text-sm mt-2" style={{ color: '#B45309' }}>
               {persistError}

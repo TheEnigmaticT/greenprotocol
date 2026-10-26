@@ -22,6 +22,11 @@ describe('private saved SciSure analysis / Evidence Atlas access', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store')
     expect(mocks.eq).toHaveBeenCalledWith('user_id', 'owner-1')
   })
+  it('flags a saved SciSure review only when the analysis carries a source snapshot hash', async () => {
+    expect(await (await read()).json()).toMatchObject({ scisureReview: false })
+    mocks.single.mockResolvedValue({ data: { id: 'analysis-1', protocol_text: 'p', analysis_result: { recommendations: [] }, impact_delta: null, revision_number: 1, source_snapshot_hash: 'a'.repeat(64) }, error: null })
+    expect(await (await read()).json()).toMatchObject({ scisureReview: true })
+  })
   it('does not expose saved source to an unsigned visitor', async () => {
     mocks.userId = null
     expect((await read()).status).toBe(401)
