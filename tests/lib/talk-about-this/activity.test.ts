@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { applyRecommendationApprovedEvent, ApprovalReceiptCard, ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, approvalFromEvent, evidenceFromEvent, focusMessageComposer, groupVerificationNotes, handleComposerKeyDown, isNewConversationCommand, parsePersistedRecommendationApprovalReceipt, parseRecommendationApprovedEvent, verificationNoteFromEvent } from '@/components/TalkAboutThis'
+import { ClosedConversationError, DiscussionScopeInstruction, EvidenceReceiptCard, activityForEvent, evidenceFromEvent, focusMessageComposer, groupVerificationNotes, handleComposerKeyDown, isNewConversationCommand, verificationNoteFromEvent } from '@/components/TalkAboutThis'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import { EvidenceAtlasTalkControl } from '@/components/AnalysisResults'
 import { activityData } from '@/lib/talk-about-this/agent'
@@ -244,11 +244,15 @@ describe('closed conversation-open errors', () => {
 })
 
 describe('scope instructions and Evidence Atlas controls', () => {
-  it('shows explicit approval guidance only for a stable recommendation scope', () => {
-    expect(renderToStaticMarkup(createElement(DiscussionScopeInstruction, { scope: { kind: 'recommendation', recommendationId: 'rec-1' } })))
-      .toContain('approve this')
-    expect(renderToStaticMarkup(createElement(DiscussionScopeInstruction, { scope: { kind: 'principle', principleNumber: 1 } })))
-      .toContain('does not change the analysis')
+  it('offers approve/reject guidance only for a stable recommendation scope', () => {
+    const stable = renderToStaticMarkup(createElement(DiscussionScopeInstruction, { scope: { kind: 'recommendation', recommendationId: 'rec-1' } }))
+    expect(stable).toContain('approve or reject this recommendation')
+    const readOnly = renderToStaticMarkup(createElement(DiscussionScopeInstruction, { scope: { kind: 'recommendation', recommendationIndex: 0, readOnly: true } }))
+    expect(readOnly).toContain('read-only')
+    expect(readOnly).not.toContain('approve')
+    const principle = renderToStaticMarkup(createElement(DiscussionScopeInstruction, { scope: { kind: 'principle', principleNumber: 1 } }))
+    expect(principle).toContain('nothing changes until you press Apply')
+    expect(principle).not.toContain('approve')
   })
 
   it('labels the Atlas control as P1 and derives sourced state from P1 recommendation citations', () => {
@@ -367,138 +371,3 @@ describe('screening prompt copy', () => {
   })
 })
 
-describe('parseRecommendationApprovedEvent', () => {
-  const scope: TalkAboutScope = { kind: 'recommendation', recommendationId: 'rec-1' }
-
-  it('accepts a complete receipt for the current stable recommendation scope', () => {
-    expect(parseRecommendationApprovedEvent(scope, {
-      recommendationId: 'rec-1',
-      label: 'Replace dichloromethane with ethyl acetate',
-      alreadyAccepted: false,
-      actionId: 'action-1',
-      revisionNumber: 4,
-    })).toEqual({
-      recommendationId: 'rec-1',
-      label: 'Replace dichloromethane with ethyl acetate',
-      alreadyAccepted: false,
-      actionId: 'action-1',
-      revisionNumber: 4,
-    })
-  })
-
-  it.each([
-    [{ kind: 'principle', principleNumber: 5 } as TalkAboutScope, 'rec-1'],
-    [{ kind: 'recommendation', recommendationId: 'other-rec' } as TalkAboutScope, 'rec-1'],
-    [scope, 'other-rec'],
-  ])('ignores approval events outside the current stable recommendation scope', (eventScope, recommendationId) => {
-    expect(parseRecommendationApprovedEvent(eventScope, {
-      recommendationId,
-      label: 'Replace dichloromethane with ethyl acetate',
-      alreadyAccepted: false,
-      actionId: 'action-1',
-      revisionNumber: 4,
-    })).toBeNull()
-  })
-
-  it.each([
-    { recommendationId: 'rec-1', label: '', alreadyAccepted: false, actionId: 'action-1', revisionNumber: 4 },
-    { recommendationId: 'rec-1', label: 'Replace dichloromethane with ethyl acetate', alreadyAccepted: 'false', actionId: 'action-1', revisionNumber: 4 },
-    { recommendationId: 'rec-1', label: 'Replace dichloromethane with ethyl acetate', alreadyAccepted: false, actionId: '', revisionNumber: 4 },
-    { recommendationId: 'rec-1', label: 'Replace dichloromethane with ethyl acetate', alreadyAccepted: false, actionId: 'action-1', revisionNumber: 4.5 },
-  ])('ignores malformed approval receipts', data => {
-    expect(parseRecommendationApprovedEvent(scope, data)).toBeNull()
-  })
-})
-
-describe('approvalFromEvent', () => {
-  const scope: TalkAboutScope = { kind: 'recommendation', recommendationId: 'rec-1' }
-
-  it('extracts a matching stable-scope approval identity', () => {
-    expect(approvalFromEvent({
-      recommendationId: 'rec-1',
-      label: 'Step 1: DMF → EtOAc',
-      revisionNumber: 3,
-    }, scope)).toEqual({
-      recommendationId: 'rec-1',
-      label: 'Step 1: DMF → EtOAc',
-      revisionNumber: 3,
-    })
-  })
-
-  it('ignores a mismatched stable-scope approval identity', () => {
-    expect(approvalFromEvent({
-      recommendationId: 'rec-2',
-      revisionNumber: 3,
-    }, scope)).toBeNull()
-  })
-})
-
-describe('parsePersistedRecommendationApprovalReceipt', () => {
-  it('hydrates a durable matching receipt with its persisted completion time', () => {
-    expect(parsePersistedRecommendationApprovalReceipt({ kind: 'recommendation', recommendationId: 'rec-1' }, {
-      actionId: 'action-persisted',
-      recommendationId: 'rec-1',
-      label: 'Use ethyl acetate',
-      alreadyAccepted: true,
-      revisionNumber: 9,
-      receivedAt: '2026-08-12T00:00:00.000Z',
-    })).toEqual({
-      actionId: 'action-persisted',
-      recommendationId: 'rec-1',
-      label: 'Use ethyl acetate',
-      alreadyAccepted: true,
-      revisionNumber: 9,
-      receivedAt: '2026-08-12T00:00:00.000Z',
-    })
-  })
-})
-
-describe('applyRecommendationApprovedEvent', () => {
-  const scope: TalkAboutScope = { kind: 'recommendation', recommendationId: 'rec-1' }
-  const receipt = {
-    actionId: 'action-persisted',
-    recommendationId: 'rec-1',
-    label: 'Use ethyl acetate',
-    alreadyAccepted: true,
-    revisionNumber: 9,
-  }
-
-  it('restores a hydrated receipt when a repeat approved phrase returns the same action ID without notifying the parent again', () => {
-    const result = applyRecommendationApprovedEvent(
-      scope,
-      receipt,
-      new Set([receipt.actionId]),
-    )
-
-    expect(result.receipt).toEqual(receipt)
-    expect(result.shouldNotifyParent).toBe(false)
-  })
-
-  it('keeps the display receipt absent and rejects a mismatched event', () => {
-    const result = applyRecommendationApprovedEvent(scope, {
-      ...receipt,
-      recommendationId: 'other-rec',
-    }, new Set([receipt.actionId]))
-
-    expect(result.receipt).toBeNull()
-    expect(result.shouldNotifyParent).toBe(false)
-  })
-})
-
-describe('ApprovalReceiptCard', () => {
-  it('renders a rehydrated receipt identity and revision', () => {
-    const markup = renderToStaticMarkup(createElement(ApprovalReceiptCard, {
-      receipt: {
-        actionId: 'action-persisted',
-        recommendationId: 'rec-1',
-        label: 'Use ethyl acetate',
-        alreadyAccepted: true,
-        revisionNumber: 9,
-      },
-      receivedAt: '2026-08-12T00:00:00.000Z',
-    }))
-
-    expect(markup).toContain('Receipt action-persisted')
-    expect(markup).toContain('revision 9')
-  })
-})

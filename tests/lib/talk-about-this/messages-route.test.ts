@@ -13,7 +13,9 @@ const repository = vi.hoisted(() => ({
   listConversationMessages: vi.fn(),
   loadOwnedAnalysis: vi.fn(),
   loadOwnedConversation: vi.fn(),
-  loadOwnedRecommendationApprovalReceipt: vi.fn(),
+  loadOwnedRecommendationDecisionReceipt: vi.fn(),
+  listPendingProcedureProposals: vi.fn(),
+  createProcedureProposal: vi.fn(),
 }))
 const runScopedToolChat = vi.hoisted(() => vi.fn())
 const createClient = vi.hoisted(() => vi.fn())
@@ -74,7 +76,8 @@ describe('open scoped conversation route', () => {
       createdAt: '2026-08-12T00:00:00.000Z',
     }])
     repository.evidenceReceiptsForUi.mockReturnValue([])
-    repository.loadOwnedRecommendationApprovalReceipt.mockResolvedValue(null)
+    repository.loadOwnedRecommendationDecisionReceipt.mockResolvedValue(null)
+    repository.listPendingProcedureProposals.mockResolvedValue([])
   }
 
   it('resumes an owned matching conversation with its persisted history', async () => {
@@ -151,6 +154,33 @@ describe('open scoped conversation route', () => {
       messages: [],
       evidenceReceipts: [],
     })
+  })
+
+  it('restores the latest decision receipt and any pending proposal when a chat is reopened', async () => {
+    vi.clearAllMocks()
+    configureAuthenticatedRequest()
+    repository.findOwnedConversationByContextHash.mockResolvedValue(existingConversation)
+    const decisionReceipt = {
+      actionId: 'action-3',
+      recommendationId: 'rec-1',
+      decision: 'rejected',
+      label: 'Use ethyl acetate',
+      alreadyDecided: false,
+      revisionNumber: 4,
+      receivedAt: '2026-08-12T00:00:00.000Z',
+    }
+    const proposal = { proposalId: 'p-1', summary: 'Swap', diff: '@@ -1 +1 @@\n-a\n+b', proposedText: 'edited procedure text', baseRevisionNumber: 4 }
+    repository.loadOwnedRecommendationDecisionReceipt.mockResolvedValue(decisionReceipt)
+    repository.listPendingProcedureProposals.mockResolvedValue([proposal])
+
+    const response = await POST(new Request('http://localhost/api/talk-about-this', {
+      method: 'POST',
+      body: JSON.stringify({ analysisId: 'analysis-1', scope }),
+    }))
+
+    expect(await response.json()).toMatchObject({ decisionReceipt, proposals: [proposal] })
+    expect(repository.loadOwnedRecommendationDecisionReceipt).toHaveBeenCalledWith(expect.anything(), 'user-1', 'existing-conversation')
+    expect(repository.listPendingProcedureProposals).toHaveBeenCalledWith(expect.anything(), 'user-1', 'existing-conversation')
   })
 
   it('rejects a non-boolean newConversation value', async () => {
@@ -246,8 +276,10 @@ function parseSse(body: string): Array<{ event: string, data: Record<string, unk
 describe('scoped conversation message route diagnostics', () => {
   const conversation = {
     id: 'conversation-1',
+    analysis_id: 'analysis-1',
     status: 'active',
-    context_snapshot: { citations: [] },
+    scope: { kind: 'principle', principleNumber: 1 },
+    context_snapshot: { citations: [], protocolText: 'Use DMF.', scope: { kind: 'principle', principleNumber: 1 } },
   }
 
   function configureMessageRoute() {

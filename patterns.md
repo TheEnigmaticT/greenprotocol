@@ -71,3 +71,16 @@
 - Draft preparation stays disabled until every finding has a decision, and any new decision discards the prepared draft and its confirmation.
 - Writeback is create-only. The explicit checkbox gates the button, the status line shows waiting, saved, uncertain, conflict, unsupported or failed, and only a `failed` (nothing created) result allows another attempt. A saved or uncertain record freezes the review.
 - Ask and the Evidence Atlas render only for signed-in (registered) connections.
+
+## Human-readable errors
+- Every user-visible error is a `HumanError` from `lib/errors/humanize.ts` (`humanizeError` / `toHumanError`): a bold title over a muted message, `role="alert"`, 44px action targets. API routes return a stable `code` plus safe text; raw detail stays server-side. Never show env var names, vendor/model names, HTTP codes, tool names or database text.
+- Orange notice card (`ChemistryDataNotice`): a lead sentence, "Step N · name · role" items grouped by reason, a "What to do:" line, then a "Chat about this" button. The chat opens with a seeded first message and a `chemistry-clarification` scope.
+- Textarea counter: right-aligned mono text, muted, amber at 90% of the limit, red when over (`lib/protocol-limits.ts`).
+
+## Chat actions (decisions and procedure proposals)
+- `DecisionActions`: two 44px chips under the chat composer, forest-filled "Approve this" and white outlined "Reject this", only for a recommendation scope with an id that is not read-only. They send the same exact phrases the server matches, so the model is never involved in a decision.
+- `ProposalCard`: gold-bordered cream card (`#FFFDF5` / `#ECB815`) with the server-computed diff (green add rows, red remove rows, grey hunk headers). Buttons: "Apply and re-run analysis" (creates a NEW analysis and uses one run; the original is untouched) and "Cancel". Pages wire `onProcedureProposalApply` to `rerunFromProposal`.
+
+## PDF import
+- `PdfImportButton` sits beside the example buttons in the paste field. Extraction runs in the browser (`unpdf`, loaded on demand), nothing is uploaded. The text lands in the editable textarea with a `PdfImportNotice` banner (filename, pages, warnings). Analyze stays disabled until the scientist ticks "I checked the extracted text".
+- Limits: 10 MB, 30 pages, 50,000 characters (refused, never truncated). Scanned PDFs get a plain "paste the text instead" message.

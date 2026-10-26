@@ -4,7 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
-import type { RecommendationApprovalReceipt } from '@/components/TalkAboutThis'
+import type { RecommendationDecisionReceipt } from '@/lib/talk-about-this/decisions'
+import { applyRecommendationDecision } from '@/lib/talk-about-this/decisions'
+import type { ProcedureProposal } from '@/lib/talk-about-this/procedure-proposal'
+import { humanizeError, toHumanError, type HumanError } from '@/lib/errors/humanize'
+import { rerunFromProposal } from '@/lib/rerun-from-proposal'
 import { calculateOriginalTotals } from '@/lib/calculations'
 import { projectScores } from '@/lib/projected-scores'
 import ImpactScoreboard from '@/components/ImpactScoreboard'
@@ -36,27 +40,23 @@ export function reconcilePersistedRevision(
   return { ...current, revisionNumber }
 }
 
-export function applyRecommendationApproval(
+export function applyDecisionReceipt(
   current: AnalysisData | null,
-  receipt: RecommendationApprovalReceipt,
+  receipt: RecommendationDecisionReceipt,
 ): AnalysisData | null {
-  if (!current) return current
-  const recommendationIndex = current.analysis.recommendations.findIndex(rec => rec.id === receipt.recommendationId)
-  if (recommendationIndex === -1) return current
-  const recommendations = [...current.analysis.recommendations]
-  recommendations[recommendationIndex] = { ...recommendations[recommendationIndex], isAccepted: true }
+  if (!current || !current.analysis.recommendations.some(rec => rec.id === receipt.recommendationId)) return current
   return {
     ...current,
-    analysis: { ...current.analysis, recommendations },
+    analysis: applyRecommendationDecision(current.analysis, receipt),
     revisionNumber: Math.max(current.revisionNumber, receipt.revisionNumber),
   }
 }
 
 export default function AnalysisByIdPage() {
   const [data, setData] = useState<AnalysisData | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<HumanError | null>(null)
   const [isRegrading, setIsRegrading] = useState(false)
-  const [regradeError, setRegradeError] = useState<string | null>(null)
+  const [regradeError, setRegradeError] = useState<HumanError | null>(null)
   const [persistError, setPersistError] = useState<string | null>(null)
   const router = useRouter()
   const params = useParams()
@@ -78,7 +78,7 @@ export default function AnalysisByIdPage() {
           }),
         })
         if (res.status === 409) {
-          setPersistError('This analysis changed elsewhere. Reload before making further changes.')
+          setPersistError(humanizeError({ code: 'save_conflict' }).message)
           return
         }
         if (!res.ok) {
@@ -91,7 +91,7 @@ export default function AnalysisByIdPage() {
         setPersistError(null)
       } catch (err) {
         console.error('Failed to persist accepted recommendations:', err)
-        setPersistError('Failed to save your recommendation decisions. Refresh carefully before leaving this page.')
+        setPersistError(humanizeError({ code: 'save_failed' }).message)
       }
     }, 400)
   }, [])
@@ -104,7 +104,7 @@ export default function AnalysisByIdPage() {
         return
       }
       if (!res.ok) {
-        setError('Analysis not found')
+        setError(humanizeError({ code: res.status === 404 ? 'analysis_not_found' : 'analysis_load_failed' }))
         return
       }
       const json = await res.json()
@@ -117,7 +117,8 @@ export default function AnalysisByIdPage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FAF8F3' }}>
         <div className="text-center space-y-4">
-          <p className="text-lg" style={{ color: '#EF4444' }}>{error}</p>
+          <p className="text-lg font-semibold" style={{ color: '#B91C1C' }}>{error.title}</p>
+          <p className="text-sm max-w-md mx-auto" style={{ color: '#44403C' }}>{error.message}</p>
           <Link href="/dashboard" className="text-sm underline" style={{ color: '#1C3822' }}>
             Back to Dashboard
           </Link>
@@ -144,9 +145,12 @@ export default function AnalysisByIdPage() {
     persistToApi(id, updatedAnalysis, expectedRevisionNumber)
   }
 
-  const handleRecommendationApproved = (receipt: RecommendationApprovalReceipt) => {
-    setData(current => applyRecommendationApproval(current, receipt))
+  const handleRecommendationDecided = (receipt: RecommendationDecisionReceipt) => {
+    setData(current => applyDecisionReceipt(current, receipt))
   }
+
+  const handleProcedureProposalApply = (proposal: ProcedureProposal) =>
+    rerunFromProposal({ proposedText: proposal.proposedText, navigate: href => router.push(href), storage: sessionStorage })
 
   const originalTotals = calculateOriginalTotals(data.analysis)
   const projectedScores = projectScores(data.analysis)
@@ -160,7 +164,7 @@ export default function AnalysisByIdPage() {
       handleUpdateAnalysis(applyDeterministicScores(data.analysis, newScores))
     } catch (err) {
       console.error('Re-grade failed:', err)
-      setRegradeError('Unable to re-score this analysis. Please try again.')
+      setRegradeError(toHumanError(err, 'scoring_failed'))
     } finally {
       setIsRegrading(false)
     }
@@ -199,7 +203,7 @@ export default function AnalysisByIdPage() {
           )}
         </header>
 
-        <ChemistryDataNotice status={data.analysis.chemistryDataStatus} />
+        <ChemistryDataNotice status={data.analysis.chemistryDataStatus} analysisId={id} onProcedureProposalApply={handleProcedureProposalApply} />
 
         <section>
           <FinalizedProtocol
@@ -207,7 +211,8 @@ export default function AnalysisByIdPage() {
             originalProtocol={data.protocolText}
             onUpdateAnalysis={handleUpdateAnalysis}
             analysisId={id}
-            onRecommendationApproved={handleRecommendationApproved}
+            onRecommendationDecided={handleRecommendationDecided}
+            onProcedureProposalApply={handleProcedureProposalApply}
             showProcedure={false}
           />
         </section>
@@ -217,7 +222,7 @@ export default function AnalysisByIdPage() {
             <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} analysisId={id} />
           </section>
         ) : data.analysis.chemistryDataStatus?.deterministicScoringAvailable === false ? (
-          <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} />
+          <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} analysisId={id} onProcedureProposalApply={handleProcedureProposalApply} />
         ) : null}
 
         <section>

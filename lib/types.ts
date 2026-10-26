@@ -243,7 +243,25 @@ export interface ChemistryDataStatus {
   deterministicScoringAvailable: boolean
   unresolvedChemicals: string[]
   indefiniteChemicals?: string[]
+  /**
+   * Why each material could not be scored, with its step and role. Absent on
+   * analyses saved before this field existed; those fall back to the name lists.
+   */
+  unresolvedDetails?: UnresolvedMaterialDetail[]
   message: string
+}
+
+export type UnresolvedMaterialReason =
+  | 'not_recognized'    // reference lookup found no chemical with this name
+  | 'reference_missing' // lookup finished but no usable reference record was returned
+  | 'provider_error'    // lookup failed or is queued for retry; usually temporary
+  | 'indefinite'        // mixture or undefined composition; cannot be one chemical
+
+export interface UnresolvedMaterialDetail {
+  name: string
+  reason: UnresolvedMaterialReason
+  stepNumber?: number
+  role?: string
 }
 
 // ─── v0.6: Waste Analysis & Citability Types ─────────────────────

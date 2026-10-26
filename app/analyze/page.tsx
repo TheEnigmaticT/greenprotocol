@@ -3,6 +3,10 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnalysisResult, ImpactDelta, Equivalency } from '@/lib/types'
+import { applyRecommendationDecision, type RecommendationDecisionReceipt } from '@/lib/talk-about-this/decisions'
+import type { ProcedureProposal } from '@/lib/talk-about-this/procedure-proposal'
+import { humanizeError, toHumanError, type HumanError } from '@/lib/errors/humanize'
+import { rerunFromProposal } from '@/lib/rerun-from-proposal'
 import { calculateOriginalTotals } from '@/lib/calculations'
 import { projectScores } from '@/lib/projected-scores'
 import ImpactScoreboard from '@/components/ImpactScoreboard'
@@ -40,7 +44,7 @@ function AnalyzePageContent() {
   const [data, setData] = useState<StoredData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [persistError, setPersistError] = useState<string | null>(null)
-  const [regradeError, setRegradeError] = useState<string | null>(null)
+  const [regradeError, setRegradeError] = useState<HumanError | null>(null)
 
   function handleNewAnalysis() {
     const hasAccepted = data?.analysis.recommendations.some(r => r.isAccepted)
@@ -96,7 +100,7 @@ function AnalyzePageContent() {
           }),
         })
         if (res.status === 409) {
-          setPersistError('This analysis was updated elsewhere. Reload the page before saving more changes.')
+          setPersistError(humanizeError({ code: 'save_conflict' }).message)
           return
         }
         if (!res.ok) {
@@ -109,7 +113,7 @@ function AnalyzePageContent() {
         setPersistError(null)
       } catch (err) {
         console.error('Failed to persist accepted recommendations:', err)
-        setPersistError('Failed to save your recommendation decisions. Refresh carefully before leaving this page.')
+        setPersistError(humanizeError({ code: 'save_failed' }).message)
       }
     }, 400)
   }, [])
@@ -125,6 +129,20 @@ function AnalyzePageContent() {
       persistToApi(data.id, updatedAnalysis)
     }
   }, [data, persistToApi])
+
+  // A decision made in chat is already saved on the server, which moved the revision: keep the cursor in step so the next save is not rejected.
+  const handleRecommendationDecided = useCallback((receipt: RecommendationDecisionReceipt) => {
+    revisionRef.current = Math.max(revisionRef.current, receipt.revisionNumber)
+    if (!data) return
+    const newData = { ...data, analysis: applyRecommendationDecision(data.analysis, receipt) }
+    setData(newData)
+    sessionStorage.setItem('gpc_analysis', JSON.stringify(newData))
+  }, [data])
+
+  const handleProcedureProposalApply = useCallback(
+    (proposal: ProcedureProposal) => rerunFromProposal({ proposedText: proposal.proposedText, navigate: href => router.push(href), storage: sessionStorage }),
+    [router],
+  )
 
   const originalTotals = useMemo(
     () => data ? calculateOriginalTotals(data.analysis) : null,
@@ -147,7 +165,7 @@ function AnalyzePageContent() {
       handleUpdateAnalysis(applyDeterministicScores(data.analysis, newScores))
     } catch (err) {
       console.error('Re-grade failed:', err)
-      setRegradeError('Unable to re-score this analysis. Please try again.')
+      setRegradeError(toHumanError(err, 'scoring_failed'))
     } finally {
       setIsRegrading(false)
     }
@@ -208,7 +226,7 @@ function AnalyzePageContent() {
           )}
         </header>
 
-        <ChemistryDataNotice status={data.analysis.chemistryDataStatus} />
+        <ChemistryDataNotice status={data.analysis.chemistryDataStatus} analysisId={data.id} onProcedureProposalApply={handleProcedureProposalApply} />
 
         <section>
           <FinalizedProtocol
@@ -216,6 +234,8 @@ function AnalyzePageContent() {
             originalProtocol={data.protocolText}
             onUpdateAnalysis={handleUpdateAnalysis}
             analysisId={data.id}
+            onRecommendationDecided={handleRecommendationDecided}
+            onProcedureProposalApply={handleProcedureProposalApply}
             showProcedure={false}
           />
         </section>
@@ -225,7 +245,7 @@ function AnalyzePageContent() {
             <ScoreCard scores={data.analysis.deterministicScores} projectedScores={projectedScores} onRegrade={handleRegrade} isRegrading={isRegrading} analysisId={data.id} />
           </section>
         ) : data.analysis.chemistryDataStatus?.deterministicScoringAvailable === false ? (
-          <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} />
+          <DeterministicScoreRecovery onRetry={handleRegrade} isRetrying={isRegrading} error={regradeError} analysisId={data.id} onProcedureProposalApply={handleProcedureProposalApply} />
         ) : null}
 
         <section>

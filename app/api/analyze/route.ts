@@ -11,10 +11,14 @@ import { notifyAnalysis } from '@/lib/operational-alerts'
 import { isCandidateEngineSelected } from '@/lib/model-runtime'
 import { hasUnlimitedAnalyses } from '@/lib/analysis-entitlements'
 import Anthropic from '@anthropic-ai/sdk'
+import { AnalysisError, classifyAnalysisFailure } from '@/lib/errors/classify'
+import { humanErrorPayload } from '@/lib/errors/humanize'
+import { MAX_PROTOCOL_CHARS, MIN_PROTOCOL_CHARS } from '@/lib/protocol-limits'
 
 export const maxDuration = 300
 
 const DEFAULT_RUN_LIMIT = parseInt(process.env.ANALYSIS_RUN_LIMIT || '10', 10)
+const RUN_LIMIT = Number.isSafeInteger(DEFAULT_RUN_LIMIT) && DEFAULT_RUN_LIMIT > 0 ? DEFAULT_RUN_LIMIT : 10
 
 function isSentinelRequest(request: Request): boolean {
   const key = process.env.SENTINEL_ANALYSIS_KEY
@@ -42,7 +46,7 @@ export async function POST(request: Request) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json(humanErrorPayload('unauthorized'), { status: 401 })
   }
 
   // The quota reservation is made atomically immediately before creating the run.
@@ -53,15 +57,26 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     protocolText = body.protocolText
-    if (!protocolText || typeof protocolText !== 'string' || protocolText.trim().length < 20) {
-      return NextResponse.json({ error: 'Protocol text is required (minimum 20 characters)' }, { status: 400 })
-    }
   } catch {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    return NextResponse.json(humanErrorPayload('invalid_request'), { status: 400 })
+  }
+  if (typeof protocolText !== 'string') {
+    return NextResponse.json(humanErrorPayload('invalid_request'), { status: 400 })
+  }
+  if (protocolText.trim().length < MIN_PROTOCOL_CHARS) {
+    return NextResponse.json(
+      humanErrorPayload('protocol_too_short', { minChars: MIN_PROTOCOL_CHARS, actualChars: protocolText.trim().length }),
+      { status: 400 },
+    )
+  }
+  if (protocolText.length > MAX_PROTOCOL_CHARS) {
+    return NextResponse.json(
+      humanErrorPayload('protocol_too_long', { maxChars: MAX_PROTOCOL_CHARS, actualChars: protocolText.length }),
+      { status: 400 },
+    )
   }
 
   const protocolFingerprintValue = await protocolFingerprint(protocolText)
-  const candidateEngineSelected = isCandidateEngineSelected()
   const protocolInputTokens = await countProtocolTokens(protocolText)
   const runSource = isSentinelRequest(request) ? 'sentinel' : 'human'
   const unlimited = hasUnlimitedAnalyses(user.email)
@@ -74,17 +89,23 @@ export async function POST(request: Request) {
   } else {
     const { data, error } = await createAdminClient().rpc('gpc_reserve_registered_analysis_run' as never, {
       p_user_id: user.id,
-      p_limit: Number.isSafeInteger(DEFAULT_RUN_LIMIT) && DEFAULT_RUN_LIMIT > 0 ? DEFAULT_RUN_LIMIT : 10,
+      p_limit: RUN_LIMIT,
       p_run_source: runSource,
     } as never)
     if (error) {
-      return NextResponse.json({ error: error.message.includes('quota exhausted') ? 'run_limit_reached' : 'Failed to reserve analysis capacity', message: error.message }, { status: error.message.includes('quota exhausted') ? 429 : 500 })
+      console.error('[analyze] analysis capacity reservation failed:', error.message)
+      const exhausted = error.message.includes('quota exhausted')
+      return NextResponse.json(
+        exhausted ? humanErrorPayload('run_limit_reached', { limit: RUN_LIMIT }) : humanErrorPayload('quota_unavailable'),
+        { status: exhausted ? 429 : 500 },
+      )
     }
     analysisRun = typeof data === 'string' ? { id: data } : null
   }
 
   if (analysisRunError || !analysisRun?.id) {
-    return NextResponse.json({ error: 'Failed to create analysis audit run' }, { status: 500 })
+    console.error('[analyze] analysis audit run was not created:', analysisRunError?.message)
+    return NextResponse.json(humanErrorPayload('quota_unavailable'), { status: 500 })
   }
   // Token accounting is metadata on the same atomically-reserved run.
   if (!unlimited && protocolInputTokens !== null) {
@@ -186,7 +207,7 @@ export async function POST(request: Request) {
       }).select('id').single()
 
       if (insertError || !insertedRow?.id) {
-        throw new Error(insertError?.message || 'Failed to persist analysis')
+        throw new AnalysisError('persist_failed', insertError?.message || 'Failed to persist analysis')
       }
       analysisId = insertedRow.id
 
@@ -201,7 +222,7 @@ export async function POST(request: Request) {
         .eq('user_id', user.id)
 
       if (analysisRunUpdateError) {
-        throw new Error(`Failed to complete analysis audit run: ${analysisRunUpdateError.message}`)
+        throw new AnalysisError('persist_failed', `Failed to complete analysis audit run: ${analysisRunUpdateError.message}`)
       }
 
       analysisRunCompleted = true
@@ -218,36 +239,12 @@ export async function POST(request: Request) {
     } catch (err: unknown) {
       console.error(`[pipeline ${elapsed()}s] CAUGHT ERROR:`, err)
 
-      if (err instanceof NotChemistryError) {
-        pipelineErrors.push(err.message)
-        send({ type: 'error', error: err.message, code: 'not_chemistry' })
-        return
+      // Raw detail stays here (logs, operational alerts); the browser only gets a code and plain-language copy.
+      const code = err instanceof NotChemistryError ? 'not_chemistry' : classifyAnalysisFailure(err)
+      if (code !== 'provider_rate_limit') {
+        pipelineErrors.push(err instanceof Error ? err.message : 'Unknown error')
       }
-
-      const error = err as { status?: number; message?: string; error?: { message?: string } }
-
-      if (error.status === 401 || error.message?.includes('authentication') || error.message?.includes('API key')) {
-        const message = candidateEngineSelected
-          ? 'Selected model API key is missing or invalid. Check the selected candidate model configuration.'
-          : 'Anthropic API key is missing or invalid. Check ANTHROPIC_API_KEY environment variable.'
-        pipelineErrors.push(message)
-        send({ type: 'error', error: message })
-        return
-      }
-
-      if (error.status === 429) {
-        send({
-          type: 'error',
-          error: candidateEngineSelected
-            ? 'Rate limited by selected model API. Please wait a moment and try again.'
-            : 'Rate limited by Claude API. Please wait a moment and try again.',
-        })
-        return
-      }
-
-      const msg = error.message || error.error?.message || 'Unknown error'
-      pipelineErrors.push(msg)
-      send({ type: 'error', error: `Analysis failed: ${msg}` })
+      send({ type: 'error', ...humanErrorPayload(code) })
     } finally {
       if (!analysisRunCompleted) {
         await supabase

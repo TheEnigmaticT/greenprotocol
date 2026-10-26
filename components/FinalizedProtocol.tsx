@@ -3,7 +3,9 @@
 import { useState, type FormEvent } from 'react'
 import { AnalysisResult, Recommendation } from '@/lib/types'
 import { shouldPromptForRejectionFeedback } from '@/lib/rejection-feedback'
-import { RecommendationApprovalReceipt, TalkAboutThis } from './TalkAboutThis'
+import { TalkAboutThis } from './TalkAboutThis'
+import type { RecommendationDecisionReceipt } from '@/lib/talk-about-this/decisions'
+import type { ProcedureProposal } from '@/lib/talk-about-this/procedure-proposal'
 import { buildNoRecommendationsBullets } from '@/lib/no-recommendations-summary'
 import { buildFinalizedProtocol } from '@/lib/finalized-protocol'
 
@@ -39,11 +41,12 @@ function skimWhyLine(rec: Recommendation): string | null {
   return sentences.slice(0, 2).join(' ') || rationale
 }
 
-function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analysisId, recommendationIndex }: {
+function PendingCard({ rec, onAccept, onDecline, onRecommendationDecided, onProcedureProposalApply, analysisId, recommendationIndex }: {
   rec: Recommendation
   onAccept: () => void
   onDecline: () => void
-  onRecommendationApproved?: (receipt: RecommendationApprovalReceipt) => void
+  onRecommendationDecided?: (receipt: RecommendationDecisionReceipt) => void
+  onProcedureProposalApply?: (proposal: ProcedureProposal) => void | Promise<void>
   analysisId?: string
   recommendationIndex: number
 }) {
@@ -128,7 +131,8 @@ function PendingCard({ rec, onAccept, onDecline, onRecommendationApproved, analy
             ? rec.original.chemical
             : `Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
           evidenceState={evidenceState}
-          onRecommendationApproved={onRecommendationApproved}
+          onRecommendationDecided={onRecommendationDecided}
+          onProcedureProposalApply={onProcedureProposalApply}
           buttonLabel="Ask"
           className="inline-flex items-center justify-center min-h-11 w-full px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em]"
           buttonStyle={{ background: '#F6F3EB', color: '#1C3822', border: '1px solid #ECB815', borderRadius: 0 }}
@@ -317,7 +321,8 @@ export default function FinalizedProtocol({
   analysis,
   originalProtocol,
   onUpdateAnalysis,
-  onRecommendationApproved,
+  onRecommendationDecided,
+  onProcedureProposalApply,
   analysisId,
   showRecommendations = true,
   showProcedure = true,
@@ -325,7 +330,8 @@ export default function FinalizedProtocol({
   analysis: AnalysisResult
   originalProtocol?: string
   onUpdateAnalysis?: (updated: AnalysisResult) => void
-  onRecommendationApproved?: (receipt: RecommendationApprovalReceipt) => void
+  onRecommendationDecided?: (receipt: RecommendationDecisionReceipt) => void
+  onProcedureProposalApply?: (proposal: ProcedureProposal) => void | Promise<void>
   analysisId?: string
   showRecommendations?: boolean
   showProcedure?: boolean
@@ -405,7 +411,8 @@ export default function FinalizedProtocol({
                     rec={rec}
                     onAccept={() => setRecAccepted(globalIndex, true)}
                     onDecline={() => declineRecommendation(globalIndex)}
-                    onRecommendationApproved={onRecommendationApproved}
+                    onRecommendationDecided={onRecommendationDecided}
+                    onProcedureProposalApply={onProcedureProposalApply}
                     analysisId={analysisId}
                     recommendationIndex={globalIndex}
                   />
@@ -448,7 +455,8 @@ export default function FinalizedProtocol({
                             scope={{ kind: 'recommendation', recommendationId: rec.id }}
                             title={`Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
                             evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
-                            onRecommendationApproved={onRecommendationApproved}
+                            onRecommendationDecided={onRecommendationDecided}
+                            onProcedureProposalApply={onProcedureProposalApply}
                             buttonLabel="Ask"
                           />
                         </div>
@@ -521,6 +529,7 @@ export default function FinalizedProtocol({
               title="Why no recommendations?"
               evidenceState="inferred"
               buttonLabel="Ask"
+              onProcedureProposalApply={onProcedureProposalApply}
               className="inline-flex items-center justify-center min-h-11 px-3 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-[0.08em]"
               buttonStyle={{ background: '#F6F3EB', color: '#1C3822', border: '1px solid #ECB815', borderRadius: 0 }}
             />
