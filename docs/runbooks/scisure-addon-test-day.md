@@ -2,22 +2,21 @@
 
 Scope: install add-on 0.4.0 on the **sandbox** SciSure installation, pointed at `https://staging.greenchemistry.ai`, and exercise the review flow on a **disposable** record. Nothing here touches production.
 
-## 0. Known state (read-only checks on 2026-10-26)
+## 0. Known state (2026-10-26)
 
 | Item | State |
 |---|---|
-| Staging DB `qqyzyezwlzvckjtggoes`, migration `20261001210000_scisure_private_workspace` | **NOT applied** |
-| Staging DB, migration `20261001220000_scisure_owned_workspace_recovery` | **NOT applied** |
-| Staging DB, migration `20261026000000_talk_decisions_and_procedure_proposals` (chat approve/reject and proposals; not tracked by the verifier) | **NOT applied** |
-| `scripts/verify-scisure-staging.py` | Fails today on both counts: the two missing migrations, and a verifier limitation. It hashes only the first statement of each applied migration, so the six multi-statement migrations `20261001070000`-`20261001140000` show as differing even though their text is split, not changed. |
+| Staging DB `qqyzyezwlzvckjtggoes` (project "GreenChemistry.ai Staging"; production is `jjxvlofcnyiqrtvwccsq`, untouched) | Migrations `20261001210000`, `20261001220000` and `20261026000000` **applied 2026-10-26** and recorded in `schema_migrations`; each stored source hash equals the committed file |
+| Staging access read-back | Owner-recovery and decision functions are service-role only; `approve/reject_scoped_recommendation` and the three `*_talk_procedure_proposal` functions are executable by `authenticated` only (they use `auth.uid()`), never `anon`; `gpc_talk_proposals` has RLS on and no direct insert/update for `authenticated` or select for `anon` |
+| `scripts/verify-scisure-staging.py` | Still reports "source hashes do not match". That is a verifier limitation: it hashes only the first statement of each applied migration, so the six multi-statement migrations `20261001070000`-`20261001140000` show as differing although their text is only split. Their content was not changed. |
 | Add-on bundle | Builds with `npm run package` (section 2). Never uploaded to a real hub. |
 | Web app on staging | `main` includes the popup review UI, owner recovery route and saved review page. |
 
-Without the missing migrations the popup cannot load a workspace and chat approve/reject and proposals fail.
+Not yet confirmed: that the staging web app's Supabase URL points at the staging project (set in Vercel; check it contains `qqyzyezwlzvckjtggoes`).
 
 ## 1. Staging prerequisites (do these first)
 
-1. **Apply the three migrations to staging only.** Target the project ref explicitly. The root Supabase CLI link is production, so never use an implicit `db push`. Then run `python3 scripts/verify-scisure-staging.py` (read-only). Expect it to report only the known multi-statement verifier limitation, not missing versions.
+1. **Confirm the staging web app uses the staging database** (Vercel staging env Supabase URL contains `qqyzyezwlzvckjtggoes`). The migrations are already applied there.
 2. **Allowed origins.** Vercel staging env `SCISURE_ALLOWED_ORIGINS` and `NEXT_PUBLIC_SCISURE_ALLOWED_ORIGINS` must both contain the exact origin of the SciSure sandbox page the add-on runs on. `NEXT_PUBLIC_*` is baked in at build time, so redeploy after changing it. This could not be checked from here.
 3. **Vercel Deployment Protection.** `staging.greenchemistry.ai` redirects to Vercel SSO. A scientist's popup only works if their browser is signed in to Vercel, or protection is relaxed for this test. Decide beforehand; the failure looks like a login page inside the popup.
 4. **Worker running.** The scheduler runs the worker once a minute with container start-up on top, so analysis takes minutes, not seconds:
