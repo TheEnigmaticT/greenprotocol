@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SciSureWorkspaceFinding } from '@/lib/integrations/scisure/workspace-contract'
 import {
-  classifyWorkspaceResponse, decisionLabel, findingEffectNote, findingKindLabel, retentionLabel, reviewProgress,
+  classifyWorkspaceResponse, decisionLabel, distinctRationale, findingEffectNote, findingKindLabel, replacementChemical, retentionLabel, reviewProgress,
 } from '@/lib/integrations/scisure/saved-workspace-view'
 
 const finding = (over: Partial<SciSureWorkspaceFinding> & { cardKind?: 'swap' | 'warning' } = {}): SciSureWorkspaceFinding => ({
@@ -44,5 +44,14 @@ describe('saved SciSure workspace view model', () => {
   it('renders retention as a UTC date and refuses an unparseable one', () => {
     expect(retentionLabel('2027-01-12T23:59:00Z')).toBe('Retained until 2027-01-12 (UTC)')
     expect(retentionLabel('not a date')).toBe('Retention date unavailable')
+  })
+  it('shows an arrow only for a real replacement, and a rationale only when it adds a sentence', () => {
+    const f = (original: string, alt: string, issue: string, rationale: string) => ({ recommendation: { original: { chemical: original, issue }, alternative: { chemical: alt, rationale } } }) as SciSureWorkspaceFinding
+    expect(replacementChemical(f('benzoic acid', 'benzoic acid', 'x', 'x'))).toBeNull()
+    expect(replacementChemical(f('DMF', ' dmf ', 'x', 'x'))).toBeNull()
+    expect(replacementChemical(f('DMF', '', 'x', 'x'))).toBeNull()
+    expect(replacementChemical(f('DMF', 'Cyrene', 'x', 'x'))).toBe('Cyrene')
+    expect(distinctRationale(f('a', 'b', 'Hazardous.', 'Hazardous.'))).toBeNull()
+    expect(distinctRationale(f('a', 'b', 'Hazardous.', 'Bio-derived.'))).toBe('Bio-derived.')
   })
 })

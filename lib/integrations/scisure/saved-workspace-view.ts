@@ -51,3 +51,17 @@ export function retentionLabel(retentionExpiresAt: string): string {
   const time = Date.parse(retentionExpiresAt)
   return Number.isFinite(time) ? `Retained until ${new Date(time).toISOString().slice(0, 10)} (UTC)` : 'Retention date unavailable'
 }
+
+/** A hazard warning carries the same material on both sides; an arrow to itself reads as a substitution that does not exist. */
+export function replacementChemical(finding: Pick<SciSureWorkspaceFinding, 'recommendation'>): string | null {
+  const { original, alternative } = finding.recommendation
+  const replacement = alternative.chemical.trim()
+  return replacement && replacement.toLowerCase() !== original.chemical.trim().toLowerCase() ? replacement : null
+}
+
+/** Models often repeat the issue as the rationale; show a sentence once. */
+export function distinctRationale(finding: Pick<SciSureWorkspaceFinding, 'recommendation'>): string | null {
+  const { original, alternative } = finding.recommendation
+  const rationale = alternative.rationale.trim()
+  return rationale && rationale !== original.issue.trim() ? rationale : null
+}

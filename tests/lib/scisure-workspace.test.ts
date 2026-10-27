@@ -60,6 +60,15 @@ describe('private SciSure workspace (synthetic fixtures)', () => {
     expect(unmapped.limitations.join(' ')).toMatch(/map/i)
     expect(unmapped.appliedFindingIds).toEqual([])
   })
+  it('names an acknowledged finding by step and chemical in the limitations, never by its raw id', async () => {
+    const { prepareWorkspaceDraft, workspaceFindings } = await module()
+    const w = workspace()
+    const ids = workspaceFindings(w.analysis!, {}).map(f => f.findingId)
+    w.findings = workspaceFindings(w.analysis!, Object.fromEntries(ids.map(id => [id, 'accepted' as const])))
+    const bundle = prepareWorkspaceDraft(w, { sourceHash: w.sourceHash, analysisRevision: 1 })
+    expect(bundle.limitations.some(line => /^Step 1, Acetone: accepted as acknowledgement only/.test(line))).toBe(true)
+    expect(bundle.limitations.join('\n')).not.toMatch(/finding-\d/)
+  })
   it('does not confuse parsed ordinal numbers with original source step identity', async () => {
     const { prepareWorkspaceDraft, workspaceFindings } = await module()
     const w = workspace()
