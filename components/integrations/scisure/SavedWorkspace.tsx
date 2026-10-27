@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   classifyWorkspaceResponse, decisionLabel, findingEffectNote, findingKindLabel, retentionLabel, reviewProgress,
-  type SavedWorkspaceLoad,
+  type SavedWorkspaceLoad, replacementChemical,
 } from '@/lib/integrations/scisure/saved-workspace-view'
 
 const DECISION_COLOR: Record<string, string> = { Accepted: '#1C3822', Rejected: '#78716C', 'Not reviewed': '#B45309' }
@@ -69,7 +69,7 @@ export default function SavedWorkspace({ analysisId }: { analysisId: string }) {
               </div>
               <p className="mt-2 mb-0 font-[family-name:var(--font-mono)] text-[14px] break-words" style={{ color: '#1C1917' }}>
                 {finding.recommendation.original.chemical}
-                {finding.recommendation.alternative.chemical ? ` → ${finding.recommendation.alternative.chemical}` : ''}
+                {replacementChemical(finding) ? ` → ${replacementChemical(finding)}` : ''}
               </p>
               <p className="mt-2 mb-0 text-sm break-words" style={{ color: '#44403C' }}>{finding.recommendation.original.issue}</p>
               {finding.recommendation.alternative.caveats && (

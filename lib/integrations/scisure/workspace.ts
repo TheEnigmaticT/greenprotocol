@@ -48,6 +48,8 @@ export function prepareWorkspaceDraft(workspace: SciSureWorkspace, binding: { so
   if (workspace.sourceHash !== binding.sourceHash || workspace.analysisRevision !== binding.analysisRevision) throw new Error('Source or analysis revision changed; reload and review again.')
   const findings = workspace.findings
   if (findings.length !== workspace.analysis.recommendations.length || findings.some(f => f.decision !== 'accepted' && f.decision !== 'rejected')) throw new Error('Every finding requires an explicit durable review.')
+  // Readable in the popup and the record; the machine ids stay in appliedFindingIds / acknowledgedFindingIds for provenance.
+  const label = (f: SciSureWorkspaceFinding) => `Step ${f.recommendation.stepNumber}, ${f.recommendation.original.chemical}`
   const limitations = [...workspace.source.importWarnings]
   const appliedFindingIds: string[] = []
   const acknowledgedFindingIds: string[] = []
@@ -60,7 +62,7 @@ export function prepareWorkspaceDraft(workspace: SciSureWorkspace, binding: { so
     const rec = finding.recommendation
     if (!finding.applicable) {
       acknowledgedFindingIds.push(finding.findingId)
-      limitations.push(`${finding.findingId}: accepted as acknowledgement only; scientific applicability does not permit procedure mutation.`)
+      limitations.push(`${label(finding)}: accepted as acknowledgement only; scientific applicability does not permit procedure mutation.`)
       continue
     }
     // Parsed step numbers are not ELN section/step identities. Prove the
@@ -75,7 +77,7 @@ export function prepareWorkspaceDraft(workspace: SciSureWorkspace, binding: { so
     const span = match ? occurrence(match.s.normalizedText, rec.original.chemical.trim()) : null
     if (!safeAssembly || !match || !span || span.start < match.start || span.end > match.end || !rec.alternative.chemical.trim() || /[$<>\n\r]/.test(rec.alternative.chemical) || rec.original.chemical.trim().toLowerCase() === rec.alternative.chemical.trim().toLowerCase()) {
       acknowledgedFindingIds.push(finding.findingId)
-      limitations.push(`${finding.findingId}: accepted change cannot safely map to one original source occurrence; source retained, not applied.`)
+      limitations.push(`${label(finding)}: accepted change cannot safely map to one original source occurrence; source retained, not applied.`)
       continue
     }
     pending.push({ finding, index: match.index, span })
@@ -85,7 +87,7 @@ export function prepareWorkspaceDraft(workspace: SciSureWorkspace, binding: { so
     const chemical = candidate.finding.recommendation.original.chemical.toLowerCase()
     if (peers.some(p => (p.span.start < candidate.span.end && candidate.span.start < p.span.end) || p.finding.recommendation.alternative.chemical.toLowerCase().includes(chemical) || candidate.finding.recommendation.alternative.chemical.toLowerCase().includes(p.finding.recommendation.original.chemical.toLowerCase()))) {
       acknowledgedFindingIds.push(candidate.finding.findingId)
-      limitations.push(`${candidate.finding.findingId}: overlapping or cascading substitutions cannot safely map; not applied.`)
+      limitations.push(`${label(candidate.finding)}: overlapping or cascading substitutions cannot safely map; not applied.`)
       continue
     }
     const rec: Recommendation = { ...candidate.finding.recommendation, isAccepted: true }

@@ -8,7 +8,7 @@ import {
   applyDecision, bridgeHeaders, buildWritebackMessage, canPrepareDraft, canRetryWriteback, newRequestId, parseWritebackResult,
   undecidedCount, UPDATE_UNAVAILABLE_NOTE, writebackTarget, type BridgeAuth,
 } from '@/lib/integrations/scisure/popup-review'
-import { decisionLabel, findingEffectNote, findingKindLabel, retentionLabel } from '@/lib/integrations/scisure/saved-workspace-view'
+import { decisionLabel, distinctRationale, findingEffectNote, findingKindLabel, replacementChemical, retentionLabel } from '@/lib/integrations/scisure/saved-workspace-view'
 
 type Admitted = { externalId?: string; externalVersionId?: string | null; selection?: ReadonlyArray<{ sectionId?: string; stepId?: string; order: number }> }
 type Writeback =
@@ -138,9 +138,9 @@ export function ReviewWorkspace({ auth, snapshotId, nonce, admittedSource }: { a
                 <span style={{ color: '#9D8026' }}>Step {rec.stepNumber} · {findingKindLabel(finding)} · {rec.severity} severity</span>
                 <span style={{ color: finding.decision ? '#1C3822' : '#B45309' }}>{decisionLabel(finding)}</span>
               </div>
-              <p className="mt-2 break-words text-base"><strong>{rec.original.chemical}</strong>{rec.alternative.chemical ? <> → <strong>{rec.alternative.chemical}</strong></> : null}</p>
+              <p className="mt-2 break-words text-base"><strong>{rec.original.chemical}</strong>{replacementChemical(finding) ? <> → <strong>{replacementChemical(finding)}</strong></> : null}</p>
               <p className="mt-2 break-words text-sm">{rec.original.issue}</p>
-              {rec.alternative.rationale && <p className="mt-2 break-words text-sm">{rec.alternative.rationale}</p>}
+              {distinctRationale(finding) && <p className="mt-2 break-words text-sm">{distinctRationale(finding)}</p>}
               <p className="mt-2 break-words text-sm" style={{ color: '#57534E' }}>Confidence: {rec.confidenceLevel}. {rec.alternative.caveats}</p>
               <p className="mt-2 break-words text-sm" style={{ color: '#57534E' }}>Evidence basis: {rec.alternative.evidenceBasis}</p>
               <p className="mt-2 text-sm font-medium">{findingEffectNote(finding)}</p>
