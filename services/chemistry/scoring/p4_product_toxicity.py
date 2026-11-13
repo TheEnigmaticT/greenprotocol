@@ -8,6 +8,7 @@ Score: 0 (non-toxic products) to 10 (highly toxic/CMR products)
 """
 
 from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
+from scoring.input_honesty import GHS_PROVENANCE, missing_hcodes_inputs, unavailable_score
 from ghs import score_health_hazard, is_cmr
 
 PRODUCT_ROLES = {
@@ -29,14 +30,27 @@ def score_p4(
                 or "product" in c.role.lower()]
 
     if not products:
+        # Packet A honesty: no products identified means there is no
+        # chemical-design target to evaluate. The principle is genuinely
+        # unavailable — score -1 pairs with confidence=UNAVAILABLE.
         return PrincipleScore(
             principle_number=4,
             principle_name="Designing Safer Chemicals",
-            score=0.0, normalized=0.0,
+            score=-1.0, normalized=-1.0,
             details={"note": "No products identified in protocol. "
                      "Molecular design scope - out of range for protocol analysis."},
             confidence=ScoreProvenance.UNAVAILABLE,
             data_sources=[],  # No data sources when unavailable
+        )
+
+    missing = missing_hcodes_inputs(products, hcodes_map)
+    if missing:
+        return unavailable_score(
+            principle_number=4,
+            principle_name="Designing Safer Chemicals",
+            missing_inputs=missing,
+            provenance=GHS_PROVENANCE,
+            data_sources=["pubchem_ghs"],
         )
 
     max_health = 0.0

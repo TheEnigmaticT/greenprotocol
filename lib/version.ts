@@ -18,6 +18,6 @@ export function getAnalysisMetadata(): AnalysisMetadata {
   return {
     generatedAt: new Date().toISOString(),
     gcaiVersion: GCAI_VERSION,
-    methodologyVersion: 'waste-v0',
+    methodologyVersion: 'honest-inputs-v1',
   }
 }

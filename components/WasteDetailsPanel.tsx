@@ -14,7 +14,8 @@ function hazardLabel(category: string): string {
   return HAZARD_LABELS[category] ?? category.charAt(0).toUpperCase() + category.slice(1)
 }
 
-function kg(n: number): string {
+function kg(n: number | null): string {
+  if (n === null || !Number.isFinite(n)) return 'Unavailable'
   if (n === 0) return '0 kg'
   if (n < 0.01) return '<0.01 kg'
   return `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg`

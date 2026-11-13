@@ -208,6 +208,8 @@ export default function PrincipleSection({
   onProcedureProposalApply,
 }: PrincipleSectionProps) {
   const anchorId = `p${principleNumber}`
+  const wasteUnavailable = wasteAnalysis?.summary.confidence === 'unavailable' || wasteAnalysis?.summary.grade === 'INCOMPLETE'
+  const wasteColors = wasteUnavailable ? { bg: '#E7E5E4', text: '#57534E' } : (GRADE_COLORS[wasteAnalysis?.summary.grade ?? ''] || GRADE_COLORS.C)
 
   return (
     <section id={anchorId} className="scroll-mt-20">
@@ -254,15 +256,15 @@ export default function PrincipleSection({
               <div
                 className="flex items-center justify-center w-12 h-12 rounded-lg text-xl font-bold shrink-0"
                 style={{
-                  background: (GRADE_COLORS[wasteAnalysis.summary.grade] || GRADE_COLORS.C).bg,
-                  color: (GRADE_COLORS[wasteAnalysis.summary.grade] || GRADE_COLORS.C).text,
+                  background: wasteColors.bg,
+                  color: wasteColors.text,
                 }}
               >
                 {wasteAnalysis.summary.grade}
               </div>
               <div>
                 <p className="text-sm font-semibold" style={{ color: '#1C1917' }}>
-                  Waste Impact: {wasteAnalysis.summary.wasteImpactScore}/10
+                  Waste Impact: {wasteUnavailable ? 'Unavailable' : `${wasteAnalysis.summary.wasteImpactScore}/10`}
                 </p>
                 <p className="text-xs" style={{ color: '#57534E' }}>{wasteAnalysis.summary.primaryDriver}</p>
               </div>
@@ -271,15 +273,15 @@ export default function PrincipleSection({
             {/* Direct waste */}
             <div className="grid grid-cols-3 gap-3 text-center mb-3">
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.directWaste.totalWasteKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.directWaste.totalWasteKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Total kg</div>
               </div>
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.directWaste.solventWasteKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.directWaste.solventWasteKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Solvent kg</div>
               </div>
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.directWaste.nonSolventWasteKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.directWaste.nonSolventWasteKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Non-solvent kg</div>
               </div>
             </div>
@@ -301,7 +303,7 @@ export default function PrincipleSection({
                           </span>
                         )}
                       </span>
-                      <span className="font-semibold" style={{ color: '#1C1917' }}>{seg.totalKg.toFixed(3)} kg</span>
+                      <span className="font-semibold" style={{ color: '#1C1917' }}>{seg.totalKg === null ? 'Unavailable' : `${seg.totalKg.toFixed(3)} kg`}</span>
                     </div>
                   ))}
                 </div>
@@ -311,11 +313,11 @@ export default function PrincipleSection({
             {/* Liquid burden */}
             <div className="grid grid-cols-2 gap-3 text-center mb-3">
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidHandledKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidHandledKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Liquid handled kg</div>
               </div>
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidDiscardedKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidDiscardedKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Liquid discarded kg</div>
               </div>
             </div>

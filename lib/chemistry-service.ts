@@ -47,6 +47,7 @@ interface ScoreResult {
   total_score: number
   max_possible: number
   grade: string
+  coverage?: { assessed: number; total: number; unavailable: number; partial: boolean }
   smiles_extraction: Record<string, unknown>
   yield_extraction: Record<string, unknown>
   // v0.6: structured waste analysis from chemistry service
@@ -117,6 +118,8 @@ export async function scoreProtocol(params: {
   chemicals: Array<{
     name: string
     role: string
+    process_use?: string
+    reference_hcodes?: string[] | null
     quantity?: string
     smiles?: string | null
     reference_status?: string

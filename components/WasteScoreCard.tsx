@@ -40,9 +40,7 @@ export default function WasteScoreCard({
   // When mass is incomplete the kg figures must never be presented as a confident
   // measurement. A 0 here is the "we don't know" sentinel — not a real value.
   const massAvailable = !isUnavailable
-    && (wasteAnalysis.directWaste.totalWasteKg > 0
-      || wasteAnalysis.directWaste.solventWasteKg > 0
-      || wasteAnalysis.directWaste.nonSolventWasteKg > 0)
+    && Object.values(wasteAnalysis.directWaste).some(value => typeof value === 'number' && value > 0)
 
   return (
     <div

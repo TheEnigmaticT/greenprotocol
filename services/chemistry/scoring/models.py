@@ -1,7 +1,7 @@
 """Shared models for scoring modules."""
 
 from enum import Enum
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ChemicalInput(BaseModel):
@@ -12,6 +12,7 @@ class ChemicalInput(BaseModel):
     """
     name: str
     role: str = "unknown"  # solvent, reagent, catalyst, product, etc.
+    process_use: str | None = None  # parent-populated: e.g. workup_solvent
     quantity: str | None = None  # compatibility raw quantity; null stays null
     raw_quantity: str | None = None  # original parser quantity, including null
     quantity_g: float | None = None   # from unit converter
@@ -49,7 +50,7 @@ class PrincipleScore(BaseModel):
     chemicals_flagged: list[str] = Field(default_factory=list)
     data_sources: list[str] = Field(default_factory=list)
     confidence: ScoreProvenance = ScoreProvenance.CALCULATED
-    
+
     @field_validator('confidence')
     @classmethod
     def validate_confidence(cls, v: ScoreProvenance) -> ScoreProvenance:
@@ -66,15 +67,19 @@ class PrincipleScore(BaseModel):
             }
             return mapping.get(v.lower(), ScoreProvenance.CALCULATED)
         return v
-    
-    @field_validator('score')
-    @classmethod
-    def validate_unavailable_score(cls, v: float, info) -> float:
-        """Ensure unavailable confidence pairs with score -1."""
-        confidence = info.data.get('confidence')
-        if confidence == ScoreProvenance.UNAVAILABLE and v != -1:
+
+    @model_validator(mode='after')
+    def validate_unavailable_score(self) -> 'PrincipleScore':
+        """Unavailable confidence must pair with score == -1.
+
+        The earlier field_validator was dead because ``score`` is declared
+        before ``confidence`` in the model, so ``info.data['confidence']``
+        was always unset when score's validator ran. This after-model
+        validator runs with both fields populated.
+        """
+        if self.confidence == ScoreProvenance.UNAVAILABLE and self.score != -1.0:
             raise ValueError('Unavailable scores must have score = -1')
-        return v
+        return self
 
 
 class ScoringRequest(BaseModel):
@@ -95,6 +100,22 @@ class SdsReference(BaseModel):
     retrieved_at: str | None = None
 
 
+class CoverageMetadata(BaseModel):
+    """Truthful coverage metadata for the scoring response.
+
+    assessed = number of principles with a numeric score
+    total    = number of principles in the canonical 12-principle set
+    unavailable = number of principles that returned score == -1
+    partial  = True iff unavailable > 0 (i.e. coverage is incomplete)
+
+    Optional in the wire format so existing consumers keep working.
+    """
+    assessed: int = 0
+    total: int = 12
+    unavailable: int = 0
+    partial: bool = False
+
+
 class ScoringResponse(BaseModel):
     """Response with principle scores and optional waste analysis."""
     scores: list[PrincipleScore]
@@ -102,6 +123,7 @@ class ScoringResponse(BaseModel):
     total_score: float = 0.0
     max_possible: float = 0.0
     grade: str = "C"
+    coverage: CoverageMetadata | None = None
     waste_analysis: dict | None = None
     sds_references: dict[str, list[SdsReference]] | None = None
     smiles_extraction: dict = Field(default_factory=dict)

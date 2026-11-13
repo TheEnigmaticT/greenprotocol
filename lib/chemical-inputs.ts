@@ -70,6 +70,8 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
     })
     return {
       name: chemical.name, role: chemical.role, quantity,
+      ...(chemical.processUse ? { process_use: chemical.processUse } : {}),
+      reference_hcodes: !indefinite && !unavailable ? conversion?.ghs_hazards?.map(hazard => hazard.code) ?? null : null,
       quantity_g: kg === null ? null : kg * 1000,
       quantity_kg: kg, quantity_mol: mol, molecular_weight: mw,
       step_number: step.stepNumber, smiles, reference_status: referenceStatus,

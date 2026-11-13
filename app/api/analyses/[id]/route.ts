@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { calculateEquivalencies } from '@/lib/equivalencies'
+import { preserveStoredManifestOnPatch } from '@/lib/scoring-input-manifest'
 
 export async function GET(
   _request: Request,
@@ -62,12 +63,63 @@ export async function PATCH(
   }
 
   const expectedRevisionNumber = expected_revision_number
+  const nextResult = analysis_result as Record<string, unknown>
 
-  // Update analysis — user_id check ensures ownership
+  // Read the current owned record so we can preserve the immutable
+  // scoringInputManifest and detect tampering before any write.
+  const { data: currentRow, error: selectError } = await supabase
+    .from('gpc_analyses')
+    .select('analysis_result,revision_number')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (selectError) {
+    return NextResponse.json({ error: 'Unable to load analysis' }, { status: 500 })
+  }
+  if (!currentRow) {
+    // Same opaque message used elsewhere so we do not disclose ownership
+    // of an analysis the caller does not own.
+    return NextResponse.json({ error: 'Analysis not found' }, { status: 404 })
+  }
+
+  const currentRevisionNumber = currentRow.revision_number ?? 0
+  if (currentRevisionNumber !== expectedRevisionNumber) {
+    return NextResponse.json(
+      { error: 'Analysis was updated elsewhere; reload before saving again', code: 'revision_mismatch' },
+      { status: 409 },
+    )
+  }
+
+  // Manifest preservation / tampering gate. This never alters any field
+  // outside scoringInputManifest. The PATCH digest is an integrity
+  // checksum, NOT a cryptographic signature or authentication artifact.
+  const merge = preserveStoredManifestOnPatch(currentRow.analysis_result, nextResult)
+  if (!merge.ok) {
+    if (merge.code === 'manifest_shape_invalid') {
+      return NextResponse.json(
+        { error: 'scoringInputManifest is not a valid manifest shape', code: merge.code },
+        { status: 400 },
+      )
+    }
+    return NextResponse.json(
+      {
+        error:
+          merge.code === 'manifest_tamper_forged'
+            ? 'Cannot add or replace the immutable scoring inputs on this analysis'
+            : 'scoringInputManifest does not match the stored immutable record',
+        code: merge.code,
+      },
+      { status: 409 },
+    )
+  }
+
+  // Update analysis — user_id check ensures ownership; revision_number
+  // CAS keeps the existing optimistic-locking contract.
   const { data, error } = await supabase
     .from('gpc_analyses')
     .update({
-      analysis_result,
+      analysis_result: merge.mergedResult,
       revision_number: expectedRevisionNumber + 1,
     })
     .eq('id', id)

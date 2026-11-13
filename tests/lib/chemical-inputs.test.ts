@@ -21,6 +21,13 @@ describe('occurrence-local scoring inputs', () => {
     expect(result.scoreChemicals.every(c => c.reference_smiles === 'O' && c.reference_provenance === 'cache')).toBe(true)
     expect(result.unresolvedChemicals.size).toBe(0)
   })
+  it('preserves solvent function independently of wash use and passes occurrence-local hazard evidence', () => {
+    const input = steps().slice(0, 1)
+    Object.assign(input[0].chemicals[0], { processUse: 'wash' })
+    const result = prepareChemicalInputs(input, { results: [{ ...conversion('5 mL', .005), ghs_hazards: [{ code: 'H225', description: 'Flammable.', source: 'fixture' }] }] })
+    expect(result.scoreChemicals[0]).toMatchObject({ role: 'solvent', process_use: 'wash', reference_hcodes: ['H225'] })
+  })
+
   it('never copies model-estimated mass into a missing conversion occurrence', () => {
     const result = prepareChemicalInputs(steps(), { results: [conversion('20 mL', .020)] })
     expect(result.scoreChemicals[0].quantity_kg).toBeNull()

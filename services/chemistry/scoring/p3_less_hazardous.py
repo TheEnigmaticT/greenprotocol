@@ -5,9 +5,22 @@ quantity. A protocol's P3 score reflects the aggregate health
 hazard of all chemicals used.
 
 Score: 0 (no health hazards) to 10 (severe CMR chemicals in large qty)
+
+Packet A: this module no longer fabricates a 10g/chemical fallback when
+masses are missing, and an empty list from ``hcodes_map.get(name, [])``
+no longer collapses 'no hazard evidence' into 'verified safe'. If any
+evaluated chemical is missing either declared mass or hazard evidence,
+the principle returns an explicit unavailable score.
 """
 
-from scoring.models import ChemicalInput, PrincipleScore
+from scoring.input_honesty import (
+    GHS_PROVENANCE,
+    MASS_PROVENANCE,
+    missing_hcodes_inputs,
+    missing_mass_inputs,
+    unavailable_score,
+)
+from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
 from ghs import score_health_hazard, is_cmr
 
 
@@ -16,7 +29,7 @@ def score_p3(
     hcodes_map: dict[str, list[str]],
 ) -> PrincipleScore:
     """Score Principle 3: Less Hazardous Chemical Syntheses.
-    
+
     Args:
         chemicals: parsed chemicals from protocol
         hcodes_map: {chemical_name: [H-codes]} from PubChem
@@ -25,10 +38,47 @@ def score_p3(
         return PrincipleScore(
             principle_number=3,
             principle_name="Less Hazardous Chemical Syntheses",
-            score=0.0, normalized=0.0,
+            score=-1.0, normalized=-1.0,
             details={"_summary": "No chemicals to evaluate.", "note": "No chemicals to evaluate"},
-            confidence="calculated",
+            confidence=ScoreProvenance.UNAVAILABLE,
             data_sources=["pubchem_ghs"],
+        )
+
+    # Packet A honesty: missing hazard evidence is not safety.
+    missing_haz = missing_hcodes_inputs(chemicals, hcodes_map)
+    if missing_haz:
+        return unavailable_score(
+            principle_number=3,
+            principle_name="Less Hazardous Chemical Syntheses",
+            missing_inputs=missing_haz,
+            provenance=GHS_PROVENANCE,
+            data_sources=["pubchem_ghs"],
+            details={
+                "_summary": (
+                    "Hazard score unavailable — one or more evaluated chemicals "
+                    "have no GHS hazard evidence on record. Cannot score health "
+                    "hazard without silently grading the remaining subset."
+                ),
+            },
+        )
+
+    # Packet A honesty: missing declared mass would require fabricating a
+    # 10g/chemical filler to compute a mass-weighted hazard. Return
+    # unavailable instead of guessing.
+    missing_mass = missing_mass_inputs(chemicals)
+    if missing_mass:
+        return unavailable_score(
+            principle_number=3,
+            principle_name="Less Hazardous Chemical Syntheses",
+            missing_inputs=missing_mass,
+            provenance=MASS_PROVENANCE,
+            data_sources=["pubchem_ghs"],
+            details={
+                "_summary": (
+                    "Hazard score unavailable — one or more evaluated chemicals "
+                    "lack a declared finite positive quantity_g."
+                ),
+            },
         )
 
     total_mass_g = 0.0
@@ -37,13 +87,12 @@ def score_p3(
     chem_details: list[dict] = []
 
     for chem in chemicals:
-        codes = hcodes_map.get(chem.name, [])
+        # Honest: every chemical is now guaranteed to be in hcodes_map.
+        codes = hcodes_map[chem.name]
         health_score = score_health_hazard(codes)
         cmr = is_cmr(codes)
 
-        mass_g = chem.quantity_g or 0.0
-        if mass_g <= 0:
-            mass_g = 10.0  # Default for unknown quantity
+        mass_g = chem.quantity_g  # type: ignore[assignment]  # verified finite positive
 
         # CMR chemicals get extra weight
         weight = health_score / 10.0
@@ -84,5 +133,5 @@ def score_p3(
         },
         chemicals_flagged=flagged,
         data_sources=["pubchem_ghs"],
-        confidence="calculated",
+        confidence=ScoreProvenance.CALCULATED,
     )

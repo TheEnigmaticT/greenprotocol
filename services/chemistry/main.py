@@ -2,7 +2,7 @@ import os
 import secrets
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from scoring.models import ScoringRequest, ScoringResponse, ScoreProvenance
+from scoring.models import ScoringRequest, ScoringResponse, ScoreProvenance, CoverageMetadata
 from scoring.p1_waste_prevention import score_p1
 from scoring.p2_atom_economy import score_p2
 from scoring.p3_less_hazardous import score_p3
@@ -319,16 +319,35 @@ async def score_protocol(request: ScoringRequest):
 
     # Roll-up score and letter grade (lower is greener)
     all_scores = [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12]
+    # Packet A: distinguish "available score" from "unavailable score" up
+    # front so coverage is honest. An unavailable principle is NOT counted
+    # toward max_possible and the response carries truthful coverage
+    # metadata; if any principle is unavailable, the grade is INCOMPLETE
+    # rather than a confident letter grade.
     available = [s for s in all_scores if s.score >= 0]
+    unavailable = [s for s in all_scores if s.score < 0]
+    unavailable_count = len(unavailable)
     total_score = round(sum(s.score for s in available), 2)
     max_possible = float(len(available) * 10)
     pct = (total_score / max_possible * 100) if max_possible > 0 else 50.0
-    grade = (
-        "A" if pct <= 20 else
-        "B" if pct <= 40 else
-        "C" if pct <= 60 else
-        "D" if pct <= 80 else
-        "F"
+    if unavailable_count > 0:
+        # Honest: when coverage is incomplete, do not assign a letter
+        # grade over a partial subset. The UI can decide whether to
+        # display INCOMPLETE or the partial pct.
+        grade = "INCOMPLETE"
+    else:
+        grade = (
+            "A" if pct <= 20 else
+            "B" if pct <= 40 else
+            "C" if pct <= 60 else
+            "D" if pct <= 80 else
+            "F"
+        )
+    coverage = CoverageMetadata(
+        assessed=len(available),
+        total=len(all_scores),
+        unavailable=unavailable_count,
+        partial=unavailable_count > 0,
     )
 
     yield_extraction = {k: v for k, v in yield_info.items() if k != "benchmark"}
@@ -339,6 +358,7 @@ async def score_protocol(request: ScoringRequest):
         total_score=total_score,
         max_possible=max_possible,
         grade=grade,
+        coverage=coverage,
         waste_analysis=waste,
         smiles_extraction=smiles_metadata,
         yield_extraction=yield_extraction,

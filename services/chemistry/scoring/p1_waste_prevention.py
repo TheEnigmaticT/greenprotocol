@@ -10,8 +10,18 @@ Data chain:
       efficiency for the classified reaction type (deterministic)
 
 Score: 0 (PMI=1, perfect) to 10 (PMI>=100, very wasteful)
+
+Packet A: this module no longer fabricates a 10g/chemical fallback when
+masses are missing. If any evaluated chemical lacks a finite positive
+``quantity_g``, the principle returns an explicit unavailable score with
+``missing_inputs`` provenance instead of a confident 10g PMI.
 """
 
+from scoring.input_honesty import (
+    MASS_PROVENANCE,
+    missing_mass_inputs,
+    unavailable_score,
+)
 from scoring.models import ChemicalInput, PrincipleScore
 
 
@@ -25,7 +35,7 @@ def score_p1(
     atom_economy_pct: float | None = None,
 ) -> PrincipleScore:
     """Score Principle 1: Waste Prevention / PMI.
-    
+
     Args:
         chemicals: all chemicals with resolved masses
         yield_pct: stated or inferred yield (0-100)
@@ -36,10 +46,30 @@ def score_p1(
         atom_economy_pct: from P2 scoring (for theoretical yield calc)
     """
 
-    # Calculate total input mass
-    total_input_g = sum(c.quantity_g or 0 for c in chemicals)
-    if total_input_g <= 0:
-        total_input_g = sum(10.0 for _ in chemicals)  # fallback
+    # Packet A honesty: a mass-weighted PMI requires every evaluated chemical
+    # to carry a finite positive quantity_g. We do not invent 10g/chemical
+    # fillers; if anything is missing, the principle is honestly unavailable.
+    missing = missing_mass_inputs(chemicals)
+    if missing:
+        return unavailable_score(
+            principle_number=1,
+            principle_name="Prevention (Waste / PMI)",
+            missing_inputs=missing,
+            provenance=MASS_PROVENANCE,
+            data_sources=["unit_converter"],
+            details={
+                "_summary": (
+                    "PMI unavailable — one or more evaluated chemicals lack a "
+                    "declared finite positive quantity_g. Cannot compute a "
+                    "mass-weighted score without fabricating inputs."
+                ),
+                "reaction_type": reaction_type,
+                "yield_pct": yield_pct,
+            },
+        )
+
+    # Calculate total input mass from recorded quantities
+    total_input_g = sum(c.quantity_g for c in chemicals)  # type: ignore[misc]
 
     # Determine product mass
     product_mass_g: float | None = None
@@ -58,7 +88,11 @@ def score_p1(
 
     # If we have a yield and can find the limiting reagent
     if yield_used is not None:
-        # Find limiting reagent (smallest molar amount among reactants)
+        # Find limiting reagent (smallest molar amount among reactants).
+        # Reactants without a declared quantity_mol cannot honestly determine
+        # the limiting reagent, so they are excluded from the limiting-reagent
+        # search; if every reactant is missing quantity_mol we fall back to
+        # non-solvent mass below.
         reactants = [c for c in chemicals
                      if c.role.lower() in ("reactant", "reagent", "starting material")
                      and c.quantity_mol and c.quantity_mol > 0]
@@ -76,13 +110,19 @@ def score_p1(
                 )
                 product_mass_g = theoretical_product_g * (yield_used / 100.0)
             else:
-                # Simpler: assume product is yield% of largest reactant mass
-                largest_reactant_g = max(c.quantity_g or 0 for c in reactants)
+                # Simpler: product is yield% of largest recorded reactant mass.
+                # All reactants here have a recorded quantity_mol so we can
+                # derive their quantity_g from molecular_weight.
+                largest_reactant_g = max(
+                    (c.quantity_mol * c.molecular_weight)
+                    for c in reactants
+                    if c.molecular_weight
+                )
                 product_mass_g = largest_reactant_g * (yield_used / 100.0)
         else:
-            # No reactants identified — rough estimate
+            # No reactants with declared quantity_mol — fall back to non-solvent mass.
             non_solvent_mass = sum(
-                c.quantity_g or 0 for c in chemicals
+                c.quantity_g for c in chemicals  # type: ignore[misc]
                 if c.role.lower() not in ("solvent", "washing solvent", "co-solvent")
             )
             product_mass_g = non_solvent_mass * (yield_used / 100.0) * 0.5
