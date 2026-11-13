@@ -9,12 +9,11 @@ Score: 0 (non-toxic products) to 10 (highly toxic/CMR products)
 
 from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
 from scoring.input_honesty import GHS_PROVENANCE, missing_hcodes_inputs, unavailable_score
+# PRODUCT_ROLES is re-exported from here: downstream consumers import this
+# name from scoring.p4_product_toxicity.  The canonical vocabulary lives in
+# scoring.roles so every scorer agrees on which roles are outputs.
+from scoring.roles import PRODUCT_ROLES, normalize_role
 from ghs import score_health_hazard, is_cmr
-
-PRODUCT_ROLES = {
-    "product", "desired product", "target", "intermediate",
-    "final product", "main product",
-}
 
 
 def score_p4(
@@ -22,12 +21,10 @@ def score_p4(
     hcodes_map: dict[str, list[str]],
 ) -> PrincipleScore:
     """Score Principle 4: Designing Safer Chemicals.
-    
+
     Same GHS scoring as P3 but filtered to products only.
     """
-    products = [c for c in chemicals
-                if c.role.lower().strip() in PRODUCT_ROLES
-                or "product" in c.role.lower()]
+    products = [c for c in chemicals if normalize_role(c.role) in PRODUCT_ROLES]
 
     if not products:
         # Packet A honesty: no products identified means there is no

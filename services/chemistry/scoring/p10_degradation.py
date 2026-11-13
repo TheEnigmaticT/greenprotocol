@@ -7,57 +7,25 @@ persistence score worst.
 Score: 0 (all biodegradable) to 10 (persistent environmental hazards)
 
 Packet A honesty: a chemical absent from ``hcodes_map`` (unknown hazard
-evidence) OR present with an empty list (no evidence returned) is treated
-as missing evidence — the principle returns an explicit unavailable
-score rather than grading the remaining subset or collapsing the absent
-chemical into a verified-zero hazard. Non-empty codes whose contents do
-not match the evaluated environmental hazard class still support a real
-score of 0.
+evidence) OR present with an empty list (no evidence returned) OR carrying an
+unresolved reference status is treated as missing evidence — the principle
+returns an explicit unavailable score rather than grading the remaining
+subset or collapsing the absent chemical into a verified-zero hazard. The
+missing-evidence contract is shared with P3/P4/P12 through
+``input_honesty.missing_hcodes_inputs``. Non-empty codes whose contents do
+not match the evaluated environmental hazard class still support a real score
+of 0.
 """
 
 from scoring.input_honesty import (
     GHS_PROVENANCE,
     MASS_PROVENANCE,
+    missing_hcodes_inputs,
+    missing_mass_inputs,
     unavailable_score,
 )
 from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
 from ghs import score_environmental_hazard
-
-
-def _missing_evidence(
-    chemicals: list[ChemicalInput],
-    hcodes_map: dict[str, list[str]],
-) -> list[dict[str, str]]:
-    """Identify chemicals whose hazard evidence is absent or empty.
-
-    ``hcodes_map.get(name, [])`` collapses both 'lookup did not return' and
-    'lookup returned nothing' into ``[]``. Both cases are conservatively
-    treated as missing evidence so an unknown chemical cannot be silently
-    graded as safe (0).
-    """
-    missing: list[dict[str, str]] = []
-    for chemical in chemicals:
-        codes = hcodes_map.get(chemical.name)
-        if codes is None or len(codes) == 0:
-            missing.append(
-                {
-                    "chemical": chemical.name,
-                    "input": "hcodes",
-                    "reason": "unavailable" if codes is None else "empty",
-                }
-            )
-    return missing
-
-
-def _missing_mass(chemicals: list[ChemicalInput]) -> list[dict[str, str]]:
-    """Local mirror of ``input_honesty.missing_mass_inputs`` filtered by role.
-
-    The packet helper treats every chemical uniformly; P10 evaluates all
-    chemicals (including products) for environmental hazard, so the mass
-    check applies to the same set as the hazard check.
-    """
-    from scoring.input_honesty import missing_mass_inputs
-    return missing_mass_inputs(chemicals)
 
 
 def score_p10(
@@ -81,7 +49,7 @@ def score_p10(
         )
 
     # Packet A honesty: unknown or empty hazard evidence is not safety.
-    missing_haz = _missing_evidence(chemicals, hcodes_map)
+    missing_haz = missing_hcodes_inputs(chemicals, hcodes_map)
     if missing_haz:
         return unavailable_score(
             principle_number=10,
@@ -102,7 +70,7 @@ def score_p10(
     # Packet A honesty: missing declared mass would require fabricating a
     # 10g/chemical filler to compute a mass-weighted environmental hazard.
     # Return unavailable instead of guessing.
-    missing_mass = _missing_mass(chemicals)
+    missing_mass = missing_mass_inputs(chemicals)
     if missing_mass:
         return unavailable_score(
             principle_number=10,

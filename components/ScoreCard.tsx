@@ -182,21 +182,24 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
   isRegrading?: boolean
   analysisId?: string
 }) {
+  const unavailableScores = scores.scores.filter(isUnavailableScore)
   const isIncomplete = scores.grade === INCOMPLETE_LABEL || scores.coverage?.partial === true
+    || unavailableScores.length > 0 || scores.scores.length === 0
+  const displayedGrade = isIncomplete ? INCOMPLETE_LABEL : scores.grade
+  const projectedIncomplete = Boolean(projectedScores && (projectedScores.grade === INCOMPLETE_LABEL
+    || projectedScores.coverage?.partial || projectedScores.scores.some(isUnavailableScore)))
+  const projectedGrade = projectedIncomplete ? INCOMPLETE_LABEL : projectedScores?.grade
   const gradeColor = isIncomplete
     ? INCOMPLETE_GRADE_COLORS
     : (GRADE_COLORS[scores.grade] || GRADE_COLORS.C)
   const projGradeColor = projectedScores
-    ? (projectedScores.grade === INCOMPLETE_LABEL
+    ? (projectedIncomplete
         ? INCOMPLETE_GRADE_COLORS
         : (GRADE_COLORS[projectedScores.grade] || GRADE_COLORS.C))
     : null
-  // Coverage — use the typed optional coverage field from the new scorer
-  // when present; otherwise derive from score flags (backwards compatibility).
-  const optionalCoverage = scores.coverage
-  const totalPrinciples = optionalCoverage?.total ?? scores.scores.length
-  const assessedCount = optionalCoverage?.assessed ?? scores.scores.filter(s => !isUnavailableScore(s)).length
-  const unavailableScores = scores.scores.filter(isUnavailableScore)
+  // Counts have one source of truth, even if old coverage metadata is stale.
+  const totalPrinciples = scores.scores.length
+  const assessedCount = totalPrinciples - unavailableScores.length
   const deterministicCount = scores.scores.filter(s =>
     !isUnavailableScore(s) && (s.confidence === 'calculated' || s.confidence === 'declared'),
   ).length
@@ -244,7 +247,7 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
             </a>
           )}
         <div className="flex items-center justify-between sm:justify-end gap-3 bg-white/50 p-2 sm:p-0 rounded-lg sm:bg-transparent">
-          {projectedScores && projectedScores.grade !== scores.grade ? (
+          {projectedScores && projectedGrade !== displayedGrade ? (
             <>
               <span className="text-sm" style={{ color: '#A8A29E' }}>
                 <s>{scores.total_score.toFixed(1)}</s> → {projectedScores.total_score.toFixed(1)}/{projectedScores.max_possible.toFixed(0)}
@@ -253,14 +256,14 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
                 className="text-lg font-bold px-2 py-0.5 rounded-lg line-through opacity-50"
                 style={{ background: gradeColor.bg, color: gradeColor.text }}
               >
-                {scores.grade}
+                {displayedGrade}
               </span>
               <span className="text-xl" style={{ color: '#78716C' }}>→</span>
               <span
                 className="text-2xl font-bold px-3 py-1 rounded-lg"
                 style={{ background: projGradeColor!.bg, color: projGradeColor!.text }}
               >
-                {projectedScores.grade}
+                {projectedGrade}
               </span>
             </>
           ) : (
@@ -279,9 +282,9 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
                   : undefined}
                 aria-label={isIncomplete
                   ? 'Grade incomplete: insufficient scoring for a complete protocol grade.'
-                  : `Grade ${scores.grade}`}
+                  : `Grade ${displayedGrade}`}
               >
-                {scores.grade}
+                {displayedGrade}
               </span>
             </>
           )}

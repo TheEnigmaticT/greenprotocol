@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getScoringViewStatus } from '@/lib/scoring-view-status'
 
 const mocks = vi.hoisted(() => ({
   anthropicCreate: vi.fn(),
@@ -112,6 +113,7 @@ describe('partial chemistry reference data', () => {
     expect(first.scoringInputManifest?.digest).toMatch(/^[a-f0-9]{64}$/)
     expect(second.scoringInputManifest?.digest).toBe(first.scoringInputManifest?.digest)
     expect(first.scoringInputManifest?.scores).not.toBe(scoreResult)
+    expect(getScoringViewStatus(first).kind).toBe('matches-original')
     if (!first.scoringInputManifest) throw new Error('Expected a persisted scoring manifest')
     const persisted = JSON.parse(JSON.stringify(first.scoringInputManifest))
     expect(replayFrozenScoring(persisted, { sourceText: source, methodologyVersion: 'honest-inputs-v1' }).scores).toEqual(scoreResult)

@@ -280,8 +280,8 @@ export interface AnalysisMetadata {
 }
 
 export interface WasteSummary {
-  wasteImpactScore: number    // 0-10
-  grade: string               // A-F
+  wasteImpactScore: number    // 0-10; -1 when unavailable
+  grade: string               // A-F or INCOMPLETE
   primaryDriver: string       // one-sentence explanation
   bestNextAction?: string
   confidence: ScoreProvenance
@@ -292,10 +292,27 @@ export interface HazardBucket {
   totalKg: number | null
   chemicalsCount: number
   chemicals: string[]
+  massCoverage?: 'complete' | 'partial' | 'unavailable'
 }
 
 export interface WasteAnalysis {
   summary: WasteSummary
+  availability?: {
+    actualWasteMass: 'available' | 'unavailable'
+    liquidDisposition: 'available' | 'unavailable'
+    wasteImpactScoreSentinel: -1
+    nullKgMeansUnavailable: true
+    missingInputs: { chemical: string; input: string; reason: string }[]
+    reason: string
+    massCoverage: 'complete' | 'partial' | 'unavailable'
+    hazardCoverage: 'complete' | 'partial' | 'unavailable'
+  }
+  observedInputInventory?: {
+    knownInputMassKg: number
+    knownMassChemicalCount: number
+    chemicalsWithUnknownMassCount: number
+    massCoverage: 'complete' | 'partial' | 'unavailable'
+  }
   directWaste: {
     totalWasteKg: number | null
     solventWasteKg: number | null

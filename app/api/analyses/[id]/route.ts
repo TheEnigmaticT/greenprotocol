@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { calculateEquivalencies } from '@/lib/equivalencies'
 import { preserveStoredManifestOnPatch } from '@/lib/scoring-input-manifest'
+import { getScoringViewStatus } from '@/lib/scoring-view-status'
 
 export async function GET(
   _request: Request,
@@ -33,6 +34,7 @@ export async function GET(
     id: data.id,
     protocolText: data.protocol_text,
     analysis: data.analysis_result,
+    scoringAudit: getScoringViewStatus(data.analysis_result),
     impactDelta: data.impact_delta,
     revisionNumber: data.revision_number,
     scisureReview: Boolean(data.source_snapshot_hash),
@@ -52,18 +54,39 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await request.json() as {
+  const parsed: unknown = await request.json().catch(() => null)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return NextResponse.json({ error: 'A JSON object is required' }, { status: 400 })
+  }
+  const body = parsed as {
     analysis_result?: unknown
     expected_revision_number?: unknown
   }
   const { analysis_result, expected_revision_number } = body
 
-  if (!analysis_result || typeof expected_revision_number !== 'number' || !Number.isInteger(expected_revision_number) || expected_revision_number < 1) {
+  if (!analysis_result || typeof analysis_result !== 'object' || Array.isArray(analysis_result) || typeof expected_revision_number !== 'number' || !Number.isInteger(expected_revision_number) || expected_revision_number < 1) {
     return NextResponse.json({ error: 'analysis_result and expected_revision_number are required' }, { status: 400 })
   }
 
   const expectedRevisionNumber = expected_revision_number
   const nextResult = analysis_result as Record<string, unknown>
+  for (const field of ['steps', 'recommendations', 'inputWarnings']) {
+    if (nextResult[field] !== undefined && !Array.isArray(nextResult[field])) {
+      return NextResponse.json({ error: `${field} must be an array` }, { status: 400 })
+    }
+  }
+  const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
+  const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
+  const scores = nextResult.deterministicScores
+  if (scores !== undefined && scores !== null && (!object(scores) || !Array.isArray(scores.scores)
+    || typeof scores.grade !== 'string' || !finite(scores.total_score) || !finite(scores.max_possible)
+    || !scores.scores.every(score => object(score) && finite(score.principle_number) && finite(score.score)
+      && finite(score.max_score) && finite(score.normalized) && typeof score.confidence === 'string'))) {
+    return NextResponse.json({ error: 'deterministicScores must be a valid score object' }, { status: 400 })
+  }
+  if (nextResult.wasteAnalysis !== undefined && nextResult.wasteAnalysis !== null && !object(nextResult.wasteAnalysis)) {
+    return NextResponse.json({ error: 'wasteAnalysis must be an object' }, { status: 400 })
+  }
 
   // Read the current owned record so we can preserve the immutable
   // scoringInputManifest and detect tampering before any write.
@@ -147,5 +170,5 @@ export async function PATCH(
     return NextResponse.json({ error: 'Analysis was updated elsewhere; reload before saving again' }, { status: 409 })
   }
 
-  return NextResponse.json({ success: true, revisionNumber: data.revision_number })
+  return NextResponse.json({ success: true, revisionNumber: data.revision_number, scoringAudit: getScoringViewStatus(merge.mergedResult) })
 }

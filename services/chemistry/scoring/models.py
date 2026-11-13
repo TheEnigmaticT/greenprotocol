@@ -29,7 +29,7 @@ class ChemicalInput(BaseModel):
 
 class ScoreProvenance(str, Enum):
     """Canonical provenance taxonomy for all scores and metrics.
-    
+
     See docs/SCORING_PROVENANCE_TAXONOMY.md for complete definitions.
     """
     DECLARED = "declared"           # From protocol text
@@ -37,6 +37,35 @@ class ScoreProvenance(str, Enum):
     BENCHMARK = "benchmark"         # Industry-average estimates (ACS GCI benchmarks)
     MODEL_INFERRED = "model-inferred"  # AI assessment (requires expert review)
     UNAVAILABLE = "unavailable"     # Missing data, cannot score
+
+
+# Legacy provenance labels that predate the canonical taxonomy.  They are
+# mapped explicitly; an unknown label is rejected rather than guessed.
+LEGACY_CONFIDENCE_ALIASES = {
+    "estimated": ScoreProvenance.MODEL_INFERRED,
+    "partial": ScoreProvenance.BENCHMARK,
+}
+
+
+def normalize_confidence(value) -> ScoreProvenance:
+    """Map a provenance label onto the canonical taxonomy.
+
+    Canonical enum values are preserved verbatim (including
+    ``model-inferred``), legacy aliases are mapped explicitly, and anything
+    else is rejected — an unknown label is never silently relabelled
+    "calculated".
+    """
+    if isinstance(value, ScoreProvenance):
+        return value
+    if isinstance(value, str):
+        key = value.strip().lower()
+        for member in ScoreProvenance:
+            if member.value == key:
+                return member
+        if key in LEGACY_CONFIDENCE_ALIASES:
+            return LEGACY_CONFIDENCE_ALIASES[key]
+        raise ValueError(f"Unknown confidence provenance: {value!r}")
+    raise ValueError(f"Invalid confidence provenance: {value!r}")
 
 
 class PrincipleScore(BaseModel):
@@ -51,22 +80,15 @@ class PrincipleScore(BaseModel):
     data_sources: list[str] = Field(default_factory=list)
     confidence: ScoreProvenance = ScoreProvenance.CALCULATED
 
-    @field_validator('confidence')
+    @field_validator('confidence', mode='before')
     @classmethod
-    def validate_confidence(cls, v: ScoreProvenance) -> ScoreProvenance:
-        """Ensure confidence is a valid ScoreProvenance value."""
-        if isinstance(v, str):
-            # Handle legacy string values during migration
-            mapping = {
-                'calculated': ScoreProvenance.CALCULATED,
-                'estimated': ScoreProvenance.MODEL_INFERRED,
-                'partial': ScoreProvenance.BENCHMARK,  # Fold partial into benchmark
-                'benchmark': ScoreProvenance.BENCHMARK,
-                'unavailable': ScoreProvenance.UNAVAILABLE,
-                'declared': ScoreProvenance.DECLARED,
-            }
-            return mapping.get(v.lower(), ScoreProvenance.CALCULATED)
-        return v
+    def validate_confidence(cls, v) -> ScoreProvenance:
+        """Keep canonical provenance strings and reject unknown ones.
+
+        Runs *before* enum coercion so legacy aliases survive, and so an
+        unknown label fails loudly instead of being relabelled "calculated".
+        """
+        return normalize_confidence(v)
 
     @model_validator(mode='after')
     def validate_unavailable_score(self) -> 'PrincipleScore':

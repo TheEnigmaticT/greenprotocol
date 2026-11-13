@@ -14,6 +14,7 @@ from scoring.input_honesty import (
     unavailable_score,
 )
 from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
+from scoring.roles import is_product_role, normalize_role
 
 # Roles considered catalytic
 CATALYTIC_ROLES = {
@@ -29,21 +30,22 @@ STOICHIOMETRIC_ROLES = {
     "base", "acid", "activating agent", "deprotecting agent",
 }
 
-# Roles to skip (not scored)
+# Roles to skip (not scored).  Declared outputs are skipped through the
+# shared helper so P9 drops exactly the product syms P4 evaluates.
 EXCLUDED_ROLES = {
     "solvent", "washing solvent", "co-solvent", "auxiliary",
-    "product", "byproduct", "starting material", "substrate",
+    "starting material", "substrate",
 }
 
 
 def _classify_role(role: str) -> str:
     """Classify a chemical role as catalytic, stoichiometric, or other."""
-    r = role.lower().strip()
+    r = normalize_role(role)
     if r in CATALYTIC_ROLES or "catalyst" in r:
         return "catalytic"
     if r in STOICHIOMETRIC_ROLES:
         return "stoichiometric"
-    if r in EXCLUDED_ROLES:
+    if is_product_role(r) or r in EXCLUDED_ROLES:
         return "excluded"
     # Default: assume stoichiometric if it's doing chemistry
     return "stoichiometric"

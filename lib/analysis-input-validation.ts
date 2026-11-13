@@ -6,9 +6,9 @@ import type { AnalysisStep, ParsedChemical } from '@/lib/types'
  * product/workup/drying_agent/other): a workup chemical can be used for
  * quenching, drying, extraction, or washing depending on the step description.
  *
- * The union is defined locally so that this helper compiles before the parent
- * has landed the schema field on ParsedChemical. Once lib/types.ts adds
- * `processUse?: ProcessUse`, callers can apply the hints directly.
+ * A model annotation is retained only when an unambiguous operation is backed
+ * by a step description found in the original source. Unsupported uses are
+ * removed; the chemical's functional role and original quantities stay intact.
  */
 export type ProcessUse = 'reaction' | 'extraction' | 'wash' | 'quench' | 'drying' | 'other'
 
@@ -58,14 +58,12 @@ const PROCESS_USE_CUES: ReadonlyArray<{ use: ProcessUse; pattern: RegExp }> = [
 ]
 
 function inferProcessUse(description: string, role: string): ProcessUse | undefined {
-  // Reaction-stage cues — only when role says this is a reaction reagent/solvent
-  // and the description says so. role=workup alone is not a reaction cue.
-  if (/\b(?:react(?:ion|ed|ing)?|stir(?:red|ring)?|reflux(?:ed|ing)?|heat(?:ed|ing)?|cool(?:ed|ing)?|add(?:ed|ition)?|acidif(?:y|ied|ying)|basif(?:y|ied|ying))\b/i.test(description)
-      && /^(?:reagent|solvent|catalyst|product)$/i.test(role)) {
+  const operations = PROCESS_USE_CUES.filter(cue => cue.pattern.test(description))
+  if (operations.length) return operations.length === 1 ? operations[0].use : undefined
+  // Addition or a functional role alone does not establish a reaction stage.
+  if (/\b(?:react(?:ion|ed|ing)?|stir(?:red|ring)?|reflux(?:ed|ing)?|heat(?:ed|ing)?|acidif(?:y|ied|ying)|basif(?:y|ied|ying))\b/i.test(description)
+      && /^(?:reagent|reactant|solvent|catalyst|product)$/i.test(role)) {
     return 'reaction'
-  }
-  for (const cue of PROCESS_USE_CUES) {
-    if (cue.pattern.test(description)) return cue.use
   }
   return undefined
 }
@@ -78,6 +76,23 @@ function occurrenceId(stepIndex: number, chemicalIndex: number): string {
   return `${stepIndex}:${chemicalIndex}`
 }
 
+function hasParallelFormulations(text: string): boolean {
+  const labels = new Map<string, Set<string>>()
+  const add = (kind: string, label: string) => {
+    const set = labels.get(kind) ?? new Set<string>()
+    set.add(label.toLowerCase())
+    labels.set(kind, set)
+  }
+  const labelled = /\b(recipe|formulation|batch|variant|run|sample|experiment|condition|entry)[\s:#_-]+([a-z]|\d+[a-z\d_-]*|[a-z][a-z\d_-]*\d[a-z\d_-]*)\b/gi
+  for (const match of text.matchAll(labelled)) add(match[1].toLowerCase(), match[2])
+  for (const match of text.matchAll(/\b(recipe|formulation|batch|variant|run|sample)(\d+)\b/gi)) add(match[1].toLowerCase(), match[2])
+  for (const match of text.matchAll(/\bfor\s+([a-z][a-z\d_-]*)\s*[, :]/gi)) {
+    if (/\d/.test(match[1])) add('source-label', match[1])
+  }
+  return [...labels.values()].some(set => set.size > 1)
+    || /\b(?:two|three|multiple|separate|parallel)\s+(?:formulations?|recipes?|batches|variants?|runs?|experiments?)\b/i.test(text)
+}
+
 function identity(name: string): string {
   return name.trim().toLowerCase()
 }
@@ -85,7 +100,6 @@ function identity(name: string): string {
 /** True when two quantities in the same step share a name but disagree on role. */
 function isSameStepRoleConflict(
   steps: AnalysisStep[],
-  source: string,
 ): string[] {
   const warnings: string[] = []
   steps.forEach((step, stepIdx) => {
@@ -105,11 +119,6 @@ function isSameStepRoleConflict(
       }
     }
   })
-  if (warnings.length === 0) {
-    // Source-grounded hint: if source mentions the chemical name once but the
-    // parser emitted multiple roles anyway, surface the ambiguity.
-    void source
-  }
   return warnings
 }
 
@@ -129,9 +138,9 @@ function isSameStepRoleConflict(
  *
  * 2. **Flag, do not silently merge/split.** If a single model emission combines
  *    multiple amounts (e.g. "5 mL; 20 mL") the helper cannot safely split
- *    without source proof; it warns and requests formulation separation.
- *    If the same chemical occurs in multiple steps with different quantities,
- *    the helper flags the multi-formulation aggregation for human review.
+ *    without source proof; it warns for quantity review without inventing a
+ *    parallel recipe. Explicit parallel-recipe labels trigger a scoring hold.
+ *    Ordinary sequential additions retain distinct occurrences.
  *
  * 3. **Process-use hints are source-grounded only.** role=workup does NOT
  *    silently become processUse=wash. Hints are emitted only when the step
@@ -147,12 +156,11 @@ export function validateParsedAnalysisInputs(
   const warnings: string[] = []
   const processUseHints: ProcessUseHints = {}
   const normalizedSource = source.replace(/\s+/g, '').toLowerCase()
+  const sourceWords = source.replace(/\s+/g, ' ').toLowerCase()
+  const validatedSteps = steps.map(step => ({ ...step, chemicals: step.chemicals.map(chemical => ({ ...chemical })) }))
   // This first staging slice holds explicit parallel recipes rather than
   // inventing a combined batch. Sequential additions alone are not variants.
-  const sourceVariantLabels = [...source.matchAll(/\bfor\s+([a-z][a-z\d_-]*)\s*[, :]/gi)]
-    .map(match => match[1].toLowerCase()).filter(label => /\d/.test(label))
-  let requiresReview = new Set(sourceVariantLabels).size > 1
-    || /\b(?:two|three|multiple|separate)\s+formulations\b/i.test(source)
+  const requiresReview = hasParallelFormulations([source, ...steps.map(step => step.description)].join('\n'))
   if (requiresReview) warnings.push('Multiple source formulations were detected. Submit one formulation at a time; separate formulations must not be scored as one combined batch.')
 
   // ── Walk every occurrence once, in order, collecting warnings + hints. ──
@@ -162,7 +170,6 @@ export function validateParsedAnalysisInputs(
 
       // (a) Compound-quantity string — model combined multiple amounts.
       if (qty && COMPOUND_QUANTITY.test(qty)) {
-        requiresReview = true
         warnings.push(
           `Step ${stepIdx + 1}, chemical "${chemical.name}" has a compound quantity ` +
           `"${qty}" that cannot be safely split without source-grounded separation; ` +
@@ -180,8 +187,18 @@ export function validateParsedAnalysisInputs(
       }
 
       // (c) Process-use hint — additive, source-grounded only.
-      const use = inferProcessUse(step.description ?? '', chemical.role ?? '')
-      if (use) processUseHints[occurrenceId(stepIdx, chemIdx)] = use
+      const description = (step.description ?? '').replace(/\s+/g, ' ').toLowerCase().trim()
+      const use = description && sourceWords.includes(description)
+        ? inferProcessUse(step.description, chemical.role ?? '') : undefined
+      const validatedChemical = validatedSteps[stepIdx].chemicals[chemIdx]
+      delete validatedChemical.processUse
+      if (use) {
+        processUseHints[occurrenceId(stepIdx, chemIdx)] = use
+        validatedChemical.processUse = use
+      }
+      if (chemical.processUse && chemical.processUse !== use) {
+        warnings.push(`Step ${stepIdx + 1}, chemical "${chemical.name}": model process use "${chemical.processUse}" was not supported by the original source and was ${use ? `replaced with "${use}"` : 'removed'}.`)
+      }
     })
   })
 
@@ -220,7 +237,7 @@ export function validateParsedAnalysisInputs(
   }
 
   // ── Same-step role conflicts. ──
-  warnings.push(...isSameStepRoleConflict(steps, source))
+  warnings.push(...isSameStepRoleConflict(steps))
 
   // ── Honesty signal: never claim validated-complete input when we cannot. ──
   if (warnings.length > 0) {
@@ -231,7 +248,7 @@ export function validateParsedAnalysisInputs(
   }
 
   return {
-    steps,
+    steps: validatedSteps,
     warnings,
     requiresReview,
     ...(Object.keys(processUseHints).length > 0 ? { processUseHints } : {}),

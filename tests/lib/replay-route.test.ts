@@ -143,7 +143,9 @@ describe('analyses replay route', () => {
     })
     expect(body.metadata.sourceHash).toBe(storedManifest.sourceHash)
     expect(body.metadata.digest).toBe(storedManifest.digest)
-    expect(body.metadata.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(body.metadata.storedAnalysisGeneratedAt).toBeNull()
+    expect(body.metadata.replayedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(body.metadata).not.toHaveProperty('generatedAt')
     expect(response.headers.get('Cache-Control')).toContain('no-store')
   })
 
@@ -230,7 +232,7 @@ describe('analyses replay route', () => {
     expect((await response.json()).code).toBe('digest_mismatch')
   })
 
-  it('returns 409 when the stored methodologyVersion does not match the current methodologyVersion', async () => {
+  it('replays original historical scores across a methodology upgrade with explicit drift metadata', async () => {
     const source = 'Add 5 mL dichloromethane and stir 10 min.'
     const storedManifest = buildStoredManifest(source, 'waste-v0-legacy')
     buildSupabase({
@@ -253,8 +255,12 @@ describe('analyses replay route', () => {
       },
     })
     const response = await callGet('analysis-1')
-    expect(response.status).toBe(409)
-    expect((await response.json()).code).toBe('methodology_mismatch')
+    const body = await response.json()
+    expect(response.status).toBe(200)
+    expect(body.metadata.methodologyDrifted).toBe(true)
+    expect(body.metadata.methodologyVersion).toBe('waste-v0-legacy')
+    expect(body.metadata.currentMethodologyVersion).toBe(CURRENT_METHODOLOGY)
+    expect(body.scores).toEqual(storedManifest.scores)
   })
 
   it('returns 409 when the stored manifest has a non-1 schemaVersion (future schema)', async () => {

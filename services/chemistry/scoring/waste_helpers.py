@@ -7,12 +7,20 @@ into an authoritative total — that would silently turn no-measurement into
 a confident measurement. ``finite_positive_kg`` is the single source of
 truth for "is this mass usable?"; ``safe_kg`` is kept only for backwards
 compatibility with other call sites and is documented as legacy.
+
+Product-role chemicals are outputs, not consumed inputs. They are excluded
+from the observed input inventory and from the input hazard buckets, so a
+protocol's product can never be counted as input mass or as a hazardous
+input. The canonical product vocabulary is owned by
+``scoring.p4_product_toxicity`` (``PRODUCT_ROLES``) so every scorer agrees
+on what a product is.
 """
 
 from __future__ import annotations
 import math
 from typing import Sequence
 from .models import ChemicalInput
+from .p4_product_toxicity import PRODUCT_ROLES
 
 
 # ── H-code hazard category mappings ──────────────────────────────────
@@ -37,6 +45,18 @@ ENVIRONMENTAL_HCODES = {
 
 
 SOLVENT_ROLES = {"solvent", "co-solvent", "wash solvent", "extraction solvent"}
+
+
+def is_product_role(chem: ChemicalInput) -> bool:
+    """True when a chemical is a product/output instead of a consumed input.
+
+    Mirrors the product detection used by P4 (product toxicity): the
+    normalized role is either one of the canonical ``PRODUCT_ROLES``
+    synonyms ("product", "desired product", "target", "intermediate",
+    "final product", "main product") or explicitly names a product.
+    """
+    role = (chem.role or "").lower().strip()
+    return role in PRODUCT_ROLES or "product" in role
 
 
 def finite_positive_kg(chem: ChemicalInput) -> float | None:
@@ -97,8 +117,12 @@ def observed_input_inventory(chemicals: Sequence[ChemicalInput]) -> dict:
       * "unavailable" — no chemical carries a finite positive mass,
       * "partial"     — at least one known, at least one missing,
       * "complete"    — every non-product input has a finite positive mass.
+
+    Product-role chemicals are outputs and are excluded from both the mass
+    totals and the coverage denominators.
     """
-    inputs = [c for c in chemicals if (c.role or "").lower().strip() != "product"]
+    products = [c for c in chemicals if is_product_role(c)]
+    inputs = [c for c in chemicals if not is_product_role(c)]
     known = [c for c in inputs if finite_positive_kg(c) is not None]
     unknown = [c for c in inputs if finite_positive_kg(c) is None]
     if not known:
@@ -115,6 +139,7 @@ def observed_input_inventory(chemicals: Sequence[ChemicalInput]) -> dict:
         "knownMassChemicalCount": len(known),
         "chemicalsWithUnknownMassCount": len(unknown),
         "massCoverage": coverage,
+        "productChemicalsExcludedCount": len(products),
     }
 
 
@@ -134,14 +159,18 @@ def bucket_hazard_chemicals(
     chemicals: Sequence[ChemicalInput],
     hcodes_map: dict[str, list[str]],
 ) -> dict[str, dict]:
-    """Group chemicals into hazard buckets, carrying per-bucket mass coverage.
+    """Group input chemicals into hazard buckets, carrying per-bucket mass coverage.
+
+    Product-role chemicals are skipped: a product is an output whose toxicity
+    is scored by P4, not a hazardous input consumed by the protocol.
 
     Observed hazard flags remain visible qualitatively (chemical names +
     counts) even when one or more flagged chemicals lack a usable mass.
     ``totalKg`` is reported only when every flagged chemical in that bucket
     carries a finite positive mass; otherwise it is ``None`` and the
     ``massCoverage`` field says ``"partial"`` or ``"unavailable"`` so the
-    caller knows the segment is qualitative, not summable.
+    caller knows the segment is qualitative, not summable. When present,
+    ``totalKg`` is observed *input* mass — never measured waste.
     """
     buckets: dict[str, dict] = {
         "toxic": {"totalKg": 0.0, "chemicals": [], "count": 0, "knownMassCount": 0},
@@ -152,6 +181,10 @@ def bucket_hazard_chemicals(
     }
 
     for chem in chemicals:
+        if is_product_role(chem):
+            # Outputs are not inputs: never report a product as a hazardous
+            # input or fold its mass into an input hazard bucket.
+            continue
         codes = hcodes_map.get(chem.name)  # absent lookup ≠ verified safety
         if codes is None:
             continue

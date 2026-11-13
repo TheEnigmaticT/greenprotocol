@@ -127,6 +127,35 @@ afterEach(() => {
 })
 
 describe('PATCH /api/analyses/[id] — immutable manifest preservation', () => {
+  it.each([{ value: 'not-an-object' }, { value: 123 }, { value: true }, { value: [] }])('rejects a non-object analysis result $value before database access', async ({ value }) => {
+    configureSupabase({ row: { analysis_result: baseResult(), revision_number: 1 } })
+    const response = await patch(patchResult({ analysis_result: value, expected_revision_number: 1 }), 'a-1')
+    expect(response.status).toBe(400)
+    const client = await mocks.createClient.mock.results[0].value
+    expect(client.from).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 for malformed JSON rather than throwing', async () => {
+    configureSupabase({ row: { analysis_result: baseResult(), revision_number: 1 } })
+    const response = await patch(new Request('http://localhost/api/analyses/a-1', { method: 'PATCH', body: '{bad' }), 'a-1')
+    expect(response.status).toBe(400)
+  })
+
+  it('rejects a malformed score view rather than saving a string as deterministicScores', async () => {
+    configureSupabase({ row: { analysis_result: baseResult(), revision_number: 1 } })
+    const response = await patch(patchResult({ analysis_result: baseResult({ deterministicScores: 'not scores' }), expected_revision_number: 1 }), 'a-1')
+    expect(response.status).toBe(400)
+  })
+
+  it('labels a valid edited score view as different from the immutable original', async () => {
+    const original = buildStoredManifest()
+    configureSupabase({ row: { analysis_result: baseResult({ deterministicScores: original.scores, scoringInputManifest: original }), revision_number: 1 } })
+    const response = await patch(patchResult({ analysis_result: baseResult({ deterministicScores: { ...original.scores, total_score: 9 } }), expected_revision_number: 1 }), 'a-1')
+    expect(response.status).toBe(200)
+    expect((await response.json()).scoringAudit).toMatchObject({ kind: 'differs-from-original', scoresMatchOriginal: false })
+    expect(original.scores.total_score).toBe(7)
+  })
+
   it('preserves the stored scoringInputManifest when the client omits it (ordinary card-update)', async () => {
     const storedManifest = buildStoredManifest()
     const currentResult = baseResult({ scoringInputManifest: storedManifest })
@@ -158,7 +187,9 @@ describe('PATCH /api/analyses/[id] — immutable manifest preservation', () => {
     )
 
     expect(response.status).toBe(200)
-    expect((await response.json())).toEqual({ success: true, revisionNumber: 2 })
+    const responseBody = await response.json()
+    expect(responseBody).toMatchObject({ success: true, revisionNumber: 2 })
+    expect(responseBody.scoringAudit.kind).toBe('differs-from-original')
 
     const supabase = await mocks.createClient.mock.results[0].value
     const updateCall = supabase.from.mock.results[0]?.value?.update?.mock?.calls?.[0]?.[0]

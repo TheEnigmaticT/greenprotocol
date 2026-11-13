@@ -1,23 +1,30 @@
-"""Structured waste analysis with explicit availability boundary.
+"""Structured waste analysis with an explicit waste/disposition boundary.
 
 Parsed inputs, GHS flags, and process counts do not establish generated
-waste, liquid phase, recovery, or final disposition. Until a protocol
-supplies those data, this module emits an ``availability`` block alongside
+waste, liquid phase, recovery, or final disposition. No measured waste or
+disposition record enters the scoring contract, so this module never
+reports an actual waste mass: it emits an ``availability`` block alongside
 the source-grounded observations that remain reportable.
 
 Contract summary:
-  * ``summary.wasteImpactScore`` is -1 (sentinel) when any mass or hazard
-    evidence is unavailable; otherwise it is the deterministic 0–10 score.
-  * ``summary.grade`` is ``"INCOMPLETE"`` on the same condition;
-    ``summary.confidence`` is ``"unavailable"`` (string-compatible).
-  * ``directWaste.*Kg`` and ``liquidBurden.*Kg`` are JSON ``null`` when
-    coverage is incomplete — never a numeric 0 masquerading as a measurement.
-  * ``hazardSegments`` still lists observed hazard flags qualitatively
-    (chemicals + counts) but their ``totalKg`` is ``null`` whenever any
-    contributor in that bucket has missing/nonpositive/nonfinite mass.
-  * The ``availability`` block carries explicit missing-input reasons and
-    declares the numeric convention (``wasteImpactScoreSentinel=-1``,
-    ``nullKgMeansUnavailable=true``).
+  * ``summary.wasteImpactScore`` is always the -1 sentinel and
+    ``summary.grade`` is always ``"INCOMPLETE"``; ``summary.confidence`` is
+    ``"unavailable"``. A complete input inventory does not change this:
+    inputs are not waste.
+  * ``directWaste.*Kg`` and ``liquidBurden.*Kg`` are JSON ``null`` — never a
+    numeric 0, never an input-derived estimate, never a fixed-fraction
+    "discarded" guess.
+  * ``observedInputInventory`` keeps the known input masses and their
+    coverage labels, independently of any waste conclusion.
+  * ``hazardSegments`` lists observed input hazard flags qualitatively
+    (chemicals + counts); their ``totalKg`` is observed *input* mass, and is
+    ``null`` whenever any contributor in that bucket lacks a usable mass.
+  * Product-role chemicals are excluded from the input inventory and from
+    the input hazard buckets (they are outputs; P4 scores their toxicity).
+  * The ``availability`` block carries explicit missing-input reasons, the
+    numeric convention (``wasteImpactScoreSentinel=-1``,
+    ``nullKgMeansUnavailable=true``) and the reason no waste metric can be
+    produced: ``input inventory is not measured waste/disposition``.
 """
 
 from __future__ import annotations
@@ -30,6 +37,7 @@ from .waste_helpers import (
     finite_positive_kg,
     observed_input_inventory,
     bucket_hazard_chemicals,
+    is_product_role,
 )
 
 
@@ -37,8 +45,17 @@ WASTE_IMPACT_SCORE_SENTINEL: int = -1
 WASTE_GRADE_INCOMPLETE: str = "INCOMPLETE"
 WASTE_CONFIDENCE_UNAVAILABLE: str = "unavailable"
 
+#: Stated whenever an actual waste / disposition metric is reported as null.
+WASTE_EVIDENCE_REASON: str = "input inventory is not measured waste/disposition"
 
-# ── Grade thresholds ─────────────────────────────────────────────
+
+# ── Legacy penalty helpers ──────────────────────────────────────────
+#
+# These helpers predate the waste/disposition evidence boundary and are
+# retained for reference only. They are NOT wired into any returned metric:
+# every penalty they compute is derived from input inventory, which is not
+# evidence of waste. They must not be re-connected to the response until a
+# measured waste/disposition record exists.
 
 def _grade(score: float) -> str:
     """Convert a 0-10 score to letter grade; non-numeric → INCOMPLETE."""
@@ -54,8 +71,6 @@ def _grade(score: float) -> str:
         return "D"
     return "F"
 
-
-# ── Penalty sub-scores ───────────────────────────────────────────
 
 def _solvent_penalty(solvent_kg: float, total_kg: float) -> float:
     """0-3 penalty based on solvent mass fraction and absolute mass."""
@@ -95,8 +110,6 @@ def _process_burden_penalty(
     transfer_score = min(transfer_count * 0.1, 0.5)
     return min(step_score + transfer_score, 2.0)
 
-
-# ── Primary driver logic ─────────────────────────────────────────
 
 def _worst_category(
     solvent_penalty: float,
@@ -148,8 +161,7 @@ def _missing_mass_reasons(chemicals: list[ChemicalInput]) -> list[dict[str, str]
     """Describe every input chemical whose quantity_kg is missing/nonpositive/nonfinite."""
     reasons: list[dict[str, str]] = []
     for chem in chemicals:
-        role = (chem.role or "").lower().strip()
-        if role == "product":
+        if is_product_role(chem):
             continue
         kg = chem.quantity_kg
         if kg is None:
@@ -174,8 +186,7 @@ def _missing_hazard_reasons(
     """
     reasons: list[dict[str, str]] = []
     for chem in chemicals:
-        role = (chem.role or "").lower().strip()
-        if role == "product":
+        if is_product_role(chem):
             continue
         if chem.name not in hcodes_map:
             reasons.append({"chemical": chem.name, "input": "hcodes", "reason": "unavailable_lookup"})
@@ -191,7 +202,14 @@ def compute_waste_analysis(
     hcodes_map: dict[str, list[str]],
     process_metrics: dict | None = None,
 ) -> dict:
-    """Compute a full structured waste analysis with explicit availability boundary.
+    """Compute a structured waste analysis with an explicit evidence boundary.
+
+    The scoring contract carries no measured waste stream and no disposition
+    record: input masses, H-codes and process counts describe what went in,
+    never what was generated, discarded, recovered, or disposed of. Every
+    actual waste metric is therefore reported as ``null`` and the summary
+    stays INCOMPLETE / -1 / "unavailable" — including when the input
+    inventory itself is complete and fully hazard-annotated.
 
     Args:
         chemicals: Parsed chemicals with quantities in kg.
@@ -201,14 +219,15 @@ def compute_waste_analysis(
 
     Returns:
         Dict matching the WasteAnalysis TypeScript interface shape, with:
-          * ``availability`` block declaring missing-input reasons and the
-            numeric convention,
-          * ``summary.wasteImpactScore == -1`` and ``summary.grade ==
-            "INCOMPLETE"`` whenever mass or hazard evidence is incomplete,
-          * ``directWaste.*Kg`` and ``liquidBurden.*Kg`` as JSON ``null``
-            when their underlying metric is unavailable,
-          * ``hazardSegments`` listing observed hazard flags qualitatively
-            (chemicals + counts) even when the bucket's totalKg is null.
+          * ``availability`` block declaring missing-input reasons, the
+            numeric convention, and why no waste metric can be produced,
+          * ``summary.wasteImpactScore == -1``, ``summary.grade ==
+            "INCOMPLETE"`` and ``summary.confidence == "unavailable"``,
+          * ``directWaste.*Kg`` and ``liquidBurden.*Kg`` as JSON ``null``,
+          * ``observedInputInventory`` preserving known input masses and
+            their coverage,
+          * ``hazardSegments`` listing observed input hazard flags
+            qualitatively (chemicals + counts) with observed input mass.
     """
     pm = process_metrics or {}
     transfer_count = pm.get("transfer_count", 0)
@@ -224,56 +243,24 @@ def compute_waste_analysis(
     missing_hazard = _missing_hazard_reasons(list(chemicals), hcodes_map)
     hazard_complete = not missing_hazard
 
-    coverage_complete = mass_complete and hazard_complete
+    input_coverage_complete = mass_complete and hazard_complete
 
     buckets = bucket_hazard_chemicals(chemicals, hcodes_map)
 
-    # Sub-scores: only meaningful when coverage is complete; otherwise we
-    # leave the penalty path quiet so the sentinel below carries the load.
-    if coverage_complete:
-        # Recompute authoritative kg totals from the actually-usable masses.
-        solvent_kg = sum(
-            finite_positive_kg(c) or 0.0
-            for c in chemicals
-            if (c.role or "").lower().strip() in {"solvent", "co-solvent", "wash solvent", "extraction solvent"}
-        )
-        non_solvent_kg = sum(
-            finite_positive_kg(c) or 0.0
-            for c in chemicals
-            if (c.role or "").lower().strip() not in {"product", "solvent", "co-solvent", "wash solvent", "extraction solvent"}
-        )
-        total_kg = round(solvent_kg + non_solvent_kg, 4)
-
-        liquid_handled_kg = sum(
-            finite_positive_kg(c) or 0.0
-            for c in chemicals
-            if (c.role or "").lower().strip() in {"solvent", "co-solvent", "wash solvent", "extraction solvent"}
-        )
-        liquid_discarded_kg = round(liquid_handled_kg * 0.6, 4)
-
-        sp = _solvent_penalty(solvent_kg, total_kg)
-        hp = _hazard_penalty(buckets)
-        lp = _liquid_burden_penalty(liquid_handled_kg)
-        pp = _process_burden_penalty(purification_count, wash_step_count, transfer_count)
-
-        waste_score = round(min(sp + hp + lp + pp, 10.0), 1)
-        grade = _grade(waste_score)
-        worst = _worst_category(sp, hp, lp, pp)
-        driver = _identify_primary_driver(worst, buckets)
-        next_action = _best_next_action(worst, buckets)
-        confidence = "calculated"
-    else:
-        solvent_kg = None
-        non_solvent_kg = None
-        total_kg = None
-        liquid_handled_kg = None
-        liquid_discarded_kg = None
-        waste_score = WASTE_IMPACT_SCORE_SENTINEL
-        grade = WASTE_GRADE_INCOMPLETE
-        worst = "unknown"
-        driver = "Actual waste generation is unknown: required inputs are unavailable."
-        next_action = "Record waste streams and disposition to estimate waste."
-        confidence = WASTE_CONFIDENCE_UNAVAILABLE
+    # ── Actual waste / disposition metrics ───────────────────────────
+    # Inputs are not waste. Without a measured waste stream, a phase
+    # observation, and a disposition record, every actual waste number
+    # stays null — even with a complete, hazard-annotated input inventory.
+    solvent_kg = None
+    non_solvent_kg = None
+    total_kg = None
+    liquid_handled_kg = None
+    liquid_discarded_kg = None
+    waste_score = WASTE_IMPACT_SCORE_SENTINEL
+    grade = WASTE_GRADE_INCOMPLETE
+    confidence = WASTE_CONFIDENCE_UNAVAILABLE
+    driver = f"Actual waste generation is unknown: {WASTE_EVIDENCE_REASON}."
+    next_action = "Record measured waste streams and their final disposition to estimate waste."
 
     # Evidence sources — list only what we can ground.
     sources: list[str] = []
@@ -298,19 +285,31 @@ def compute_waste_analysis(
         seen.add(name)
         missing_inputs.append(entry)
 
+    input_chemicals = [c for c in chemicals if not is_product_role(c)]
+    if hazard_complete:
+        hazard_coverage = "complete"
+    elif any(hcodes_map.get(c.name) for c in input_chemicals):
+        hazard_coverage = "partial"
+    else:
+        hazard_coverage = "unavailable"
+
+    if input_coverage_complete:
+        input_coverage = "complete"
+    elif mass_complete or hazard_complete:
+        input_coverage = "partial"
+    else:
+        input_coverage = "unavailable"
+
     availability = {
-        "actualWasteMass": "available" if coverage_complete else "unavailable",
-        "liquidDisposition": "available" if coverage_complete else "unavailable",
+        "actualWasteMass": "unavailable",
+        "liquidDisposition": "unavailable",
         "wasteImpactScoreSentinel": WASTE_IMPACT_SCORE_SENTINEL,
         "nullKgMeansUnavailable": True,
         "missingInputs": missing_inputs,
-        "reason": (
-            "Mass and hazard evidence cover every evaluated input."
-            if coverage_complete
-            else "Actual waste generation and liquid disposition were not reported in the submitted protocol; required mass or hazard inputs are unavailable."
-        ),
+        "reason": WASTE_EVIDENCE_REASON,
         "massCoverage": inventory["massCoverage"],
-        "hazardCoverage": "complete" if hazard_complete else ("partial" if any(hcodes_map.get(c.name) for c in chemicals) else "unavailable"),
+        "hazardCoverage": hazard_coverage,
+        "inputCoverage": input_coverage,
     }
 
     return {
@@ -331,7 +330,7 @@ def compute_waste_analysis(
         "hazardSegments": [
             {
                 "category": cat,
-                "totalKg": data["totalKg"],  # already rounded or None per massCoverage
+                "totalKg": data["totalKg"],  # observed input mass, or None per massCoverage
                 "chemicalsCount": data["count"],
                 "chemicals": data["chemicals"],
                 "massCoverage": data["massCoverage"],

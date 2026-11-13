@@ -29,7 +29,8 @@ export default function WasteScoreCard({
   analysisId?: string
 }) {
   const { summary } = wasteAnalysis
-  const isIncomplete = summary.grade === INCOMPLETE_LABEL
+  const isIncomplete = summary.grade === INCOMPLETE_LABEL || summary.confidence === 'unavailable'
+    || summary.wasteImpactScore < 0 || wasteAnalysis.availability?.actualWasteMass === 'unavailable'
   const isUnavailable = isIncomplete || summary.confidence === 'unavailable'
   const gc = isIncomplete
     ? INCOMPLETE_GRADE_COLORS
@@ -40,7 +41,7 @@ export default function WasteScoreCard({
   // When mass is incomplete the kg figures must never be presented as a confident
   // measurement. A 0 here is the "we don't know" sentinel — not a real value.
   const massAvailable = !isUnavailable
-    && Object.values(wasteAnalysis.directWaste).some(value => typeof value === 'number' && value > 0)
+    && Object.values(wasteAnalysis.directWaste).every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0)
 
   return (
     <div
@@ -60,13 +61,13 @@ export default function WasteScoreCard({
               className="flex items-center justify-center w-14 h-14 rounded-lg text-2xl font-bold shrink-0"
               style={{ background: gc.bg, color: gc.text }}
               title={isIncomplete
-                ? 'Incomplete coverage — solvent/use roles could not be fully classified.'
+                ? 'Actual waste measurements are unavailable; input mass alone is not measured waste.'
                 : undefined}
               aria-label={isIncomplete
-                ? 'Grade incomplete: solvent/use roles could not be fully classified.'
+                ? 'Grade incomplete: actual waste measurements are unavailable.'
                 : `Grade ${summary.grade}`}
             >
-              {summary.grade}
+              {isIncomplete ? INCOMPLETE_LABEL : summary.grade}
             </div>
 
             <div className="min-w-0">

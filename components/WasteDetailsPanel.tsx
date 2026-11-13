@@ -77,7 +77,7 @@ export default function WasteDetailsPanel({ wasteAnalysis }: { wasteAnalysis: Wa
 
       {/* Hazard segments */}
       {hazardSegments.length > 0 && (
-        <Section label="Hazard-segmented waste">
+        <Section label="Observed input hazards (not measured waste)">
           <ul className="space-y-2">
             {hazardSegments.map((seg) => (
               <li key={seg.category} className="flex items-start justify-between gap-3">

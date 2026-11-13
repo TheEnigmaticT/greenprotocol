@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import {
   replayFrozenScoring,
+  SCORING_INPUT_MANIFEST_SCHEMA_VERSION,
   type ScoringInputManifest,
 } from '@/lib/scoring-input-manifest'
 import { getAnalysisMetadata } from '@/lib/version'
+import { getScoringViewStatus } from '@/lib/scoring-view-status'
 
 /**
  * GET /api/analyses/[id]/replay
@@ -48,7 +50,7 @@ export async function GET(
     return NextResponse.json({ error: 'Analysis not found' }, { status: 404 })
   }
 
-  const analysisResult = (data.analysis_result ?? {}) as { scoringInputManifest?: unknown }
+  const analysisResult = (data.analysis_result ?? {}) as { scoringInputManifest?: unknown; analysisMetadata?: { generatedAt?: string } }
   const storedManifest = analysisResult.scoringInputManifest as
     | ScoringInputManifest
     | undefined
@@ -63,7 +65,7 @@ export async function GET(
     )
   }
 
-  if (storedManifest.schemaVersion !== 1) {
+  if (storedManifest.schemaVersion !== SCORING_INPUT_MANIFEST_SCHEMA_VERSION) {
     return NextResponse.json(
       {
         error: 'Stored manifest uses an unsupported schema version; cannot replay',
@@ -78,7 +80,9 @@ export async function GET(
   try {
     const replay = replayFrozenScoring(storedManifest, {
       sourceText: data.protocol_text ?? '',
-      methodologyVersion: metadata.methodologyVersion,
+      // Historical retrieval validates the recorded method, not today's method.
+      // Strict callers of replayFrozenScoring may still require an exact method.
+      methodologyVersion: storedManifest.provenance?.methodologyVersion,
     })
     return NextResponse.json(
       {
@@ -89,10 +93,13 @@ export async function GET(
           schemaVersion: storedManifest.schemaVersion,
           methodologyVersion: storedManifest.provenance.methodologyVersion,
           currentMethodologyVersion: metadata.methodologyVersion,
+          methodologyDrifted: metadata.methodologyVersion !== storedManifest.provenance.methodologyVersion,
+          recordRole: 'original-analysis',
+          currentViewStatus: getScoringViewStatus(data.analysis_result),
           model: storedManifest.provenance.model,
           sourceHash: storedManifest.sourceHash,
           digest: storedManifest.digest,
-          generatedAt: metadata.generatedAt,
+          storedAnalysisGeneratedAt: typeof analysisResult.analysisMetadata?.generatedAt === 'string' ? analysisResult.analysisMetadata.generatedAt : null,
           replayMode: 'stored-result-replay',
           replayedAt: new Date().toISOString(),
         },

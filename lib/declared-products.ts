@@ -8,10 +8,10 @@ import type { AnalysisStep } from '@/lib/types'
 // regardless of which the source uses. Without equivalence, an explicitly
 // declared product was being dropped from the declared inventory.
 //
-// The fold is intentionally narrow: it covers only the alpha glyph at the
-// positions where the chemical name itself contains alpha. It does NOT
-// generally fold Greek, Cyrillic, or Latin characters; it does NOT collapse
-// chemical hashes, alphanumeric tokens, or stereodescriptors (R/S).
+// The only explicit typography equivalence added here is alpha at positions
+// where the chemical name contains it. Matching remains Unicode case-insensitive;
+// source text and chemical identities are never rewritten or globally normalized.
+// This does not equate beta with alpha, Cyrillic letters with Latin letters, or R/S.
 const GREEK_ALPHA = '\u03B1'
 const LATIN_ALPHA = '\u0251'
 const ALPHA_TYPOGRAPHY_CLASS = `[${GREEK_ALPHA}${LATIN_ALPHA}]`

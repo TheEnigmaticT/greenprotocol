@@ -1,28 +1,21 @@
-"""P1: Prevention / Process Mass Intensity (PMI)
+"""P1: Prevention / Process Mass Intensity (PMI).
 
-PMI = total mass of all inputs / mass of desired product
-
-Data chain:
-1. Total input mass: summed from unit converter (deterministic)
-2. Product mass via one of:
-   a. LLM extracts stated yield from protocol (surgical call)
-   b. Theoretical yield from atom economy × ACS GCI benchmark
-      efficiency for the classified reaction type (deterministic)
-
-Score: 0 (PMI=1, perfect) to 10 (PMI>=100, very wasteful)
-
-Packet A: this module no longer fabricates a 10g/chemical fallback when
-masses are missing. If any evaluated chemical lacks a finite positive
-``quantity_g``, the principle returns an explicit unavailable score with
-``missing_inputs`` provenance instead of a confident 10g PMI.
+Protocol PMI requires measured input masses and one identified measured product
+mass. Stated yield, reactant molecular weight and atom economy do not by
+themselves establish a product mass. A sourced reaction-type PMI benchmark may
+be reported separately as BENCHMARK, never as a protocol-derived output mass.
 """
+from __future__ import annotations
 
-from scoring.input_honesty import (
-    MASS_PROVENANCE,
-    missing_mass_inputs,
-    unavailable_score,
-)
-from scoring.models import ChemicalInput, PrincipleScore
+import math
+
+from scoring.input_honesty import MASS_PROVENANCE, missing_mass_inputs, unavailable_score
+from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
+from scoring.roles import PRODUCT_ROLES, is_product_role, normalize_role
+
+
+def _finite_positive(value: float | None) -> bool:
+    return value is not None and math.isfinite(value) and value > 0
 
 
 def score_p1(
@@ -34,172 +27,72 @@ def score_p1(
     benchmark_pmi: float | None = None,
     atom_economy_pct: float | None = None,
 ) -> PrincipleScore:
-    """Score Principle 1: Waste Prevention / PMI.
+    """Calculate measured PMI or explicitly report a benchmark-only proxy.
 
-    Args:
-        chemicals: all chemicals with resolved masses
-        yield_pct: stated or inferred yield (0-100)
-        yield_source: "stated", "benchmark", "unknown"
-        reaction_type: classified reaction type
-        benchmark_efficiency: ACS GCI typical efficiency for this type
-        benchmark_pmi: ACS GCI typical PMI for comparison
-        atom_economy_pct: from P2 scoring (for theoretical yield calc)
+    Yield/efficiency/atom-economy arguments remain accepted for caller
+    compatibility but are not substitutes for a measured product mass.
     """
-
-    # Packet A honesty: a mass-weighted PMI requires every evaluated chemical
-    # to carry a finite positive quantity_g. We do not invent 10g/chemical
-    # fillers; if anything is missing, the principle is honestly unavailable.
-    missing = missing_mass_inputs(chemicals)
+    principle_name = "Prevention (Waste / PMI)"
+    inputs = [c for c in chemicals if not is_product_role(c.role)]
+    # Byproducts are excluded from inputs but are not the desired denominator.
+    outputs = [c for c in chemicals if normalize_role(c.role) in PRODUCT_ROLES]
+    if not inputs:
+        return unavailable_score(
+            principle_number=1, principle_name=principle_name,
+            missing_inputs=[{"chemical": "", "input": "input_chemicals", "reason": "no_inputs"}],
+            provenance=MASS_PROVENANCE, data_sources=["unit_converter"],
+        )
+    missing = missing_mass_inputs(inputs)
     if missing:
         return unavailable_score(
-            principle_number=1,
-            principle_name="Prevention (Waste / PMI)",
-            missing_inputs=missing,
-            provenance=MASS_PROVENANCE,
-            data_sources=["unit_converter"],
-            details={
-                "_summary": (
-                    "PMI unavailable — one or more evaluated chemicals lack a "
-                    "declared finite positive quantity_g. Cannot compute a "
-                    "mass-weighted score without fabricating inputs."
-                ),
-                "reaction_type": reaction_type,
-                "yield_pct": yield_pct,
-            },
+            principle_number=1, principle_name=principle_name, missing_inputs=missing,
+            provenance=MASS_PROVENANCE, data_sources=["unit_converter"],
         )
-
-    # Calculate total input mass from recorded quantities
-    total_input_g = sum(c.quantity_g for c in chemicals)  # type: ignore[misc]
-
-    # Determine product mass
-    product_mass_g: float | None = None
-    yield_used: float | None = None
-    method = "none"
-
-    # Method A: stated yield
-    if yield_pct is not None and yield_pct > 0:
-        yield_used = yield_pct
-        method = "stated_yield"
-
-    # Method B: benchmark efficiency × atom economy
-    elif benchmark_efficiency is not None and atom_economy_pct is not None:
-        yield_used = benchmark_efficiency * 100  # convert to pct
-        method = "benchmark_yield"
-
-    # If we have a yield and can find the limiting reagent
-    if yield_used is not None:
-        # Find limiting reagent (smallest molar amount among reactants).
-        # Reactants without a declared quantity_mol cannot honestly determine
-        # the limiting reagent, so they are excluded from the limiting-reagent
-        # search; if every reactant is missing quantity_mol we fall back to
-        # non-solvent mass below.
-        reactants = [c for c in chemicals
-                     if c.role.lower() in ("reactant", "reagent", "starting material")
-                     and c.quantity_mol and c.quantity_mol > 0]
-
-        if reactants:
-            limiting = min(reactants, key=lambda c: c.quantity_mol or float('inf'))
-
-            # Theoretical product mass = limiting_mol × product_MW × (AE/100)
-            if atom_economy_pct and limiting.molecular_weight:
-                # AE tells us what fraction of reactant mass becomes product
-                theoretical_product_g = (
-                    (limiting.quantity_mol or 0)
-                    * (limiting.molecular_weight or 0)
-                    * (atom_economy_pct / 100.0)
-                )
-                product_mass_g = theoretical_product_g * (yield_used / 100.0)
-            else:
-                # Simpler: product is yield% of largest recorded reactant mass.
-                # All reactants here have a recorded quantity_mol so we can
-                # derive their quantity_g from molecular_weight.
-                largest_reactant_g = max(
-                    (c.quantity_mol * c.molecular_weight)
-                    for c in reactants
-                    if c.molecular_weight
-                )
-                product_mass_g = largest_reactant_g * (yield_used / 100.0)
-        else:
-            # No reactants with declared quantity_mol — fall back to non-solvent mass.
-            non_solvent_mass = sum(
-                c.quantity_g for c in chemicals  # type: ignore[misc]
-                if c.role.lower() not in ("solvent", "washing solvent", "co-solvent")
-            )
-            product_mass_g = non_solvent_mass * (yield_used / 100.0) * 0.5
-
-    # Calculate PMI
-    pmi: float | None = None
-    if product_mass_g and product_mass_g > 0:
+    total_input_g = sum(c.quantity_g for c in inputs)  # type: ignore[misc]
+    if len(outputs) > 1:
+        return unavailable_score(
+            principle_number=1, principle_name=principle_name,
+            missing_inputs=[{"chemical": c.name, "input": "desired_product_scope", "reason": "multiple_declared_outputs"} for c in outputs],
+            provenance="unavailable: identify one desired product and its measured mass; outputs were not silently combined or selected",
+            data_sources=["unit_converter"], details={"total_input_g": total_input_g},
+        )
+    product_mass_g = outputs[0].quantity_g if outputs and _finite_positive(outputs[0].quantity_g) else None
+    benchmark = benchmark_pmi if _finite_positive(benchmark_pmi) else None
+    if product_mass_g is not None:
         pmi = total_input_g / product_mass_g
-
-    # If no PMI calculable, use benchmark PMI if available
-    if pmi is None and benchmark_pmi:
-        pmi = benchmark_pmi
+        method = "measured_product_mass"
+        confidence = ScoreProvenance.CALCULATED
+    elif benchmark is not None:
+        pmi = benchmark
         method = "benchmark_pmi_only"
-
-    if pmi is None:
-        return PrincipleScore(
-            principle_number=1,
-            principle_name="Prevention (Waste / PMI)",
-            score=-1.0, normalized=-1.0,
-            details={
-                "_summary": "PMI unavailable — no yield data and no reaction type benchmark.",
-                "error": "Cannot calculate PMI — no yield data and no "
-                         "reaction type benchmark available",
-                "total_input_g": round(total_input_g, 2),
-            },
-            confidence="unavailable",
-            data_sources=[],
-        )
-
-    # Score: PMI 1=0/10, PMI 10=3/10, PMI 25=5/10, PMI 50=7/10, PMI 100+=10/10
-    # Using log scale since PMI varies enormously
-    import math
-    if pmi <= 1:
-        score = 0.0
+        confidence = ScoreProvenance.BENCHMARK
     else:
-        score = min(10.0, round(math.log10(pmi) * 5.0, 2))
-
-    # Compare against benchmark if available
+        return unavailable_score(
+            principle_number=1, principle_name=principle_name,
+            missing_inputs=[{"chemical": outputs[0].name if outputs else "desired product", "input": "product_mass_g", "reason": "not_measured"}],
+            provenance="unavailable: measured product mass missing; yield and reactant weight do not establish product mass",
+            data_sources=["unit_converter"],
+            details={"_summary": "PMI unavailable — no measured product mass and no reaction type PMI benchmark.",
+                     "total_input_g": total_input_g, "product_mass_g": None, "yield_pct": yield_pct},
+        )
+    score = 0.0 if pmi <= 1 else min(10.0, round(math.log10(pmi) * 5.0, 2))
     vs_benchmark = None
-    if benchmark_pmi:
-        if pmi < benchmark_pmi * 0.8:
-            vs_benchmark = "better_than_typical"
-        elif pmi > benchmark_pmi * 1.2:
-            vs_benchmark = "worse_than_typical"
-        else:
-            vs_benchmark = "typical"
-
+    if benchmark is not None:
+        vs_benchmark = "better_than_typical" if pmi < benchmark * .8 else "worse_than_typical" if pmi > benchmark * 1.2 else "typical"
+    if method == "benchmark_pmi_only":
+        summary = f"Benchmark-only PMI = {round(pmi, 2):.1f}; product mass was not derived from this protocol."
+    else:
+        assert product_mass_g is not None  # measured-product branch invariant
+        summary = (f"PMI = {round(pmi, 2):.1f} ({total_input_g:g} g input → "
+                   f"{product_mass_g:g} g declared product). ")
+        summary += (f"vs. {reaction_type} benchmark PMI {benchmark}: {vs_benchmark.replace('_', ' ')}."
+                    if vs_benchmark else "No benchmark available.")
     return PrincipleScore(
-        principle_number=1,
-        principle_name="Prevention (Waste / PMI)",
-        score=score,
-        normalized=round(score / 10.0, 4),
-        details={
-            "_summary": (
-                f"Benchmark-only PMI = {round(pmi, 2):.1f}; product mass was not "
-                f"derived from this protocol."
-                if method == "benchmark_pmi_only"
-                else (
-                    f"PMI = {round(pmi, 2):.1f} "
-                    f"({round(total_input_g, 1):.0f} g input → {round(product_mass_g, 1):.0f} g product, "
-                    f"{yield_used}% yield). "
-                    + (f"vs. {reaction_type} benchmark PMI {benchmark_pmi}: {vs_benchmark.replace('_', ' ')}." if vs_benchmark else "No benchmark available.")
-                )
-            ),
-            "pmi": round(pmi, 2),
-            "total_input_g": round(total_input_g, 2),
-            "product_mass_g": round(product_mass_g, 2) if product_mass_g else None,
-            "yield_pct": yield_used,
-            "yield_source": yield_source if yield_used == yield_pct else method,
-            "reaction_type": reaction_type,
-            "benchmark_pmi": benchmark_pmi,
-            "vs_benchmark": vs_benchmark,
-            "method": method,
-        },
-        data_sources=["unit_converter", "acs_gci_benchmarks"] if benchmark_pmi
-                     else ["unit_converter"],
-        confidence="calculated" if method == "stated_yield"
-                   else "benchmark" if "benchmark" in method
-                   else "partial",
+        principle_number=1, principle_name=principle_name, score=score, normalized=round(score / 10, 4),
+        details={"_summary": summary, "pmi": round(pmi, 2), "total_input_g": round(total_input_g, 2),
+                 "product_mass_g": round(product_mass_g, 2) if product_mass_g is not None else None,
+                 "yield_pct": yield_pct, "yield_source": yield_source, "reaction_type": reaction_type,
+                 "benchmark_pmi": benchmark, "vs_benchmark": vs_benchmark, "method": method},
+        data_sources=["unit_converter", "acs_gci_benchmarks"] if benchmark is not None else ["unit_converter"],
+        confidence=confidence,
     )

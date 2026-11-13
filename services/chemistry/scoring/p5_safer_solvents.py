@@ -6,21 +6,29 @@ its solvent choices are, scaled by how much of each is used.
 
 Score: 0 (all recommended solvents) to 10 (all highly hazardous)
 
-Packet A: solvent role filter is now narrowed.
+Packet A / reviewer B2: a chemical is treated as a solvent when EITHER
 
-    A chemical is treated as a solvent when ANY of:
-      (a) its role is in the explicit solvent-family set
-          (``solvent``, ``co-solvent``, ``washing solvent``, ``auxiliary``), OR
-      (b) its process-use / role signals workup/extraction/wash AND its
-          identity resolves to a curated CHEM21 solvent. This handles
-          legacy protocols that label ethyl acetate ``workup`` rather
-          than ``solvent``.
+  (a) its role is in the explicit solvent-family set
+      (``solvent``, ``co-solvent``, ``washing solvent``, ``auxiliary``), OR
+  (b) its role is a legacy workup label (``workup``, ``workup_solvent``,
+      ``wash``, ``extraction``) AND its identity resolves to a curated CHEM21
+      solvent. This handles legacy protocols that label ethyl acetate
+      ``workup`` rather than ``solvent``.
 
-    We do NOT blindly widen ``workup`` to all workup chemicals — salts
-    like ``Na2CO3`` and ``NaCl`` that the protocol lists under workup/wash
-    are excluded unless their identity verifies as a curated solvent.
+The canonical process-use vocabulary is reaction/extraction/wash/quench/drying
+(``workup_solvent`` is the legacy alias).  Process use is recorded context, not
+a blanket disqualifier: an explicit solvent role is always assessed, and a
+curated solvent is never dropped because of the process use it carries.
 
-    A 100g/chemical fabricated default for missing mass has been removed.
+We do NOT blindly widen ``workup`` to all workup chemicals — salts like
+``Na2CO3`` and ``NaCl`` that the protocol lists under workup/wash are
+excluded because their identity does not verify as a curated solvent.  An
+unknown role is not a solvent either.
+
+A stated solvent with no curated classification cannot be scored away: it
+makes the principle unavailable rather than disappearing from the
+denominator.  A 100g/chemical fabricated default for missing mass has been
+removed.
 """
 
 from scoring.input_honesty import (
@@ -29,20 +37,10 @@ from scoring.input_honesty import (
     unavailable_score,
 )
 from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
+from scoring.roles import SOLVENT_ROLES, WORKUP_ROLES, normalize_role
 from chem21 import lookup_solvent
 from identity import preferred_identity_name
 from solvent_evidence_store import SolventEvidenceUnavailableError
-
-
-SOLVENT_ROLES = frozenset({
-    "solvent", "co-solvent", "washing solvent", "auxiliary",
-})
-# Roles that, in legacy protocols, may carry a real solvent under a
-# non-solvent role label. We only treat them as solvent when the
-# CHEM21 identity check confirms the curated solvent name.
-SOLVENT_PROCESS_USE = frozenset({
-    "workup", "extraction", "wash",
-})
 
 
 def _chem21_unavailable(error: SolventEvidenceUnavailableError) -> PrincipleScore:
@@ -66,30 +64,30 @@ CLASS_WEIGHTS = {
 }
 
 
+def _is_curated_solvent(chem: ChemicalInput) -> bool:
+    """True when CHEM21 recognises this identity as a curated solvent.
+
+    We let SolventEvidenceUnavailableError propagate so the caller can
+    convert it to an UNAVAILABLE score.
+    """
+    entry = lookup_solvent(
+        preferred_identity_name(chem.reference_name or chem.name)
+    )
+    return entry is not None
+
+
 def _is_solvent(chem: ChemicalInput) -> bool:
     """Narrow solvent filter — see module docstring.
 
-    Returns True when the chemical belongs to the explicit solvent role
-    set, OR its process-use signals workup/extraction/wash AND its
-    identity resolves to a curated CHEM21 solvent.
+    Returns True when the chemical belongs to the explicit solvent role set,
+    OR its role is a legacy workup label AND its identity resolves to a
+    curated CHEM21 solvent.  The process use never disqualifies a chemical.
     """
-    role = chem.role.lower().strip()
+    role = normalize_role(chem.role)
     if role in SOLVENT_ROLES:
         return True
-    # process_use (parent-populated) takes precedence over legacy role labels.
-    process_use = (chem.process_use or "").lower().strip()
-    if process_use and process_use not in SOLVENT_PROCESS_USE:
-        # An explicit non-solvent process_use disqualifies the chemical
-        # from the solvent filter.
-        return False
-    if role in SOLVENT_PROCESS_USE or (process_use and process_use in SOLVENT_PROCESS_USE):
-        # Identity check — only include if CHEM21 recognises the name.
-        # We let SolventEvidenceUnavailableError propagate so the caller
-        # can convert it to an UNAVAILABLE score.
-        entry = lookup_solvent(
-            preferred_identity_name(chem.reference_name or chem.name)
-        )
-        return entry is not None
+    if role in WORKUP_ROLES:
+        return _is_curated_solvent(chem)
     return False
 
 
@@ -99,7 +97,7 @@ def score_p5(chemicals: list[ChemicalInput]) -> PrincipleScore:
     Method: For each solvent, look up CHEM21 classification and
     weight by mass fraction. Non-solvents are ignored.
     """
-    # Packet A: solvent filter is now identity-verified for legacy workup
+    # Packet A: the solvent filter is identity-verified for legacy workup
     # roles. Errors here propagate to an UNAVAILABLE score; legitimate
     # non-solvents simply return False from _is_solvent.
     try:

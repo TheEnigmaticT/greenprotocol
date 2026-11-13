@@ -157,8 +157,9 @@ describe('ScoreCard truthful coverage display', () => {
 
     // Must show the partial-coverage caveat even though grade is a letter
     expect(html).toMatch(/partial|incomplete|not comparable/i)
-    // Assessed count uses the typed coverage field
-    expect(html).toMatch(/3 of 6|3 of/i)
+    // Actual rows override stale service coverage; these fixtures contain two assessed principles.
+    expect(html).toContain('2 of 6 principles assessed')
+    expect(html).not.toContain('3 of 6 principles assessed')
   })
 
   it('AI-assessed count uses model-inferred confidence, not benchmark', () => {

@@ -290,7 +290,7 @@ export default function PrincipleSection({
             {wasteAnalysis.hazardSegments && wasteAnalysis.hazardSegments.length > 0 && (
               <div className="mb-3">
                 <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#7C2D36' }}>
-                  Hazard-Segmented Waste
+                  Observed input hazards (not measured waste)
                 </h4>
                 <div className="space-y-1">
                   {wasteAnalysis.hazardSegments.map((seg) => (

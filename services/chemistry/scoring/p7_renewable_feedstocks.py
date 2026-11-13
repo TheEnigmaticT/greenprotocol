@@ -13,6 +13,7 @@ from scoring.input_honesty import (
     unavailable_score,
 )
 from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
+from scoring.roles import is_product_role
 from identity import preferred_identity_name
 
 # Curated set of known renewable / bio-based chemicals
@@ -63,7 +64,7 @@ def is_renewable(name: str) -> bool:
 
 def score_p7(chemicals: list[ChemicalInput]) -> PrincipleScore:
     """Score Principle 7: Use of Renewable Feedstocks.
-    
+
     Method: Calculate renewable mass fraction. Solvents and reagents
     both count. Products are excluded.
     """
@@ -77,13 +78,10 @@ def score_p7(chemicals: list[ChemicalInput]) -> PrincipleScore:
             data_sources=["renewable_db"],
         )
 
-    excluded_roles = {"product", "desired product", "byproduct",
-                      "target", "final product"}
-
-    # Unknown roles are kept — not silently excluded — only confirmed products
-    # / byproducts / targets are dropped from the mass-weighted calculation.
-    scoreable = [c for c in chemicals
-                 if c.role.lower().strip() not in excluded_roles]
+    # Unknown roles are kept — not silently excluded — only confirmed
+    # outputs (products / byproducts / targets, the same vocabulary P4
+    # evaluates) are dropped from the mass-weighted calculation.
+    scoreable = [c for c in chemicals if not is_product_role(c.role)]
 
     # Packet A honesty: missing declared mass would require fabricating a
     # 10g/chemical filler to compute the renewable mass fraction. Block

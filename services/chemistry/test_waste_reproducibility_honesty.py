@@ -255,8 +255,8 @@ def test_response_keys_preserved_on_unavailable_path():
     assert "purificationCount" in analysis["processBurden"]
 
 
-def test_complete_coverage_returns_authoritative_waste_metrics():
-    """Sanity: complete mass + hcodes yields nonzero metrics, not a sentinel -1."""
+def test_complete_input_coverage_does_not_establish_actual_waste_metrics():
+    """Input inventory stays measurable; actual output/disposition stays unknown."""
     analysis = compute_waste_analysis(
         chemicals=[
             _chem("acetonitrile", role="solvent", quantity_kg=0.8),
@@ -264,11 +264,13 @@ def test_complete_coverage_returns_authoritative_waste_metrics():
         ],
         hcodes_map={"acetonitrile": ["H225"], "solid": ["H300"]},
     )
-    assert analysis["summary"]["grade"] != "INCOMPLETE"
-    assert analysis["summary"]["wasteImpactScore"] != -1
-    assert analysis["directWaste"]["totalWasteKg"] == pytest.approx(1.0, rel=1e-4)
-    assert analysis["directWaste"]["solventWasteKg"] == pytest.approx(0.8, rel=1e-4)
-    assert analysis["directWaste"]["nonSolventWasteKg"] == pytest.approx(0.2, rel=1e-4)
+    assert analysis["observedInputInventory"]["knownInputMassKg"] == pytest.approx(1.0, rel=1e-4)
+    assert analysis["observedInputInventory"]["massCoverage"] == "complete"
+    assert analysis["summary"]["grade"] == "INCOMPLETE"
+    assert analysis["summary"]["wasteImpactScore"] == -1
+    assert all(value is None for value in analysis["directWaste"].values())
+    assert all(value is None for value in analysis["liquidBurden"].values())
+    assert analysis["availability"]["actualWasteMass"] == "unavailable"
 
 
 # ── Convenience: numeric convention declared ───────────────────────
