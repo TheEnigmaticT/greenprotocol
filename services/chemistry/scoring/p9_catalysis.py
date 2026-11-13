@@ -8,7 +8,13 @@ excesses of reagents score poorly.
 Score: 0 (all catalytic) to 10 (all stoichiometric, no catalysts)
 """
 
-from scoring.models import ChemicalInput, PrincipleScore
+from scoring.input_honesty import (
+    MASS_PROVENANCE,
+    missing_mass_inputs,
+    unavailable_score,
+)
+from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
+from scoring.roles import is_product_role, normalize_role
 
 # Roles considered catalytic
 CATALYTIC_ROLES = {
@@ -24,21 +30,22 @@ STOICHIOMETRIC_ROLES = {
     "base", "acid", "activating agent", "deprotecting agent",
 }
 
-# Roles to skip (not scored)
+# Roles to skip (not scored).  Declared outputs are skipped through the
+# shared helper so P9 drops exactly the product syms P4 evaluates.
 EXCLUDED_ROLES = {
     "solvent", "washing solvent", "co-solvent", "auxiliary",
-    "product", "byproduct", "starting material", "substrate",
+    "starting material", "substrate",
 }
 
 
 def _classify_role(role: str) -> str:
     """Classify a chemical role as catalytic, stoichiometric, or other."""
-    r = role.lower().strip()
+    r = normalize_role(role)
     if r in CATALYTIC_ROLES or "catalyst" in r:
         return "catalytic"
     if r in STOICHIOMETRIC_ROLES:
         return "stoichiometric"
-    if r in EXCLUDED_ROLES:
+    if is_product_role(r) or r in EXCLUDED_ROLES:
         return "excluded"
     # Default: assume stoichiometric if it's doing chemistry
     return "stoichiometric"
@@ -46,22 +53,48 @@ def _classify_role(role: str) -> str:
 
 def score_p9(chemicals: list[ChemicalInput]) -> PrincipleScore:
     """Score Principle 9: Use of Catalysts.
-    
+
     Method: Calculate ratio of stoichiometric reagent mass to
     total reagent mass (excluding solvents/products). Protocols
     with no catalysts at all get penalized extra.
+
+    Unknown roles are kept (treated as stoichiometric) — only confirmed
+    solvent / co-solvent / auxiliary / product / byproduct / starting
+    material / substrate roles are excluded from the mass-weighted
+    calculation.
     """
     catalytic_mass = 0.0
     stoichiometric_mass = 0.0
     flagged: list[str] = []
     chem_details: list[dict] = []
 
+    # Packet A honesty: a mass-weighted catalytic/stoichiometric ratio
+    # cannot be honestly derived when any non-excluded participant lacks
+    # a declared finite positive quantity_g. Block scoring and surface
+    # the missing inputs explicitly rather than substituting 10g/chemical.
+    non_excluded = [c for c in chemicals if _classify_role(c.role) != "excluded"]
+    missing_mass = missing_mass_inputs(non_excluded)
+    if missing_mass:
+        return unavailable_score(
+            principle_number=9,
+            principle_name="Use of Catalysts",
+            missing_inputs=missing_mass,
+            provenance=MASS_PROVENANCE,
+            data_sources=["protocol_parse"],
+            details={
+                "_summary": (
+                    "Catalysis ratio unavailable — one or more evaluated "
+                    "chemicals lack a declared finite positive quantity_g."
+                ),
+            },
+        )
+
     for chem in chemicals:
         classification = _classify_role(chem.role)
         if classification == "excluded":
             continue
 
-        mass_g = chem.quantity_g or 10.0
+        mass_g = chem.quantity_g  # type: ignore[assignment]  # verified finite positive
 
         if classification == "catalytic":
             catalytic_mass += mass_g

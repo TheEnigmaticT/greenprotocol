@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { boundLiteratureQuery } from './literature-query'
 import { QWEN_MODEL, callQwen } from '@/lib/qwen-adapter'
@@ -12,6 +12,8 @@ import { prepareChemicalInputs } from '@/lib/chemical-inputs'
 import { AnalysisError } from '@/lib/errors/classify'
 import { buildChemistryStatusMessage } from '@/lib/chemistry-status-message'
 import { groundDeclaredProducts } from '@/lib/declared-products'
+import { validateParsedAnalysisInputs } from '@/lib/analysis-input-validation'
+import { buildScoringInputManifest } from '@/lib/scoring-input-manifest'
 import { getAnalysisMetadata } from '@/lib/version'
 import { CANDIDATE_PARSE_SYSTEM_PROMPT, PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
@@ -57,7 +59,8 @@ const PARSE_SCHEMA: InputSchema = {
               type: 'object',
               properties: {
                 name: { type: 'string' },
-                role: { type: 'string' },
+                role: { type: 'string', enum: ['solvent', 'reagent', 'catalyst', 'product', 'workup', 'drying_agent', 'other'] },
+                processUse: { type: 'string', enum: ['reaction', 'extraction', 'wash', 'quench', 'drying', 'other'] },
                 quantity: { type: 'string' },
                 quantityMl: { type: 'number' },
                 quantityKg: { type: 'number' },
@@ -229,6 +232,12 @@ async function callClaude<T>(
         request_payload: {
           system: system.substring(0, 500) + '...', // Truncate for storage
           userContent: userContent.substring(0, 500) + '...',
+          systemHash: createHash('sha256').update(system).digest('hex'),
+          schemaHash: createHash('sha256').update(JSON.stringify(schema)).digest('hex'),
+          sampling: {
+            temperature: isQwenTransportEnabled() ? 0 : 'provider-default',
+            ...(isQwenTransportEnabled() ? { seed: createHash('sha256').update(JSON.stringify([selectedModel, system, userContent, schema])).digest().readUInt32BE(0) & 0x7fffffff } : {}),
+          },
           schema: schema,
         },
         response_payload: {
@@ -289,8 +298,12 @@ async function parseProtocol(protocolText: string, context?: CallContext): Promi
 
   if (process.env.GCAI_ENGINE_CANDIDATE === '1') {
     const grounded = groundDeclaredProducts(result.steps, protocolText)
-    result.steps = grounded.steps
-    result.inputWarnings = grounded.warnings
+    const validated = validateParsedAnalysisInputs(grounded.steps, protocolText)
+    if (validated.requiresReview) {
+      throw new AnalysisError('ambiguous_formulations', 'The procedure contains ambiguous or parallel formulation quantities. Submit one formulation at a time with its own material amounts; no combined score was calculated.')
+    }
+    result.steps = validated.steps
+    result.inputWarnings = [...grounded.warnings, ...validated.warnings]
     for (const step of result.steps) {
       step.conditions ??= { temperature: null, duration: null, atmosphere: null }
       for (const chemical of step.chemicals) {
@@ -673,6 +686,7 @@ export async function analyzeProtocol(
 
   // Phase 1.5: Rationalize quantities + deterministic scoring (if service available)
   let deterministicScores: DeterministicScores | undefined
+  let scoringInputManifest: AnalysisResult['scoringInputManifest']
   let enrichedChemicals: EnrichedChemical[] | undefined
   let wasteAnalysis: WasteAnalysis | undefined
   const unresolvedChemicals = new Set<string>()
@@ -705,19 +719,34 @@ export async function analyzeProtocol(
       onProgress?.({ type: 'phase', phase: 2, message: 'Scoring against 12 principles...' })
     const scoreChemicals = prepared.scoreChemicals
 
-    const scoreResult = await scoreProtocol({
+    const scoreRequest = {
       chemicals: scoreChemicals,
       steps: parsed.steps.map(s => ({
         stepNumber: s.stepNumber,
         description: s.description,
-        chemicals: s.chemicals.map(c => ({ name: c.name, role: c.role })),
+        chemicals: s.chemicals.map(c => ({ name: c.name, role: c.role, ...(c.processUse ? { processUse: c.processUse } : {}) })),
         conditions: s.conditions,
       })),
       protocol_text: protocolText,
-    })
+    }
+    const scoreResult = await scoreProtocol(scoreRequest)
 
     if (scoreResult) {
       deterministicScores = scoreResult
+      scoringInputManifest = await buildScoringInputManifest({
+        sourceText: protocolText,
+        request: scoreRequest,
+        scores: scoreResult,
+        references: enrichedChemicals ?? [],
+        warnings: parsed.inputWarnings ?? [],
+        provenance: {
+          methodologyVersion: getAnalysisMetadata().methodologyVersion,
+          model: isQwenTransportEnabled() ? process.env.GCAI_LLM_MODEL || QWEN_MODEL : SONNET,
+          promptHash: createHash('sha256').update(process.env.GCAI_ENGINE_CANDIDATE === '1' ? CANDIDATE_PARSE_SYSTEM_PROMPT : PARSE_SYSTEM_PROMPT).digest('hex'),
+          schemaHash: createHash('sha256').update(JSON.stringify(PARSE_SCHEMA)).digest('hex'),
+          webRevision: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_SHA || null,
+        },
+      })
       // v0.6: capture structured waste analysis
       if (scoreResult.waste_analysis) {
         wasteAnalysis = scoreResult.waste_analysis as unknown as WasteAnalysis
@@ -947,6 +976,7 @@ export async function analyzeProtocol(
     revisedProtocol: assembled.revisedProtocol,
     overallAssessment: assembled.overallAssessment,
     deterministicScores,
+    ...(scoringInputManifest ? { scoringInputManifest } : {}),
     enrichedChemicals,
     analysisMetadata: metadata,
     wasteAnalysis,

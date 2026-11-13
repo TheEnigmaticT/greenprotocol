@@ -7,7 +7,13 @@ petroleum score poorly; bio-derived chemicals score well.
 Score: 0 (all renewable) to 10 (all petroleum-derived)
 """
 
-from scoring.models import ChemicalInput, PrincipleScore
+from scoring.input_honesty import (
+    MASS_PROVENANCE,
+    missing_mass_inputs,
+    unavailable_score,
+)
+from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
+from scoring.roles import is_product_role
 from identity import preferred_identity_name
 
 # Curated set of known renewable / bio-based chemicals
@@ -58,17 +64,11 @@ def is_renewable(name: str) -> bool:
 
 def score_p7(chemicals: list[ChemicalInput]) -> PrincipleScore:
     """Score Principle 7: Use of Renewable Feedstocks.
-    
+
     Method: Calculate renewable mass fraction. Solvents and reagents
     both count. Products are excluded.
     """
-    excluded_roles = {"product", "desired product", "byproduct",
-                      "target", "final product"}
-
-    scoreable = [c for c in chemicals
-                 if c.role.lower().strip() not in excluded_roles]
-
-    if not scoreable:
+    if not chemicals:
         return PrincipleScore(
             principle_number=7,
             principle_name="Use of Renewable Feedstocks",
@@ -78,13 +78,38 @@ def score_p7(chemicals: list[ChemicalInput]) -> PrincipleScore:
             data_sources=["renewable_db"],
         )
 
+    # Unknown roles are kept — not silently excluded — only confirmed
+    # outputs (products / byproducts / targets, the same vocabulary P4
+    # evaluates) are dropped from the mass-weighted calculation.
+    scoreable = [c for c in chemicals if not is_product_role(c.role)]
+
+    # Packet A honesty: missing declared mass would require fabricating a
+    # 10g/chemical filler to compute the renewable mass fraction. Block
+    # scoring and surface the missing inputs explicitly.
+    missing_mass = missing_mass_inputs(scoreable)
+    if missing_mass:
+        return unavailable_score(
+            principle_number=7,
+            principle_name="Use of Renewable Feedstocks",
+            missing_inputs=missing_mass,
+            provenance=MASS_PROVENANCE,
+            data_sources=["renewable_db"],
+            details={
+                "_summary": (
+                    "Renewable feedstock fraction unavailable — one or more "
+                    "evaluated chemicals lack a declared finite positive "
+                    "quantity_g."
+                ),
+            },
+        )
+
     renewable_mass = 0.0
     total_mass = 0.0
     flagged: list[str] = []
     chem_details: list[dict] = []
 
     for chem in scoreable:
-        mass_g = chem.quantity_g or 10.0
+        mass_g = chem.quantity_g  # type: ignore[assignment]  # verified finite positive
         renewable = is_renewable(preferred_identity_name(chem.reference_name or chem.name))
 
         total_mass += mass_g

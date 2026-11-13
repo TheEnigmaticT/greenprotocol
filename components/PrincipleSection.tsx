@@ -57,9 +57,30 @@ const CONFIDENCE_INFO: Record<ScoreProvenance, { label: string; description: str
 }
 
 function ScoreBadge({ score, maxScore, confidence }: { score: number; maxScore: number; confidence: ScoreProvenance }) {
+  const isUnavailable = score < 0 || confidence === 'unavailable'
+  const info = CONFIDENCE_INFO[confidence]
+  if (isUnavailable) {
+    // Old saved records can have score = 0 with confidence = 'unavailable' — never render that as a valid 0.
+    return (
+      <div className="space-y-1" data-testid="principle-score-badge-unavailable">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl font-bold" style={{ color: '#A8A29E' }}>N/A</span>
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded cursor-help"
+            style={{ background: '#F0EBE1', color: '#78716C', fontFamily: 'var(--font-mono)' }}
+            title={info?.description ?? 'No score could be computed.'}
+          >
+            {info?.label ?? confidence}
+          </span>
+        </div>
+        {info && (
+          <p className="text-[10px] italic" style={{ color: '#A8A29E' }}>{info.description}</p>
+        )}
+      </div>
+    )
+  }
   const pct = maxScore > 0 ? score / maxScore : 0
   const color = pct <= 0.3 ? '#166534' : pct <= 0.6 ? '#92400E' : '#991B1B'
-  const info = CONFIDENCE_INFO[confidence]
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
@@ -187,6 +208,8 @@ export default function PrincipleSection({
   onProcedureProposalApply,
 }: PrincipleSectionProps) {
   const anchorId = `p${principleNumber}`
+  const wasteUnavailable = wasteAnalysis?.summary.confidence === 'unavailable' || wasteAnalysis?.summary.grade === 'INCOMPLETE'
+  const wasteColors = wasteUnavailable ? { bg: '#E7E5E4', text: '#57534E' } : (GRADE_COLORS[wasteAnalysis?.summary.grade ?? ''] || GRADE_COLORS.C)
 
   return (
     <section id={anchorId} className="scroll-mt-20">
@@ -212,8 +235,8 @@ export default function PrincipleSection({
         />
       </div>
 
-      {/* Score */}
-      {score && score.score >= 0 && (
+      {/* Score — always render when present, including unavailable (renders N/A, not 0) */}
+      {score && (
         <div className="mb-4 p-3 rounded-lg" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
           <ScoreBadge score={score.score} maxScore={score.max_score} confidence={score.confidence} />
           {score.data_sources.length > 0 && (
@@ -233,15 +256,15 @@ export default function PrincipleSection({
               <div
                 className="flex items-center justify-center w-12 h-12 rounded-lg text-xl font-bold shrink-0"
                 style={{
-                  background: (GRADE_COLORS[wasteAnalysis.summary.grade] || GRADE_COLORS.C).bg,
-                  color: (GRADE_COLORS[wasteAnalysis.summary.grade] || GRADE_COLORS.C).text,
+                  background: wasteColors.bg,
+                  color: wasteColors.text,
                 }}
               >
                 {wasteAnalysis.summary.grade}
               </div>
               <div>
                 <p className="text-sm font-semibold" style={{ color: '#1C1917' }}>
-                  Waste Impact: {wasteAnalysis.summary.wasteImpactScore}/10
+                  Waste Impact: {wasteUnavailable ? 'Unavailable' : `${wasteAnalysis.summary.wasteImpactScore}/10`}
                 </p>
                 <p className="text-xs" style={{ color: '#57534E' }}>{wasteAnalysis.summary.primaryDriver}</p>
               </div>
@@ -250,15 +273,15 @@ export default function PrincipleSection({
             {/* Direct waste */}
             <div className="grid grid-cols-3 gap-3 text-center mb-3">
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.directWaste.totalWasteKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.directWaste.totalWasteKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Total kg</div>
               </div>
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.directWaste.solventWasteKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.directWaste.solventWasteKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Solvent kg</div>
               </div>
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.directWaste.nonSolventWasteKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.directWaste.nonSolventWasteKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Non-solvent kg</div>
               </div>
             </div>
@@ -267,7 +290,7 @@ export default function PrincipleSection({
             {wasteAnalysis.hazardSegments && wasteAnalysis.hazardSegments.length > 0 && (
               <div className="mb-3">
                 <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#7C2D36' }}>
-                  Hazard-Segmented Waste
+                  Observed input hazards (not measured waste)
                 </h4>
                 <div className="space-y-1">
                   {wasteAnalysis.hazardSegments.map((seg) => (
@@ -280,7 +303,7 @@ export default function PrincipleSection({
                           </span>
                         )}
                       </span>
-                      <span className="font-semibold" style={{ color: '#1C1917' }}>{seg.totalKg.toFixed(3)} kg</span>
+                      <span className="font-semibold" style={{ color: '#1C1917' }}>{seg.totalKg === null ? 'Unavailable' : `${seg.totalKg.toFixed(3)} kg`}</span>
                     </div>
                   ))}
                 </div>
@@ -290,11 +313,11 @@ export default function PrincipleSection({
             {/* Liquid burden */}
             <div className="grid grid-cols-2 gap-3 text-center mb-3">
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidHandledKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidHandledKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Liquid handled kg</div>
               </div>
               <div className="p-2 rounded bg-white/60">
-                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidDiscardedKg.toFixed(3)}</div>
+                <div className="text-sm font-bold">{wasteAnalysis.liquidBurden.totalLiquidDiscardedKg?.toFixed(3) ?? 'Unavailable'}</div>
                 <div className="text-[9px] uppercase text-stone-500">Liquid discarded kg</div>
               </div>
             </div>

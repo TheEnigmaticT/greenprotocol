@@ -141,6 +141,43 @@ describe('pipeline Qwen opt-in', () => {
     expect(result.revisedProtocol).toBe(source)
   })
 
+  it('records complete prompt/schema digests and constrains function and process-use fields', async () => {
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    mocks.qwenCall.mockResolvedValue({
+      content: [{ type: 'tool_use', name: 'return_result', input: {
+        protocolTitle: 'Water handling', chemistrySubdomain: 'Processing', steps: [{
+          stepNumber: 1, description: 'Wash with water.', conditions: {},
+          chemicals: [{ name: 'water', role: 'solvent', processUse: 'wash', quantity: '5 mL' }],
+        }],
+      } }], usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: 'tool_calls',
+    })
+    await analyzeProtocol('Wash with 5 mL water.', undefined, { userId: 'test-user' })
+    const call = mocks.qwenCall.mock.calls[0][0]
+    const properties = call.schema.properties.steps.items.properties.chemicals.items.properties
+    expect(properties.role.enum).toContain('product')
+    expect(properties.processUse.enum).toContain('wash')
+    const trace = mocks.logLLMTrace.mock.calls.at(-1)?.[0]
+    expect(trace.request_payload.systemHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(trace.request_payload.schemaHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(trace.request_payload.sampling).toEqual(expect.objectContaining({ temperature: 0 }))
+  })
+
+  it('holds ambiguous parallel recipes before any conversion or scoring', async () => {
+    vi.stubEnv('GCAI_ENGINE_CANDIDATE', '1')
+    const source = 'For sample-1, add 5 mL water. For sample-2, add 20 mL water.'
+    mocks.qwenCall.mockResolvedValue({
+      content: [{ type: 'tool_use', name: 'return_result', input: {
+        protocolTitle: 'Parallel recipes', chemistrySubdomain: 'Processing', steps: [{
+          stepNumber: 1, description: source, conditions: {},
+          chemicals: [{ name: 'water', role: 'solvent', quantity: '5 mL (sample-1), 20 mL (sample-2)' }],
+        }],
+      } }], usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: 'tool_calls',
+    })
+    await expect(analyzeProtocol(source)).rejects.toThrow(/one formulation at a time/i)
+    expect(mocks.batchConvert).not.toHaveBeenCalled()
+    expect(mocks.scoreProtocol).not.toHaveBeenCalled()
+  })
+
   it('rejects malformed parsing with a clear stage error', async () => {
     mocks.qwenCall.mockResolvedValue({ content: [{ type: 'tool_use', input: {} }], usage: {}, stop_reason: 'tool_calls' })
     await expect(analyzeProtocol('Wash with water.')).rejects.toThrow('Protocol parsing returned no usable steps')

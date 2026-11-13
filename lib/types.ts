@@ -1,3 +1,5 @@
+import type { ScoringInputManifest } from '@/lib/scoring-input-manifest'
+
 export interface ChemicalData {
   cas: string
   name: string
@@ -36,6 +38,8 @@ export interface AnalysisStep {
 export interface ParsedChemical {
   name: string
   role: string
+  /** Chemical function is independent of the operation where it is used. */
+  processUse?: 'reaction' | 'extraction' | 'wash' | 'quench' | 'drying' | 'other'
   quantity: string
   quantityMl: number | null
   quantityKg: number | null
@@ -134,6 +138,8 @@ export interface AnalysisResult {
   inputWarnings?: string[]
   // v0.6: waste analysis + citability
   analysisMetadata?: AnalysisMetadata
+  /** Historical scoring inputs and output; explicit replay, never silent cache reuse. */
+  scoringInputManifest?: ScoringInputManifest
   wasteAnalysis?: WasteAnalysis
   // v0.7: two-pass re-evaluation stats
   reevaluationStats?: {
@@ -217,6 +223,7 @@ export interface DeterministicScores {
   total_score: number
   max_possible: number
   grade: string
+  coverage?: { assessed: number; total: number; unavailable: number; partial: boolean }
   smiles_extraction: Record<string, unknown>
   yield_extraction: Record<string, unknown>
 }
@@ -273,8 +280,8 @@ export interface AnalysisMetadata {
 }
 
 export interface WasteSummary {
-  wasteImpactScore: number    // 0-10
-  grade: string               // A-F
+  wasteImpactScore: number    // 0-10; -1 when unavailable
+  grade: string               // A-F or INCOMPLETE
   primaryDriver: string       // one-sentence explanation
   bestNextAction?: string
   confidence: ScoreProvenance
@@ -282,22 +289,39 @@ export interface WasteSummary {
 
 export interface HazardBucket {
   category: string            // toxic, cmr, flammable, corrosive, environmental
-  totalKg: number
+  totalKg: number | null
   chemicalsCount: number
   chemicals: string[]
+  massCoverage?: 'complete' | 'partial' | 'unavailable'
 }
 
 export interface WasteAnalysis {
   summary: WasteSummary
+  availability?: {
+    actualWasteMass: 'available' | 'unavailable'
+    liquidDisposition: 'available' | 'unavailable'
+    wasteImpactScoreSentinel: -1
+    nullKgMeansUnavailable: true
+    missingInputs: { chemical: string; input: string; reason: string }[]
+    reason: string
+    massCoverage: 'complete' | 'partial' | 'unavailable'
+    hazardCoverage: 'complete' | 'partial' | 'unavailable'
+  }
+  observedInputInventory?: {
+    knownInputMassKg: number
+    knownMassChemicalCount: number
+    chemicalsWithUnknownMassCount: number
+    massCoverage: 'complete' | 'partial' | 'unavailable'
+  }
   directWaste: {
-    totalWasteKg: number
-    solventWasteKg: number
-    nonSolventWasteKg: number
+    totalWasteKg: number | null
+    solventWasteKg: number | null
+    nonSolventWasteKg: number | null
   }
   hazardSegments: HazardBucket[]
   liquidBurden: {
-    totalLiquidHandledKg: number
-    totalLiquidDiscardedKg: number
+    totalLiquidHandledKg: number | null
+    totalLiquidDiscardedKg: number | null
   }
   processBurden: {
     transferCount: number

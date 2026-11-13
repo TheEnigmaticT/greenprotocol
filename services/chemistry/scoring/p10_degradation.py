@@ -5,9 +5,26 @@ weighted by quantity. Chemicals with aquatic toxicity and
 persistence score worst.
 
 Score: 0 (all biodegradable) to 10 (persistent environmental hazards)
+
+Packet A honesty: a chemical absent from ``hcodes_map`` (unknown hazard
+evidence) OR present with an empty list (no evidence returned) OR carrying an
+unresolved reference status is treated as missing evidence — the principle
+returns an explicit unavailable score rather than grading the remaining
+subset or collapsing the absent chemical into a verified-zero hazard. The
+missing-evidence contract is shared with P3/P4/P12 through
+``input_honesty.missing_hcodes_inputs``. Non-empty codes whose contents do
+not match the evaluated environmental hazard class still support a real score
+of 0.
 """
 
-from scoring.models import ChemicalInput, PrincipleScore
+from scoring.input_honesty import (
+    GHS_PROVENANCE,
+    MASS_PROVENANCE,
+    missing_hcodes_inputs,
+    missing_mass_inputs,
+    unavailable_score,
+)
+from scoring.models import ChemicalInput, PrincipleScore, ScoreProvenance
 from ghs import score_environmental_hazard
 
 
@@ -15,15 +32,59 @@ def score_p10(
     chemicals: list[ChemicalInput],
     hcodes_map: dict[str, list[str]],
 ) -> PrincipleScore:
-    """Score Principle 10: Design for Degradation."""
+    """Score Principle 10: Design for Degradation.
+
+    Args:
+        chemicals: parsed chemicals from protocol
+        hcodes_map: {chemical_name: [H-codes]} from PubChem
+    """
     if not chemicals:
         return PrincipleScore(
             principle_number=10,
             principle_name="Design for Degradation",
             score=0.0, normalized=0.0,
             details={"note": "No chemicals to evaluate"},
-            confidence="calculated",
+            confidence=ScoreProvenance.CALCULATED,
             data_sources=["pubchem_ghs"],
+        )
+
+    # Packet A honesty: unknown or empty hazard evidence is not safety.
+    missing_haz = missing_hcodes_inputs(chemicals, hcodes_map)
+    if missing_haz:
+        return unavailable_score(
+            principle_number=10,
+            principle_name="Design for Degradation",
+            missing_inputs=missing_haz,
+            provenance=GHS_PROVENANCE,
+            data_sources=["pubchem_ghs"],
+            details={
+                "_summary": (
+                    "Environmental hazard score unavailable — one or more "
+                    "evaluated chemicals have no GHS hazard evidence on "
+                    "record. Cannot score degradation without silently "
+                    "grading the remaining subset."
+                ),
+            },
+        )
+
+    # Packet A honesty: missing declared mass would require fabricating a
+    # 10g/chemical filler to compute a mass-weighted environmental hazard.
+    # Return unavailable instead of guessing.
+    missing_mass = missing_mass_inputs(chemicals)
+    if missing_mass:
+        return unavailable_score(
+            principle_number=10,
+            principle_name="Design for Degradation",
+            missing_inputs=missing_mass,
+            provenance=MASS_PROVENANCE,
+            data_sources=["pubchem_ghs"],
+            details={
+                "_summary": (
+                    "Environmental hazard score unavailable — one or more "
+                    "evaluated chemicals lack a declared finite positive "
+                    "quantity_g."
+                ),
+            },
         )
 
     total_mass_g = 0.0
@@ -32,9 +93,12 @@ def score_p10(
     chem_details: list[dict] = []
 
     for chem in chemicals:
-        codes = hcodes_map.get(chem.name, [])
+        # Both checks above guarantee the key is present with a non-empty list
+        # and quantity_g is a finite positive number.
+        codes = hcodes_map[chem.name]
+        assert len(codes) > 0, "hcodes must be non-empty here"
         env_score = score_environmental_hazard(codes)
-        mass_g = chem.quantity_g or 10.0
+        mass_g = chem.quantity_g  # type: ignore[assignment]  # verified finite positive
 
         weighted_hazard += mass_g * (env_score / 10.0)
         total_mass_g += mass_g
@@ -63,5 +127,5 @@ def score_p10(
         },
         chemicals_flagged=flagged,
         data_sources=["pubchem_ghs"],
-        confidence="calculated",
+        confidence=ScoreProvenance.CALCULATED,
     )

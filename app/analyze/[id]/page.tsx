@@ -15,6 +15,7 @@ import ImpactScoreboard from '@/components/ImpactScoreboard'
 import ScaleUpProjection from '@/components/ScaleUpProjection'
 import FinalizedProtocol from '@/components/FinalizedProtocol'
 import ScoreCard from '@/components/ScoreCard'
+import ScoringAuditNotice from '@/components/ScoringAuditNotice'
 import ChemistryDataNotice from '@/components/ChemistryDataNotice'
 import DeterministicScoreRecovery from '@/components/DeterministicScoreRecovery'
 import AppShell from '@/components/AppShell'
@@ -204,6 +205,7 @@ export default function AnalysisByIdPage() {
         </header>
 
         <ChemistryDataNotice status={data.analysis.chemistryDataStatus} analysisId={id} onProcedureProposalApply={handleProcedureProposalApply} />
+        <ScoringAuditNotice analysis={data.analysis} />
 
         <section>
           <FinalizedProtocol

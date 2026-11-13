@@ -4,6 +4,14 @@ import type { BatchResult, ConvertResult } from '@/lib/chemistry-service'
 const identity = (name: string) => name.trim().toLowerCase()
 const positive = (value: number | null | undefined) => typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 
+/** A solution's stated volume is not a measured amount of its neat solute. */
+function solutionVolume(name: string, quantity: string, description: string): boolean {
+  if (!/\d\s*(?:mL|L|µL|μL|uL)\b/i.test(quantity)) return false
+  const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (!escaped) return false
+  return new RegExp(`(?:aqueous|aq\\.?)\\s+(?:saturated\\s+)?${escaped}(?=$|[^\\p{L}\\p{N}])|${escaped}\\s+(?:solution|in\\s+water)\\b|solution\\s+of\\s+${escaped}(?=$|[^\\p{L}\\p{N}])`, 'iu').test(description)
+}
+
 /**
  * Why the reference lookup could not give a usable record, or null when it did.
  * Separates a name nobody recognises from a lookup that failed or is queued for
@@ -43,15 +51,16 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
       conversion = batch!.results[matching[0]]
       remaining.delete(matching[0])
     }
-    const reason = classifyUnresolvedReason(conversion)
+    const reason = solutionVolume(chemical.name, quantity, step.description)
+      ? 'indefinite' : classifyUnresolvedReason(conversion)
     const indefinite = reason === 'indefinite'
     const unavailable = reason !== null && !indefinite
     if (indefinite) indefiniteChemicals.add(chemical.name)
     else if (unavailable) unresolvedChemicals.add(chemical.name)
     if (reason) unresolvedDetails.push({ name: chemical.name, reason, stepNumber: step.stepNumber, role: chemical.role })
     const referenceStatus = indefinite ? 'indefinite' : unavailable ? conversion?.reference_status ?? 'unavailable' : 'available'
-    const kg = quantity ? positive(conversion?.quantity_kg) : null
-    const mol = quantity ? positive(conversion?.quantity_mol) : null
+    const kg = quantity && !indefinite ? positive(conversion?.quantity_kg) : null
+    const mol = quantity && !indefinite ? positive(conversion?.quantity_mol) : null
     // Model-supplied converted masses are not a fallback for missing conversion.
     chemical.quantityKg = kg
     const smiles = !indefinite && !unavailable ? conversion?.smiles ?? null : null
@@ -70,6 +79,8 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
     })
     return {
       name: chemical.name, role: chemical.role, quantity,
+      ...(chemical.processUse ? { process_use: chemical.processUse } : {}),
+      reference_hcodes: !indefinite && !unavailable ? conversion?.ghs_hazards?.map(hazard => hazard.code) ?? null : null,
       quantity_g: kg === null ? null : kg * 1000,
       quantity_kg: kg, quantity_mol: mol, molecular_weight: mw,
       step_number: step.stepNumber, smiles, reference_status: referenceStatus,

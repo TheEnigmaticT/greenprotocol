@@ -15,6 +15,7 @@ export const ERROR_CODES = [
   'provider_rate_limit',
   'provider_unavailable',
   'analysis_incomplete',
+  'ambiguous_formulations',
   'persist_failed',
   'unauthorized',
   'chemistry_service_unavailable',
@@ -131,6 +132,11 @@ const COPY: Record<Exclude<ErrorCode, 'run_limit_reached' | 'protocol_too_short'
     title: "We couldn't complete this analysis",
     message: `The analysis stopped before every part was finished, so it wasn't saved. Try again. If it keeps happening, shorten or simplify the procedure, or contact us at ${CONTACT}.`,
     action: 'retry',
+  },
+  ambiguous_formulations: {
+    title: 'Separate the formulations before scoring',
+    message: 'Submit one formulation at a time with its own material amounts. Ambiguous quantities were not added together, and no combined score was calculated. Your original procedure text is unchanged.',
+    action: 'edit-protocol',
   },
   persist_failed: {
     title: "We finished the analysis but couldn't save it",

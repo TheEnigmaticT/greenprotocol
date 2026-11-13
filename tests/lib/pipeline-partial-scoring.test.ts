@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getScoringViewStatus } from '@/lib/scoring-view-status'
 
 const mocks = vi.hoisted(() => ({
   anthropicCreate: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('@/lib/literature-evidence', () => ({
 }))
 
 import { analyzeProtocol } from '@/lib/pipeline'
+import { replayFrozenScoring } from '@/lib/scoring-input-manifest'
 
 function response(input: Record<string, unknown>) {
   return {
@@ -56,6 +58,7 @@ const scoreResult = {
 
 describe('partial chemistry reference data', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     mocks.isServiceAvailable.mockResolvedValue(true)
     mocks.batchConvert.mockResolvedValue({
       results: [
@@ -94,6 +97,26 @@ describe('partial chemistry reference data', () => {
       }
       return Promise.resolve(response({ principleNumber: 5, recommendations: [] }))
     })
+  })
+
+  it('freezes the exact scoring request and response without suppressing a fresh analysis', async () => {
+    const source = 'Wash the product with 10 mL brine.'
+    const first = await analyzeProtocol(source)
+    const second = await analyzeProtocol(source)
+    expect(mocks.scoreProtocol).toHaveBeenCalledTimes(2)
+    expect(first.scoringInputManifest).toMatchObject({
+      schemaVersion: 1,
+      request: mocks.scoreProtocol.mock.calls[0][0],
+      scores: scoreResult,
+      provenance: { methodologyVersion: 'honest-inputs-v1' },
+    })
+    expect(first.scoringInputManifest?.digest).toMatch(/^[a-f0-9]{64}$/)
+    expect(second.scoringInputManifest?.digest).toBe(first.scoringInputManifest?.digest)
+    expect(first.scoringInputManifest?.scores).not.toBe(scoreResult)
+    expect(getScoringViewStatus(first).kind).toBe('matches-original')
+    if (!first.scoringInputManifest) throw new Error('Expected a persisted scoring manifest')
+    const persisted = JSON.parse(JSON.stringify(first.scoringInputManifest))
+    expect(replayFrozenScoring(persisted, { sourceText: source, methodologyVersion: 'honest-inputs-v1' }).scores).toEqual(scoreResult)
   })
 
   it('still calls the scorer when an indefinite workup material is present', async () => {
