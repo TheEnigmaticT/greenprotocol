@@ -28,6 +28,24 @@ describe('occurrence-local scoring inputs', () => {
     expect(result.scoreChemicals[0]).toMatchObject({ role: 'solvent', process_use: 'wash', reference_hcodes: ['H225'] })
   })
 
+  it('does not treat the volume of an aqueous wash as a measured mass of neat salt', () => {
+    const input: AnalysisStep[] = [{
+      stepNumber: 1, description: 'Wash the ethyl acetate layer with saturated aqueous NaCl.',
+      conditions: { temperature: null, duration: null, atmosphere: null },
+      chemicals: [
+        { name: 'ethyl acetate', role: 'solvent', processUse: 'extraction', quantity: '15 mL', quantityMl: null, quantityKg: null },
+        { name: 'NaCl', role: 'workup', processUse: 'wash', quantity: '15 mL', quantityMl: null, quantityKg: null },
+      ],
+    }]
+    const result = prepareChemicalInputs(input, { results: [
+      { ...conversion('15 mL', .01353), chemical_name: 'ethyl acetate' },
+      { ...conversion('15 mL', .03255), chemical_name: 'NaCl' },
+    ] })
+    expect(result.scoreChemicals[0].quantity_g).toBeCloseTo(13.53)
+    expect(result.scoreChemicals[1]).toMatchObject({ quantity_g: null, quantity_mol: null, reference_status: 'indefinite' })
+    expect(result.indefiniteChemicals.has('NaCl')).toBe(true)
+  })
+
   it('never copies model-estimated mass into a missing conversion occurrence', () => {
     const result = prepareChemicalInputs(steps(), { results: [conversion('20 mL', .020)] })
     expect(result.scoreChemicals[0].quantity_kg).toBeNull()
