@@ -144,7 +144,11 @@ function getActivePrinciples(analysis: AnalysisResult): number[] {
   const active = new Set<number>()
   if (analysis.deterministicScores) {
     for (const s of analysis.deterministicScores.scores) {
-      if (s.score >= 0) active.add(s.principle_number)
+      // Include principle if it has a real numeric score (not unavailable).
+      // Old saved records can have score = 0 with confidence = 'unavailable' — never
+      // treat 0 as a real active assessment.
+      const unavailable = s.score < 0 || s.confidence === 'unavailable'
+      if (!unavailable) active.add(s.principle_number)
     }
   }
   for (const rec of analysis.recommendations) {
@@ -153,6 +157,43 @@ function getActivePrinciples(analysis: AnalysisResult): number[] {
   if (analysis.wasteAnalysis) active.add(1)
   active.delete(4)
   return Array.from(active).sort((a, b) => a - b)
+}
+
+const INCOMPLETE_LABEL = 'INCOMPLETE'
+
+function isIncompleteGrade(grade: string | undefined, partial?: boolean): boolean {
+  return grade === INCOMPLETE_LABEL || partial === true
+}
+
+// A principle score is "unavailable" whenever the provenance says so OR the
+// numeric score sentinel is -1.
+function isUnavailableScore(s: { score: number; confidence: string }): boolean {
+  if (s.confidence === 'unavailable') return true
+  return s.score < 0
+}
+
+function isPrincipleUnavailable(s: { score: number; confidence: string }): boolean {
+  return isUnavailableScore(s)
+}
+
+// Quiet grade line — honest about incomplete coverage. Replaces the default
+// grade-only line when the new scorer reports 'INCOMPLETE' or coverage.partial.
+function buildHonestQuietGradeLine(analysis: AnalysisResult): string {
+  const ds = analysis.deterministicScores
+  if (!ds) return buildQuietGradeLine(analysis)
+  const incomplete = isIncompleteGrade(ds.grade, ds.coverage?.partial)
+  const totalScores = ds.scores.length
+  const unavailableCount = ds.scores.filter(isPrincipleUnavailable).length
+  const assessedCount = totalScores - unavailableCount
+  const grade = incomplete ? INCOMPLETE_LABEL : ds.grade
+  const base = `${grade} · ${ds.total_score.toFixed(1)}/${ds.max_possible.toFixed(0)}`
+  if (incomplete) {
+    return `${base} · ${assessedCount}/${totalScores} assessed · not comparable to a complete grade`
+  }
+  if (unavailableCount > 0) {
+    return `${base} · ${assessedCount}/${totalScores} assessed · ${unavailableCount} unavailable`
+  }
+  return `${base} · ${assessedCount}/${totalScores} assessed`
 }
 
 type Mode = 'chemicals' | 'principles'
@@ -171,7 +212,7 @@ interface EvidenceAtlasProps {
 export default function EvidenceAtlas({ analysisId, analysis, embedded = false }: EvidenceAtlasProps) {
   const activePrinciples = getActivePrinciples(analysis)
   const metadata = analysis.analysisMetadata
-  const quietGrade = buildQuietGradeLine(analysis)
+  const quietGrade = buildHonestQuietGradeLine(analysis)
 
   const searchParams = useSearchParams()
   const [mode, setMode] = useState<Mode>('principles')
@@ -452,7 +493,7 @@ export default function EvidenceAtlas({ analysisId, analysis, embedded = false }
                   {filteredPrinciples.map(pn => {
                     const score = analysis.deterministicScores?.scores.find(s => s.principle_number === pn)
                     const isActive = selectedPrinciple === pn
-                    const unavailable = !score || score.score < 0 || pn === 4
+                    const unavailable = !score || isUnavailableScore(score) || pn === 4
                     const colors = PN_COLORS[pn] || PN_COLORS[1]
                     const flagged = score?.chemicals_flagged?.length ?? 0
                     return (
@@ -676,7 +717,20 @@ export default function EvidenceAtlas({ analysisId, analysis, embedded = false }
                   <div>
                     <h4 className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#1C1917' }}>Deterministic Scoring</h4>
                     <p className="text-xs m-0" style={{ color: '#57534E' }}>
-                      {analysis.deterministicScores.scores.length} principles scored · Grade: {analysis.deterministicScores.grade} · Score: {analysis.deterministicScores.total_score}/{analysis.deterministicScores.max_possible}
+                      {(() => {
+                        const ds = analysis.deterministicScores!
+                        const total = ds.scores.length
+                        const unavailable = ds.scores.filter(isPrincipleUnavailable).length
+                        const assessed = total - unavailable
+                        const incomplete = isIncompleteGrade(ds.grade, ds.coverage?.partial)
+                        return (
+                          <>
+                            {assessed} of {total} principles scored · Grade: {ds.grade}
+                            {incomplete && ' (incomplete — not comparable to a complete grade)'}
+                            {' · Score: '}{ds.total_score}/{ds.max_possible}
+                          </>
+                        )
+                      })()}
                     </p>
                   </div>
                 )}

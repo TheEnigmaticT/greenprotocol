@@ -57,9 +57,30 @@ const CONFIDENCE_INFO: Record<ScoreProvenance, { label: string; description: str
 }
 
 function ScoreBadge({ score, maxScore, confidence }: { score: number; maxScore: number; confidence: ScoreProvenance }) {
+  const isUnavailable = score < 0 || confidence === 'unavailable'
+  const info = CONFIDENCE_INFO[confidence]
+  if (isUnavailable) {
+    // Old saved records can have score = 0 with confidence = 'unavailable' — never render that as a valid 0.
+    return (
+      <div className="space-y-1" data-testid="principle-score-badge-unavailable">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl font-bold" style={{ color: '#A8A29E' }}>N/A</span>
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded cursor-help"
+            style={{ background: '#F0EBE1', color: '#78716C', fontFamily: 'var(--font-mono)' }}
+            title={info?.description ?? 'No score could be computed.'}
+          >
+            {info?.label ?? confidence}
+          </span>
+        </div>
+        {info && (
+          <p className="text-[10px] italic" style={{ color: '#A8A29E' }}>{info.description}</p>
+        )}
+      </div>
+    )
+  }
   const pct = maxScore > 0 ? score / maxScore : 0
   const color = pct <= 0.3 ? '#166534' : pct <= 0.6 ? '#92400E' : '#991B1B'
-  const info = CONFIDENCE_INFO[confidence]
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
@@ -212,8 +233,8 @@ export default function PrincipleSection({
         />
       </div>
 
-      {/* Score */}
-      {score && score.score >= 0 && (
+      {/* Score — always render when present, including unavailable (renders N/A, not 0) */}
+      {score && (
         <div className="mb-4 p-3 rounded-lg" style={{ background: '#FAFAF8', border: '1px solid #E7E5E4' }}>
           <ScoreBadge score={score.score} maxScore={score.max_score} confidence={score.confidence} />
           {score.data_sources.length > 0 && (

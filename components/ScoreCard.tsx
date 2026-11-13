@@ -44,9 +44,24 @@ const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
   F: { bg: '#FEE2E2', text: '#991B1B' },
 }
 
+// Neutral honest label for a non-grade result. The new scorer returns the literal
+// string 'INCOMPLETE' when not enough was scored for a complete grade; the UI
+// must never render it under the default grade C color (green-yellow) or as a
+// passable headline score.
+const INCOMPLETE_GRADE_COLORS = { bg: '#E7E5E4', text: '#57534E' }
+const INCOMPLETE_LABEL = 'INCOMPLETE'
+
+// A principle score is "unavailable" whenever the provenance says so OR the
+// numeric score sentinel is -1. Old saved records can have score = 0 with
+// confidence = 'unavailable' — never render that as a valid 0.
+export function isUnavailableScore(s: PrincipleScore): boolean {
+  if (s.confidence === 'unavailable') return true
+  return s.score < 0
+}
+
 function ScoreBar({ score }: { score: PrincipleScore }) {
   const [showDetails, setShowDetails] = useState(false)
-  const isUnavailable = score.score < 0
+  const isUnavailable = isUnavailableScore(score)
   const pct = isUnavailable ? 0 : (score.score / 10) * 100
 
   // Color: green (low score = good) to red (high score = bad)
@@ -167,10 +182,30 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
   isRegrading?: boolean
   analysisId?: string
 }) {
-  const gradeColor = GRADE_COLORS[scores.grade] || GRADE_COLORS.C
-  const projGradeColor = projectedScores ? (GRADE_COLORS[projectedScores.grade] || GRADE_COLORS.C) : null
-  const availableScores = scores.scores.filter(s => s.score >= 0)
-  const unavailableScores = scores.scores.filter(s => s.score < 0)
+  const isIncomplete = scores.grade === INCOMPLETE_LABEL || scores.coverage?.partial === true
+  const gradeColor = isIncomplete
+    ? INCOMPLETE_GRADE_COLORS
+    : (GRADE_COLORS[scores.grade] || GRADE_COLORS.C)
+  const projGradeColor = projectedScores
+    ? (projectedScores.grade === INCOMPLETE_LABEL
+        ? INCOMPLETE_GRADE_COLORS
+        : (GRADE_COLORS[projectedScores.grade] || GRADE_COLORS.C))
+    : null
+  // Coverage — use the typed optional coverage field from the new scorer
+  // when present; otherwise derive from score flags (backwards compatibility).
+  const optionalCoverage = scores.coverage
+  const totalPrinciples = optionalCoverage?.total ?? scores.scores.length
+  const assessedCount = optionalCoverage?.assessed ?? scores.scores.filter(s => !isUnavailableScore(s)).length
+  const unavailableScores = scores.scores.filter(isUnavailableScore)
+  const deterministicCount = scores.scores.filter(s =>
+    !isUnavailableScore(s) && (s.confidence === 'calculated' || s.confidence === 'declared'),
+  ).length
+  const aiAssessedCount = scores.scores.filter(s =>
+    !isUnavailableScore(s) && s.confidence === 'model-inferred',
+  ).length
+  const benchmarkCount = scores.scores.filter(s =>
+    !isUnavailableScore(s) && s.confidence === 'benchmark',
+  ).length
 
   // Build a map of projected scores by principle number for comparison
   const projMap = new Map<number, PrincipleScore>()
@@ -185,7 +220,7 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <p className="m-0 mb-1 font-[family-name:var(--font-mono)] text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: '#9D8026' }}>
-            12 principles
+            {assessedCount} of {totalPrinciples} principles assessed
           </p>
           <h3 className="text-lg font-semibold font-[family-name:var(--font-serif)] m-0"
               style={{ color: '#1C1917' }}>
@@ -230,12 +265,21 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
             </>
           ) : (
             <>
-              <span className="text-sm" style={{ color: '#78716C' }}>
+              <span className="text-sm" style={{ color: isIncomplete ? '#92400E' : '#78716C' }}>
                 {scores.total_score.toFixed(1)}/{scores.max_possible.toFixed(0)}
+                {isIncomplete && (
+                  <span style={{ color: '#92400E' }}> · partial subtotal</span>
+                )}
               </span>
               <span
                 className="text-2xl font-bold px-3 py-1 rounded-lg"
                 style={{ background: gradeColor.bg, color: gradeColor.text }}
+                title={isIncomplete
+                  ? 'Incomplete coverage — this grade is not comparable to a fully-scored protocol grade.'
+                  : undefined}
+                aria-label={isIncomplete
+                  ? 'Grade incomplete: insufficient scoring for a complete protocol grade.'
+                  : `Grade ${scores.grade}`}
               >
                 {scores.grade}
               </span>
@@ -244,6 +288,24 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
         </div>
         </div>
       </div>
+
+      {/* INCOMPLETE caveat — required by the task: "partial subtotal not comparable complete grade" */}
+      {isIncomplete && (
+        <div
+          className="p-3 rounded-lg text-xs"
+          style={{ background: '#FAFAF8', border: '1px solid #D6D0C4', color: '#57534E' }}
+          role="status"
+        >
+          <strong style={{ color: '#1C1917' }}>Grade is incomplete:</strong>{' '}
+          only {assessedCount} of {totalPrinciples} principles could be scored.
+          The {scores.total_score.toFixed(1)}/{scores.max_possible.toFixed(0)} subtotal is a partial
+          score over assessed principles only and is{' '}
+          <strong>not comparable to a complete protocol grade</strong>.
+          {unavailableScores.length > 0 && (
+            <> {unavailableScores.length} principle{unavailableScores.length === 1 ? '' : 's'} need additional data before a complete grade can be reported.</>
+          )}
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3 text-xs" style={{ color: '#A8A29E' }}>
@@ -277,15 +339,30 @@ export default function ScoreCard({ scores, projectedScores, onRegrade, isRegrad
         }
       </div>
 
-      {/* Summary footer */}
+      {/* Summary footer — coverage breakdown distinguishes AI-assessed from deterministic */}
       <div className="flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-xs pt-4 mt-2 border-t gap-4" style={{ borderColor: '#D6D0C4', color: '#78716C' }}>
-        <div className="text-center sm:text-left">
-          {availableScores.length} of 12 principles scored deterministically
-          {unavailableScores.length > 0 && (
-            <span> · {unavailableScores.length} need additional data</span>
-          )}
-          {projectedScores && (
-            <span> · Projected from accepted recommendations</span>
+        <div className="text-center sm:text-left space-y-0.5">
+          <div>
+            {assessedCount} of {totalPrinciples} principles assessed
+            {unavailableScores.length > 0 && (
+              <span> · {unavailableScores.length} need additional data</span>
+            )}
+            {projectedScores && (
+              <span> · Projected from accepted recommendations</span>
+            )}
+          </div>
+          {(deterministicCount > 0 || aiAssessedCount > 0 || benchmarkCount > 0) && (
+            <div style={{ color: '#A8A29E' }}>
+              {deterministicCount > 0 && (
+                <span>{deterministicCount} deterministic (calculated/declared)</span>
+              )}
+              {benchmarkCount > 0 && (
+                <span>{deterministicCount > 0 ? ' · ' : ''}{benchmarkCount} benchmark-derived</span>
+              )}
+              {aiAssessedCount > 0 && (
+                <span>{(deterministicCount > 0 || benchmarkCount > 0) ? ' · ' : ''}{aiAssessedCount} AI-assessed</span>
+              )}
+            </div>
           )}
         </div>
         {onRegrade && projectedScores && (

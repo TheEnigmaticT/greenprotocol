@@ -13,6 +13,12 @@ const GRADE_COLORS: Record<string, { bg: string; text: string }> = {
   F: { bg: '#FEE2E2', text: '#991B1B' },
 }
 
+// Neutral honest styling for a non-grade result. The new scorer may return
+// 'INCOMPLETE' when waste mass cannot be computed; the UI must never render it
+// as if it were a confident C-grade or display 0 kg as a real measurement.
+const INCOMPLETE_GRADE_COLORS = { bg: '#E7E5E4', text: '#57534E' }
+const INCOMPLETE_LABEL = 'INCOMPLETE'
+
 export default function WasteScoreCard({
   wasteAnalysis,
   gcaiVersion,
@@ -23,9 +29,20 @@ export default function WasteScoreCard({
   analysisId?: string
 }) {
   const { summary } = wasteAnalysis
-  const gc = GRADE_COLORS[summary.grade] || GRADE_COLORS.C
+  const isIncomplete = summary.grade === INCOMPLETE_LABEL
+  const isUnavailable = isIncomplete || summary.confidence === 'unavailable'
+  const gc = isIncomplete
+    ? INCOMPLETE_GRADE_COLORS
+    : (GRADE_COLORS[summary.grade] || GRADE_COLORS.C)
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
+
+  // When mass is incomplete the kg figures must never be presented as a confident
+  // measurement. A 0 here is the "we don't know" sentinel — not a real value.
+  const massAvailable = !isUnavailable
+    && (wasteAnalysis.directWaste.totalWasteKg > 0
+      || wasteAnalysis.directWaste.solventWasteKg > 0
+      || wasteAnalysis.directWaste.nonSolventWasteKg > 0)
 
   return (
     <div
@@ -44,6 +61,12 @@ export default function WasteScoreCard({
             <div
               className="flex items-center justify-center w-14 h-14 rounded-lg text-2xl font-bold shrink-0"
               style={{ background: gc.bg, color: gc.text }}
+              title={isIncomplete
+                ? 'Incomplete coverage — solvent/use roles could not be fully classified.'
+                : undefined}
+              aria-label={isIncomplete
+                ? 'Grade incomplete: solvent/use roles could not be fully classified.'
+                : `Grade ${summary.grade}`}
             >
               {summary.grade}
             </div>
@@ -71,13 +94,19 @@ export default function WasteScoreCard({
               className="text-xs px-2.5 py-1 rounded-full font-semibold"
               style={{ background: gc.bg, color: gc.text }}
             >
-              {summary.wasteImpactScore}/10
+              {isIncomplete
+                ? `${INCOMPLETE_LABEL} · not a complete grade`
+                : `${summary.wasteImpactScore}/10`}
             </span>
             <span
               className="text-[10px] px-2 py-0.5 rounded"
               style={{ background: '#F0EBE1', color: '#78716C' }}
+              title={isUnavailable
+                ? 'Coverage incomplete: kg figures below are not reliable measurements.'
+                : undefined}
             >
               {summary.confidence}
+              {!massAvailable && !isIncomplete && ' · mass unavailable'}
             </span>
           </div>
         </div>
@@ -104,6 +133,28 @@ export default function WasteScoreCard({
 
       {expanded && (
         <div id={panelId}>
+          {/* Honest coverage caveat — never pretend an incomplete mass figure is a confident kg */}
+          {isIncomplete && (
+            <div
+              className="mx-4 mt-3 p-3 rounded-lg text-xs"
+              style={{ background: '#FAFAF8', border: '1px solid #D6D0C4', color: '#57534E' }}
+              role="status"
+            >
+              <strong style={{ color: '#1C1917' }}>Waste mass unavailable:</strong>{' '}
+              solvent/use role classification was not complete enough to compute kg figures.
+              The 0 kg values shown below are placeholders for missing data, not real measurements.
+            </div>
+          )}
+          {!isIncomplete && !massAvailable && (
+            <div
+              className="mx-4 mt-3 p-3 rounded-lg text-xs"
+              style={{ background: '#FAFAF8', border: '1px solid #D6D0C4', color: '#57534E' }}
+              role="status"
+            >
+              <strong style={{ color: '#1C1917' }}>Waste mass unavailable:</strong>{' '}
+              role classification did not yield enough mass data to compute a confident total.
+            </div>
+          )}
           <WasteDetailsPanel wasteAnalysis={wasteAnalysis} />
           {analysisId && (
             <div className="px-4 pb-4">
