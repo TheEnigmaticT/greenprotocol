@@ -113,6 +113,65 @@ def test_release_workflows_require_staging_validation_and_digest_promotion():
     assert "IMAGE_DIGEST" in production
 
 
+def test_release_candidate_staging_deploy_uses_the_validated_candidate_runtime_config():
+    """The candidate workflow must not overwrite the validated staging runtime.
+
+    ``deploy-staging.yml`` is the known-good staging activation workflow: it
+    deploys and verifies with ``STAGING_ENGINE_CANDIDATE=1`` and the explicit
+    ``qwen/qwen3.8-27b`` model. ``release-candidate.yml`` deploys to the same
+    staging service, so it must supply the same candidate routing. Without it
+    the candidate deploy would rebind the staging runtime to the legacy
+    ``anthropic/claude-sonnet-4.5`` model and drop ``GCAI_ENGINE_CANDIDATE``.
+    """
+    workflow_dir = REPO_ROOT / ".github" / "workflows"
+    candidate = (workflow_dir / "release-candidate.yml").read_text()
+    activation = (workflow_dir / "deploy-staging.yml").read_text()
+
+    # Both the deploy and the verify step must request the candidate runtime,
+    # exactly as the known-good activation workflow does.
+    assert candidate.count("STAGING_ENGINE_CANDIDATE: '1'") >= 2
+    assert candidate.count("STAGING_OPENROUTER_MODEL: qwen/qwen3.8-27b") >= 2
+
+    # The candidate values must be identical to the activation workflow's, so
+    # the two cannot drift apart.
+    for key in ("STAGING_ENGINE_CANDIDATE", "STAGING_OPENROUTER_MODEL"):
+        candidate_values = {
+            line.split(":", 1)[1].strip()
+            for line in candidate.splitlines()
+            if line.strip().startswith(f"{key}:")
+        }
+        activation_values = {
+            line.split(":", 1)[1].strip()
+            for line in activation.splitlines()
+            if line.strip().startswith(f"{key}:")
+        }
+        assert candidate_values == activation_values, (
+            f"{key} differs between release-candidate.yml and deploy-staging.yml"
+        )
+
+    # The legacy Sonnet default must never appear in the candidate workflow.
+    assert "anthropic/claude-sonnet-4.5" not in candidate
+
+
+def test_release_candidate_staging_deploy_and_verify_both_request_the_candidate_runtime():
+    """Guard the exact steps, not just the file, that touch the staging service."""
+    candidate = (REPO_ROOT / ".github" / "workflows" / "release-candidate.yml").read_text()
+
+    deploy_step = candidate.split("- name: Deploy the exact staging-validated digest", 1)[1]
+    deploy_step = deploy_step.split("- name:", 1)[0]
+    verify_step = candidate.split("- name: Verify health and authenticated chemistry sentinel", 1)[1]
+    verify_step = verify_step.split("- name:", 1)[0]
+
+    for step in (deploy_step, verify_step):
+        assert "STAGING_ENGINE_CANDIDATE: '1'" in step
+        assert "STAGING_OPENROUTER_MODEL: qwen/qwen3.8-27b" in step
+
+    # The candidate workflow must still deploy the staging-validated digest and
+    # verify with the staging token; alignment must not weaken those gates.
+    assert "IMAGE_DIGEST: ${{ needs.build-staging-image.outputs.image_digest }}" in deploy_step
+    assert "STAGING_CHEMISTRY_SERVICE_TOKEN: ${{ secrets.STAGING_CHEMISTRY_SERVICE_TOKEN }}" in verify_step
+
+
 def test_candidate_build_submits_asynchronously_and_polls_for_its_immutable_digest():
     build = (REPO_ROOT / "scripts" / "build-chemistry-image.sh").read_text()
 

@@ -1,19 +1,23 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { boundLiteratureQuery } from './literature-query'
 import { QWEN_MODEL, callQwen } from '@/lib/qwen-adapter'
-import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type LiteratureEvidenceMatch, type EvidenceBackedCandidate } from '@/lib/types'
+import { AnalysisResult, AnalysisStep, Recommendation, ProgressEvent, DeterministicScores, EnrichedChemical, WasteAnalysis, type UnresolvedMaterialDetail, type LiteratureEvidenceMatch, type EvidenceBackedCandidate } from '@/lib/types'
 import { buildEvidenceBackedCandidates, buildHypothesisRecommendation, evidenceCandidateKey, isPhraseableDisposition, isEligibleToReviseProcedure } from '@/lib/recommendation-candidates'
 import { applyAcsGciprRecommendations } from '@/lib/acs-gcipr'
 import { buildHazardWarnings } from '@/lib/hazard-warnings'
 import { normalizeParsedMaterials } from '@/lib/material-names'
 import { batchConvert, scoreProtocol, isServiceAvailable } from '@/lib/chemistry-service'
 import { prepareChemicalInputs } from '@/lib/chemical-inputs'
+import { AnalysisError } from '@/lib/errors/classify'
+import { buildChemistryStatusMessage } from '@/lib/chemistry-status-message'
 import { groundDeclaredProducts } from '@/lib/declared-products'
+import { validateParsedAnalysisInputs } from '@/lib/analysis-input-validation'
+import { buildScoringInputManifest } from '@/lib/scoring-input-manifest'
 import { getAnalysisMetadata } from '@/lib/version'
 import { CANDIDATE_PARSE_SYSTEM_PROMPT, PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt, type PrincipleDefinition } from '@/lib/prompts/principles'
-import { buildAssemblePrompt } from '@/lib/prompts/assemble'
+import { buildAssemblePrompt, buildAssembleSourceData } from '@/lib/prompts/assemble'
 import { citationFromEvidenceMatch, searchLiteratureEvidence } from '@/lib/literature-evidence'
 import { buildSdsReferences } from '@/lib/sds'
 import { logLLMTrace, logDedupTrace } from '@/lib/trace'
@@ -55,7 +59,8 @@ const PARSE_SCHEMA: InputSchema = {
               type: 'object',
               properties: {
                 name: { type: 'string' },
-                role: { type: 'string' },
+                role: { type: 'string', enum: ['solvent', 'reagent', 'catalyst', 'product', 'workup', 'drying_agent', 'other'] },
+                processUse: { type: 'string', enum: ['reaction', 'extraction', 'wash', 'quench', 'drying', 'other'] },
                 quantity: { type: 'string' },
                 quantityMl: { type: 'number' },
                 quantityKg: { type: 'number' },
@@ -146,6 +151,8 @@ interface CallContext {
   analysisId?: string
   analysisRunId?: string
   supabase?: SupabaseClient
+  /** External guests are deliberately limited to provider/public evidence, never tenant-scoped persistence. */
+  retrievalScope?: 'public-only'
 }
 
 interface TransportMessage {
@@ -225,6 +232,12 @@ async function callClaude<T>(
         request_payload: {
           system: system.substring(0, 500) + '...', // Truncate for storage
           userContent: userContent.substring(0, 500) + '...',
+          systemHash: createHash('sha256').update(system).digest('hex'),
+          schemaHash: createHash('sha256').update(JSON.stringify(schema)).digest('hex'),
+          sampling: {
+            temperature: isQwenTransportEnabled() ? 0 : 'provider-default',
+            ...(isQwenTransportEnabled() ? { seed: createHash('sha256').update(JSON.stringify([selectedModel, system, userContent, schema])).digest().readUInt32BE(0) & 0x7fffffff } : {}),
+          },
           schema: schema,
         },
         response_payload: {
@@ -240,7 +253,7 @@ async function callClaude<T>(
   }
 
   if (!message) {
-    throw new Error(`Claude API call failed for ${label}`)
+    throw new AnalysisError('provider_unavailable', `Claude API call failed for ${label}`)
   }
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1)
@@ -248,7 +261,7 @@ async function callClaude<T>(
 
   const toolBlock = message.content.find(b => b.type === 'tool_use')
   if (!toolBlock || toolBlock.type !== 'tool_use') {
-    throw new Error(`Claude did not return a tool_use block for ${label} (stop_reason=${message.stop_reason})`)
+    throw new AnalysisError('analysis_incomplete', `Claude did not return a tool_use block for ${label} (stop_reason=${message.stop_reason})`)
   }
 
   return toolBlock.input as T
@@ -278,15 +291,19 @@ async function parseProtocol(protocolText: string, context?: CallContext): Promi
     !step || typeof step.description !== 'string' || !Array.isArray(step.chemicals) ||
     step.chemicals.some(chemical => !chemical || typeof chemical.name !== 'string' || !chemical.name.trim())
   )) {
-    throw new Error('Protocol parsing returned no usable steps')
+    throw new AnalysisError('analysis_incomplete', 'Protocol parsing returned no usable steps')
   }
 
   result.steps = normalizeParsedMaterials(result.steps)
 
   if (process.env.GCAI_ENGINE_CANDIDATE === '1') {
     const grounded = groundDeclaredProducts(result.steps, protocolText)
-    result.steps = grounded.steps
-    result.inputWarnings = grounded.warnings
+    const validated = validateParsedAnalysisInputs(grounded.steps, protocolText)
+    if (validated.requiresReview) {
+      throw new AnalysisError('ambiguous_formulations', 'The procedure contains ambiguous or parallel formulation quantities. Submit one formulation at a time with its own material amounts; no combined score was calculated.')
+    }
+    result.steps = validated.steps
+    result.inputWarnings = [...grounded.warnings, ...validated.warnings]
     for (const step of result.steps) {
       step.conditions ??= { temperature: null, duration: null, atmosphere: null }
       for (const chemical of step.chemicals) {
@@ -405,7 +422,7 @@ async function evaluateAllPrinciples(
     }
   }
 
-  if (succeeded === 0) throw new Error('All evidence-backed recommendation evaluations failed')
+  if (succeeded === 0) throw new AnalysisError('analysis_incomplete', 'All evidence-backed recommendation evaluations failed')
   return allRecommendations
 }
 
@@ -459,10 +476,11 @@ async function assembleResult(
     }
   }
 
-  const systemPrompt = buildAssemblePrompt(protocolText, steps, recommendations)
+  const systemPrompt = buildAssemblePrompt()
+  const sourceData = buildAssembleSourceData(protocolText, steps, recommendations)
 
   try {
-    const result = await callClaude<AssembleResult>(systemPrompt, 'Generate the revised protocol and overall assessment based on the recommendations above.', ASSEMBLE_SCHEMA, 'assemble', SONNET, context)
+    const result = await callClaude<AssembleResult>(systemPrompt, sourceData, ASSEMBLE_SCHEMA, 'assemble', SONNET, context)
     console.log('Phase 3 complete')
     return result
   } catch (err) {
@@ -668,10 +686,12 @@ export async function analyzeProtocol(
 
   // Phase 1.5: Rationalize quantities + deterministic scoring (if service available)
   let deterministicScores: DeterministicScores | undefined
+  let scoringInputManifest: AnalysisResult['scoringInputManifest']
   let enrichedChemicals: EnrichedChemical[] | undefined
   let wasteAnalysis: WasteAnalysis | undefined
   const unresolvedChemicals = new Set<string>()
   const indefiniteChemicals = new Set<string>()
+  let unresolvedDetails: UnresolvedMaterialDetail[] = []
 
   const serviceUp = await isServiceAvailable()
   if (serviceUp) {
@@ -685,6 +705,7 @@ export async function analyzeProtocol(
     enrichedChemicals = prepared.enrichedChemicals
     for (const name of prepared.unresolvedChemicals) unresolvedChemicals.add(name)
     for (const name of prepared.indefiniteChemicals) indefiniteChemicals.add(name)
+    unresolvedDetails = prepared.unresolvedDetails
 
     // A missing or indefinite material limits only principles that require that
     // material's reference data. It must not suppress protocol-level scoring
@@ -698,19 +719,34 @@ export async function analyzeProtocol(
       onProgress?.({ type: 'phase', phase: 2, message: 'Scoring against 12 principles...' })
     const scoreChemicals = prepared.scoreChemicals
 
-    const scoreResult = await scoreProtocol({
+    const scoreRequest = {
       chemicals: scoreChemicals,
       steps: parsed.steps.map(s => ({
         stepNumber: s.stepNumber,
         description: s.description,
-        chemicals: s.chemicals.map(c => ({ name: c.name, role: c.role })),
+        chemicals: s.chemicals.map(c => ({ name: c.name, role: c.role, ...(c.processUse ? { processUse: c.processUse } : {}) })),
         conditions: s.conditions,
       })),
       protocol_text: protocolText,
-    })
+    }
+    const scoreResult = await scoreProtocol(scoreRequest)
 
     if (scoreResult) {
       deterministicScores = scoreResult
+      scoringInputManifest = await buildScoringInputManifest({
+        sourceText: protocolText,
+        request: scoreRequest,
+        scores: scoreResult,
+        references: enrichedChemicals ?? [],
+        warnings: parsed.inputWarnings ?? [],
+        provenance: {
+          methodologyVersion: getAnalysisMetadata().methodologyVersion,
+          model: isQwenTransportEnabled() ? process.env.GCAI_LLM_MODEL || QWEN_MODEL : SONNET,
+          promptHash: createHash('sha256').update(process.env.GCAI_ENGINE_CANDIDATE === '1' ? CANDIDATE_PARSE_SYSTEM_PROMPT : PARSE_SYSTEM_PROMPT).digest('hex'),
+          schemaHash: createHash('sha256').update(JSON.stringify(PARSE_SCHEMA)).digest('hex'),
+          webRevision: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_SHA || null,
+        },
+      })
       // v0.6: capture structured waste analysis
       if (scoreResult.waste_analysis) {
         wasteAnalysis = scoreResult.waste_analysis as unknown as WasteAnalysis
@@ -940,6 +976,7 @@ export async function analyzeProtocol(
     revisedProtocol: assembled.revisedProtocol,
     overallAssessment: assembled.overallAssessment,
     deterministicScores,
+    ...(scoringInputManifest ? { scoringInputManifest } : {}),
     enrichedChemicals,
     analysisMetadata: metadata,
     wasteAnalysis,
@@ -951,13 +988,12 @@ export async function analyzeProtocol(
       deterministicScoringAvailable: deterministicScores !== undefined,
       unresolvedChemicals: Array.from(unresolvedChemicals).sort((a, b) => a.localeCompare(b)),
       indefiniteChemicals: Array.from(indefiniteChemicals).sort((a, b) => a.localeCompare(b)),
-      message: deterministicScores === undefined
-        ? 'Deterministic chemistry scoring was unavailable because the chemistry service did not return a score. Re-run when the service is available.'
-        : unresolvedChemicals.size > 0
-          ? 'Partial deterministic scoring completed. Some material-level calculations are unavailable because chemical reference records could not be retrieved for the listed materials.'
-          : indefiniteChemicals.size > 0
-            ? 'Partial deterministic scoring completed. Materials with indefinite composition cannot be analyzed as single chemicals, so only dependent calculations may be unavailable.'
-            : 'All requested chemical reference data was available from cache or bundled sources.',
+      ...(unresolvedDetails.length > 0 ? { unresolvedDetails } : {}),
+      message: buildChemistryStatusMessage({
+        scoringAvailable: deterministicScores !== undefined,
+        unresolvedCount: unresolvedChemicals.size,
+        indefiniteCount: indefiniteChemicals.size,
+      }),
     },
     // v0.7: Re-evaluation statistics
     reevaluationStats,

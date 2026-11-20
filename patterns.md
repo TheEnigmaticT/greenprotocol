@@ -59,3 +59,28 @@
 - Keep recommendation decisions above the scorecard and render the `ProcedureWorkbench` immediately below it on both new and persisted analysis routes.
 - The workbench always renders, including before any recommendation has been decided. It applies accepted changes only and states that pending/rejected items remain as written.
 - Provide visible `Copy Procedure` and `Print Procedure` controls. Print hides the scorecard and decisions, leaving the procedure and its analysis heading.
+
+## Saved SciSure review (read-only recovery view)
+- `/analyze/[id]/scisure` renders `SavedWorkspace` from the owner-authenticated `GET /api/integrations/scisure/analyses/[id]/workspace`. It is linked from the analysis header only when the analysis payload has `scisureReview`.
+- Findings use the same cream card treatment as the score card (`#FAFAF8`, 1px `#D6D0C4`), mono kicker in gold, and a decision label in forest (Accepted), stone (Rejected) or amber (Not reviewed).
+- The view is read-only: it states that decisions and writeback need the live review popup, and never describes a non-eligible finding as changing the procedure. 401 redirects to login, 404 shows an honest "not available" message, other failures show a retryable error; none are conflated.
+
+## SciSure popup review workspace
+- `ConnectionBridge` owns the postMessage handshake and status polling only; once the analysis is `completed` it mounts `ReviewWorkspace`, which owns review state. Pure protocol and decision logic lives in `lib/integrations/scisure/popup-review.ts`.
+- Finding cards use a 1px `#D6D0C4` border, a gold uppercase kicker (step, kind, severity), a decision label in forest (decided) or amber (undecided), and 44px-minimum bordered buttons. Eligible swaps read "Accept change" / "Reject change"; non-eligible findings read "Acknowledge" / "Dismiss" so a review is never mistaken for an applied change.
+- Draft preparation stays disabled until every finding has a decision, and any new decision discards the prepared draft and its confirmation.
+- Writeback is create-only. The explicit checkbox gates the button, the status line shows waiting, saved, uncertain, conflict, unsupported or failed, and only a `failed` (nothing created) result allows another attempt. A saved or uncertain record freezes the review.
+- Ask and the Evidence Atlas render only for signed-in (registered) connections.
+
+## Human-readable errors
+- Every user-visible error is a `HumanError` from `lib/errors/humanize.ts` (`humanizeError` / `toHumanError`): a bold title over a muted message, `role="alert"`, 44px action targets. API routes return a stable `code` plus safe text; raw detail stays server-side. Never show env var names, vendor/model names, HTTP codes, tool names or database text.
+- Orange notice card (`ChemistryDataNotice`): a lead sentence, "Step N · name · role" items grouped by reason, a "What to do:" line, then a "Chat about this" button. The chat opens with a seeded first message and a `chemistry-clarification` scope.
+- Textarea counter: right-aligned mono text, muted, amber at 90% of the limit, red when over (`lib/protocol-limits.ts`).
+
+## Chat actions (decisions and procedure proposals)
+- `DecisionActions`: two 44px chips under the chat composer, forest-filled "Approve this" and white outlined "Reject this", only for a recommendation scope with an id that is not read-only. They send the same exact phrases the server matches, so the model is never involved in a decision.
+- `ProposalCard`: gold-bordered cream card (`#FFFDF5` / `#ECB815`) with the server-computed diff (green add rows, red remove rows, grey hunk headers). Buttons: "Apply and re-run analysis" (creates a NEW analysis and uses one run; the original is untouched) and "Cancel". Pages wire `onProcedureProposalApply` to `rerunFromProposal`.
+
+## PDF import
+- `PdfImportButton` sits beside the example buttons in the paste field. Extraction runs in the browser (`unpdf`, loaded on demand), nothing is uploaded. The text lands in the editable textarea with a `PdfImportNotice` banner (filename, pages, warnings). Analyze stays disabled until the scientist ticks "I checked the extracted text".
+- Limits: 10 MB, 30 pages, 50,000 characters (refused, never truncated). Scanned PDFs get a plain "paste the text instead" message.

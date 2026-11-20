@@ -14,7 +14,8 @@ function hazardLabel(category: string): string {
   return HAZARD_LABELS[category] ?? category.charAt(0).toUpperCase() + category.slice(1)
 }
 
-function kg(n: number): string {
+function kg(n: number | null): string {
+  if (n === null || !Number.isFinite(n)) return 'Unavailable'
   if (n === 0) return '0 kg'
   if (n < 0.01) return '<0.01 kg'
   return `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg`
@@ -76,7 +77,7 @@ export default function WasteDetailsPanel({ wasteAnalysis }: { wasteAnalysis: Wa
 
       {/* Hazard segments */}
       {hazardSegments.length > 0 && (
-        <Section label="Hazard-segmented waste">
+        <Section label="Observed input hazards (not measured waste)">
           <ul className="space-y-2">
             {hazardSegments.map((seg) => (
               <li key={seg.category} className="flex items-start justify-between gap-3">
