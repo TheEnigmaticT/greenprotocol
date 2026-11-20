@@ -1,8 +1,31 @@
-import type { AnalysisStep, EnrichedChemical } from '@/lib/types'
+import type { AnalysisStep, EnrichedChemical, UnresolvedMaterialDetail, UnresolvedMaterialReason } from '@/lib/types'
 import type { BatchResult, ConvertResult } from '@/lib/chemistry-service'
 
 const identity = (name: string) => name.trim().toLowerCase()
 const positive = (value: number | null | undefined) => typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+
+/** A solution's stated volume is not a measured amount of its neat solute. */
+function solutionVolume(name: string, quantity: string, description: string): boolean {
+  if (!/\d\s*(?:mL|L|µL|μL|uL)\b/i.test(quantity)) return false
+  const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (!escaped) return false
+  return new RegExp(`(?:aqueous|aq\\.?)\\s+(?:saturated\\s+)?${escaped}(?=$|[^\\p{L}\\p{N}])|${escaped}\\s+(?:solution|in\\s+water)\\b|solution\\s+of\\s+${escaped}(?=$|[^\\p{L}\\p{N}])`, 'iu').test(description)
+}
+
+/**
+ * Why the reference lookup could not give a usable record, or null when it did.
+ * Separates a name nobody recognises from a lookup that failed or is queued for
+ * retry, because the person has to do different things in each case.
+ */
+export function classifyUnresolvedReason(conversion: ConvertResult | undefined): UnresolvedMaterialReason | null {
+  if (!conversion || conversion.data_source === 'error') return 'provider_error'
+  if (conversion.data_source === 'indefinite') return 'indefinite'
+  if (conversion.reference_status === 'queued') return 'provider_error'
+  if (conversion.reference_status === 'terminal_not_found') return 'not_recognized'
+  if (conversion.reference_status === 'unavailable') return 'reference_missing'
+  if (conversion.data_source === 'not_found') return 'not_recognized'
+  return null
+}
 
 /** Join conversions to material occurrences, never to the first matching name. */
 export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult | null) {
@@ -12,6 +35,7 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
   const remaining = new Set((batch?.results ?? []).map((_, index) => index))
   const unresolvedChemicals = new Set<string>()
   const indefiniteChemicals = new Set<string>()
+  const unresolvedDetails: UnresolvedMaterialDetail[] = []
   const enrichedChemicals: EnrichedChemical[] = []
   const scoreChemicals = occurrences.map(({ step, chemical, occurrenceId }) => {
     const quantity = chemical.quantity || ''
@@ -27,14 +51,16 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
       conversion = batch!.results[matching[0]]
       remaining.delete(matching[0])
     }
-    const indefinite = conversion?.data_source === 'indefinite'
-    const unavailable = !conversion || ['not_found', 'error'].includes(conversion.data_source)
-      || ['queued', 'unavailable', 'terminal_not_found'].includes(conversion.reference_status ?? '')
+    const reason = solutionVolume(chemical.name, quantity, step.description)
+      ? 'indefinite' : classifyUnresolvedReason(conversion)
+    const indefinite = reason === 'indefinite'
+    const unavailable = reason !== null && !indefinite
     if (indefinite) indefiniteChemicals.add(chemical.name)
     else if (unavailable) unresolvedChemicals.add(chemical.name)
+    if (reason) unresolvedDetails.push({ name: chemical.name, reason, stepNumber: step.stepNumber, role: chemical.role })
     const referenceStatus = indefinite ? 'indefinite' : unavailable ? conversion?.reference_status ?? 'unavailable' : 'available'
-    const kg = quantity ? positive(conversion?.quantity_kg) : null
-    const mol = quantity ? positive(conversion?.quantity_mol) : null
+    const kg = quantity && !indefinite ? positive(conversion?.quantity_kg) : null
+    const mol = quantity && !indefinite ? positive(conversion?.quantity_mol) : null
     // Model-supplied converted masses are not a fallback for missing conversion.
     chemical.quantityKg = kg
     const smiles = !indefinite && !unavailable ? conversion?.smiles ?? null : null
@@ -53,6 +79,8 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
     })
     return {
       name: chemical.name, role: chemical.role, quantity,
+      ...(chemical.processUse ? { process_use: chemical.processUse } : {}),
+      reference_hcodes: !indefinite && !unavailable ? conversion?.ghs_hazards?.map(hazard => hazard.code) ?? null : null,
       quantity_g: kg === null ? null : kg * 1000,
       quantity_kg: kg, quantity_mol: mol, molecular_weight: mw,
       step_number: step.stepNumber, smiles, reference_status: referenceStatus,
@@ -62,5 +90,5 @@ export function prepareChemicalInputs(steps: AnalysisStep[], batch: BatchResult 
       reference_provenance: conversion?.data_source ?? null,
     }
   })
-  return { enrichedChemicals, scoreChemicals, unresolvedChemicals, indefiniteChemicals }
+  return { enrichedChemicals, scoreChemicals, unresolvedChemicals, indefiniteChemicals, unresolvedDetails }
 }

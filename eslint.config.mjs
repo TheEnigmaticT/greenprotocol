@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The SciSure add-on is a separately packaged CommonJS SDK extension with
+    // its own node:test suite; it is not bundled by the Next application.
+    "integrations/scisure-addon/**",
   ]),
 ]);
 

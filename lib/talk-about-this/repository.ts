@@ -4,6 +4,9 @@ import type { AnalysisResult, Citation, LiteratureEvidenceMatch } from '@/lib/ty
 import type { TalkAboutContext, TalkAboutScope } from '@/lib/talk-about-this/context'
 import { isPersistedEvidence, type PersistedEvidence, type PersistedEvidenceReceipt } from '@/lib/talk-about-this/evidence'
 import type { AdminSupabaseClient } from '@/lib/supabase/admin'
+import type { RecommendationDecisionReceipt } from '@/lib/talk-about-this/decisions'
+import { parseProcedureProposal, type ProcedureProposal } from '@/lib/talk-about-this/procedure-proposal'
+import { TalkActionError } from '@/lib/talk-about-this/action-errors'
 
 export interface StoredAnalysis {
   id: string
@@ -21,8 +24,9 @@ export interface TalkConversation {
   status: 'active' | 'closed'
 }
 
-export interface StoredRecommendationApprovalAction {
+export interface StoredRecommendationDecisionAction {
   id: string
+  action_type: string
   target_recommendation_id: string
   label: string
   already_applied: boolean
@@ -30,22 +34,24 @@ export interface StoredRecommendationApprovalAction {
   completed_at: string | null
 }
 
-export interface PersistedRecommendationApprovalReceipt {
-  actionId: string
-  recommendationId: string
-  label: string
-  alreadyAccepted: boolean
-  revisionNumber: number
+export interface PersistedRecommendationDecisionReceipt extends RecommendationDecisionReceipt {
   receivedAt: string
 }
 
+const DECISION_BY_ACTION_TYPE: Record<string, RecommendationDecisionReceipt['decision']> = {
+  approve_recommendation: 'approved',
+  reject_recommendation: 'rejected',
+}
+
 export function receiptFromStoredAction(
-  action: StoredRecommendationApprovalAction | null,
-): PersistedRecommendationApprovalReceipt | null {
+  action: StoredRecommendationDecisionAction | null,
+): PersistedRecommendationDecisionReceipt | null {
   if (
     !action
     || typeof action.id !== 'string'
     || !action.id.trim()
+    || typeof action.action_type !== 'string'
+    || !Object.hasOwn(DECISION_BY_ACTION_TYPE, action.action_type)
     || typeof action.target_recommendation_id !== 'string'
     || !action.target_recommendation_id.trim()
     || typeof action.label !== 'string'
@@ -60,8 +66,9 @@ export function receiptFromStoredAction(
   return {
     actionId: action.id,
     recommendationId: action.target_recommendation_id,
+    decision: DECISION_BY_ACTION_TYPE[action.action_type],
     label: action.label,
-    alreadyAccepted: action.already_applied,
+    alreadyDecided: action.already_applied,
     revisionNumber: action.revision_number,
     receivedAt: action.completed_at,
   }
@@ -272,25 +279,124 @@ export async function findOwnedConversationByContextHash(
   return data as TalkConversation | null
 }
 
-export async function loadOwnedRecommendationApprovalReceipt(
+/** The most recent approve/reject receipt for the conversation, so a reopened chat shows the current state. */
+export async function loadOwnedRecommendationDecisionReceipt(
   supabase: SupabaseClient,
   userId: string,
   conversationId: string,
-): Promise<PersistedRecommendationApprovalReceipt | null> {
+): Promise<PersistedRecommendationDecisionReceipt | null> {
   const { data, error } = await supabase
     .from('gpc_talk_actions')
-    .select('id, target_recommendation_id, label, already_applied, revision_number, completed_at')
+    .select('id, action_type, target_recommendation_id, label, already_applied, revision_number, completed_at')
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
-    .eq('action_type', 'approve_recommendation')
     .eq('status', 'completed')
+    .order('decision_sequence', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (error) {
-    throw new Error(`Failed to load approval receipt: ${error.message}`)
+    throw new Error(`Failed to load decision receipt: ${error.message}`)
   }
 
-  return receiptFromStoredAction(data as StoredRecommendationApprovalAction | null)
+  return receiptFromStoredAction(data as StoredRecommendationDecisionAction | null)
+}
+
+interface StoredProcedureProposal {
+  id: string
+  summary: string
+  diff: string
+  proposed_text: string
+  base_revision_number: number
+}
+
+export async function listPendingProcedureProposals(
+  supabase: SupabaseClient,
+  userId: string,
+  conversationId: string,
+): Promise<ProcedureProposal[]> {
+  const { data, error } = await supabase
+    .from('gpc_talk_proposals')
+    .select('id, summary, diff, proposed_text, base_revision_number')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to load procedure proposals: ${error.message}`)
+  }
+
+  return ((data ?? []) as StoredProcedureProposal[]).flatMap(row => {
+    const proposal = parseProcedureProposal({
+      proposalId: row.id,
+      summary: row.summary,
+      diff: row.diff,
+      proposedText: row.proposed_text,
+      baseRevisionNumber: row.base_revision_number,
+    })
+    return proposal ? [proposal] : []
+  })
+}
+
+export async function createProcedureProposal(
+  supabase: SupabaseClient,
+  input: { conversationId: string; summary: string; proposedText: string; diff: string; baseTextHash: string },
+): Promise<{ proposalId: string; baseRevisionNumber: number }> {
+  const { data, error } = await supabase.rpc('create_talk_procedure_proposal', {
+    p_conversation_id: input.conversationId,
+    p_summary: input.summary,
+    p_proposed_text: input.proposedText,
+    p_diff: input.diff,
+    p_base_text_hash: input.baseTextHash,
+  })
+  if (error) throw new TalkActionError(error.message, error.code)
+
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null | undefined
+  if (!row || typeof row.proposal_id !== 'string' || typeof row.base_revision_number !== 'number') {
+    throw new TalkActionError('Proposal creation returned an invalid receipt')
+  }
+  return { proposalId: row.proposal_id, baseRevisionNumber: row.base_revision_number }
+}
+
+export type ApplyProcedureProposalResult =
+  | { outcome: 'applied'; proposalId: string; summary: string; proposedText: string }
+  | { outcome: 'stale' }
+
+/** Confirms the scientist's decision. The saved analysis is not touched; the caller re-runs the text. */
+export async function applyProcedureProposal(
+  supabase: SupabaseClient,
+  input: { conversationId: string; proposalId: string },
+): Promise<ApplyProcedureProposalResult> {
+  const { data, error } = await supabase.rpc('apply_talk_procedure_proposal', {
+    p_conversation_id: input.conversationId,
+    p_proposal_id: input.proposalId,
+  })
+  if (error) throw new TalkActionError(error.message, error.code)
+
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null | undefined
+  if (row?.outcome === 'stale') return { outcome: 'stale' }
+  if (
+    !row
+    || row.outcome !== 'applied'
+    || typeof row.proposal_id !== 'string'
+    || typeof row.summary !== 'string'
+    || typeof row.proposed_text !== 'string'
+  ) {
+    throw new TalkActionError('Proposal apply returned an invalid receipt')
+  }
+  return { outcome: 'applied', proposalId: row.proposal_id, summary: row.summary, proposedText: row.proposed_text }
+}
+
+export async function cancelProcedureProposal(
+  supabase: SupabaseClient,
+  input: { conversationId: string; proposalId: string },
+): Promise<void> {
+  const { error } = await supabase.rpc('cancel_talk_procedure_proposal', {
+    p_conversation_id: input.conversationId,
+    p_proposal_id: input.proposalId,
+  })
+  if (error) throw new TalkActionError(error.message, error.code)
 }
 
 export function assistantMessageCitations(
@@ -512,6 +618,7 @@ const toolRunArgumentSchemas: Record<string, Record<string, DiagnosticArgumentKi
     temperatureK: 'number',
   },
   search_scoped_literature_evidence: { signalGroups: 'string_array_digest' },
+  propose_procedure_edit: { summary: 'digest', editCount: 'number' },
 }
 
 function diagnosticArgumentProjection(

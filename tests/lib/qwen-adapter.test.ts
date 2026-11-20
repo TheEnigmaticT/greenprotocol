@@ -60,6 +60,18 @@ describe('Qwen OpenAI-compatible transport', () => {
     vi.unstubAllEnvs()
   })
 
+  it('pins extraction sampling and a stable input-specific seed without claiming exact model determinism', async () => {
+    mocks.create.mockResolvedValue(SUCCESS)
+    await callQwen(request())
+    await callQwen(request())
+    await callQwen({ ...request(), userContent: 'different procedure' })
+    const [first, repeated, changed] = mocks.create.mock.calls.map(([wire]) => wire)
+    expect(first.temperature).toBe(0)
+    expect(Number.isInteger(first.seed)).toBe(true)
+    expect(repeated.seed).toBe(first.seed)
+    expect(changed.seed).not.toBe(first.seed)
+  })
+
   it('preserves the GCAI_QWEN_PARITY OpenRouter route and native forced function', async () => {
     vi.stubEnv('GCAI_QWEN_PARITY', '1')
     mocks.create.mockResolvedValue(SUCCESS)

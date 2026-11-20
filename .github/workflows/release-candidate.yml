@@ -65,12 +65,20 @@ jobs:
           DEPLOY_ENV: staging
           GIT_SHA: ${{ github.event.pull_request.head.sha }}
           IMAGE_DIGEST: ${{ needs.build-staging-image.outputs.image_digest }}
+          # Candidate routing must match the known-good staging activation
+          # workflow (deploy-staging.yml). Without these, this deploy would
+          # overwrite the validated staging runtime with the legacy Claude
+          # Sonnet default and drop GCAI_ENGINE_CANDIDATE.
+          STAGING_ENGINE_CANDIDATE: '1'
+          STAGING_OPENROUTER_MODEL: qwen/qwen3.8-27b
         run: bash scripts/deploy-chemistry-cloud-run.sh
       - name: Verify health and authenticated chemistry sentinel
         env:
           DEPLOY_ENV: staging
           GIT_SHA: ${{ github.event.pull_request.head.sha }}
           STAGING_CHEMISTRY_SERVICE_TOKEN: ${{ secrets.STAGING_CHEMISTRY_SERVICE_TOKEN }}
+          STAGING_ENGINE_CANDIDATE: '1'
+          STAGING_OPENROUTER_MODEL: qwen/qwen3.8-27b
         run: bash scripts/verify-chemistry-release.sh
 
   staging-e2e:

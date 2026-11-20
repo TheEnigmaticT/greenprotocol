@@ -220,6 +220,7 @@ describe('receiptFromStoredAction', () => {
   it('recovers the durable action identity and revision without consulting message text', () => {
     expect(receiptFromStoredAction({
       id: 'action-persisted',
+      action_type: 'reject_recommendation',
       target_recommendation_id: 'rec-1',
       label: 'Use ethyl acetate',
       already_applied: false,
@@ -228,8 +229,9 @@ describe('receiptFromStoredAction', () => {
     })).toEqual({
       actionId: 'action-persisted',
       recommendationId: 'rec-1',
+      decision: 'rejected',
       label: 'Use ethyl acetate',
-      alreadyAccepted: false,
+      alreadyDecided: false,
       revisionNumber: 9,
       receivedAt: '2026-08-12T00:00:00.000Z',
     })
@@ -238,6 +240,7 @@ describe('receiptFromStoredAction', () => {
   it('rejects incomplete persisted actions rather than inferring a receipt from chat content', () => {
     expect(receiptFromStoredAction({
       id: 'action-persisted',
+      action_type: 'reject_recommendation',
       target_recommendation_id: 'rec-1',
       label: 'Use ethyl acetate',
       already_applied: false,

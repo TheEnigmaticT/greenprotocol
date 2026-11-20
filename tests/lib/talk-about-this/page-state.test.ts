@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseOpenConversationResponse, type RecommendationApprovalReceipt } from '@/components/TalkAboutThis'
-import { applyRecommendationApproval, reconcilePersistedRevision, type AnalysisData } from '@/app/analyze/[id]/page'
+import { parseOpenConversationResponse, type RecommendationDecisionReceipt } from '@/components/TalkAboutThis'
+import { applyDecisionReceipt, reconcilePersistedRevision, type AnalysisData } from '@/app/analyze/[id]/page'
 
 const data: AnalysisData = {
   id: 'analysis-1',
@@ -27,11 +27,12 @@ const data: AnalysisData = {
   revisionNumber: 4,
 }
 
-const receipt: RecommendationApprovalReceipt = {
+const receipt: RecommendationDecisionReceipt = {
   actionId: 'action-1',
   recommendationId: 'rec-1',
+  decision: 'approved',
   label: 'Use ethyl acetate',
-  alreadyAccepted: false,
+  alreadyDecided: false,
   revisionNumber: 6,
 }
 
@@ -41,7 +42,7 @@ describe('analysis persistence reconciliation', () => {
     const delayedPatch = new Promise<number>(resolve => { resolvePatch = resolve })
     let current = data
 
-    current = applyRecommendationApproval(current, receipt)!
+    current = applyDecisionReceipt(current, receipt)!
     expect(current.analysis.recommendations[0].isAccepted).toBe(true)
     expect(current.revisionNumber).toBe(6)
 
@@ -83,14 +84,16 @@ describe('scoped conversation opening state', () => {
         createdAt: '2026-08-12T00:00:00.000Z',
       }],
       evidenceReceipts: [{ evidence, receivedAt: '2026-08-12T00:00:00.000Z' }],
-      approvalReceipt: {
+      decisionReceipt: {
         recommendationId: 'rec-1',
+        decision: 'rejected',
         label: 'Use ethyl acetate',
-        alreadyAccepted: false,
+        alreadyDecided: false,
         actionId: 'approval-1',
         revisionNumber: 7,
         receivedAt: '2026-08-12T00:00:00.000Z',
       },
+      proposals: [],
     })
 
     expect(response).toMatchObject({
@@ -98,7 +101,8 @@ describe('scoped conversation opening state', () => {
       disposition: 'resumed',
       messages: [{ id: 'message-1', content: 'Persisted answer.' }],
       evidenceReceipts: [{ evidence }],
-      approvalReceipt: { actionId: 'approval-1' },
+      decisionReceipt: { actionId: 'approval-1', decision: 'rejected' },
+      proposals: [],
     })
   })
 

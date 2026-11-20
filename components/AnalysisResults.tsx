@@ -7,6 +7,8 @@ import type { AnalysisResult, Recommendation, Evidence } from '@/lib/types'
 import Link from 'next/link'
 import WasteScoreCard from './WasteScoreCard'
 import { TalkAboutThis } from './TalkAboutThis'
+import type { RecommendationDecisionReceipt } from '@/lib/talk-about-this/decisions'
+import type { ProcedureProposal } from '@/lib/talk-about-this/procedure-proposal'
 import { buildCitationString } from '@/lib/citation'
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -111,7 +113,12 @@ function EvidenceView({ evidence, principleNumbers, analysisId }: {
 }
 
 
-export function EvidenceAtlasTalkControl({ analysisId, analysis }: { analysisId: string; analysis: AnalysisResult }) {
+export function EvidenceAtlasTalkControl({ analysisId, analysis, onRecommendationDecided, onProcedureProposalApply }: {
+  analysisId: string
+  analysis: AnalysisResult
+  onRecommendationDecided?: (receipt: RecommendationDecisionReceipt) => void
+  onProcedureProposalApply?: (proposal: ProcedureProposal) => void | Promise<void>
+}) {
   const principleNumber = 1
   const hasScopedCitations = analysis.recommendations.some(recommendation =>
     recommendation.principleNumbers.includes(principleNumber)
@@ -125,6 +132,8 @@ export function EvidenceAtlasTalkControl({ analysisId, analysis }: { analysisId:
       title="P1 Evidence Atlas"
       evidenceState={hasScopedCitations ? 'sourced' : 'inferred'}
       buttonLabel="Ask"
+      onRecommendationDecided={onRecommendationDecided}
+      onProcedureProposalApply={onProcedureProposalApply}
     />
   )
 }
@@ -133,11 +142,15 @@ function RecommendationCard({
   onToggleAccept,
   analysisId,
   recommendationIndex,
+  onRecommendationDecided,
+  onProcedureProposalApply,
 }: {
   rec: Recommendation;
   onToggleAccept: () => void;
   analysisId?: string;
   recommendationIndex: number;
+  onRecommendationDecided?: (receipt: RecommendationDecisionReceipt) => void;
+  onProcedureProposalApply?: (proposal: ProcedureProposal) => void | Promise<void>;
 }) {
   const isAccepted = !!rec.isAccepted
   const warning = rec.cardKind === 'warning'
@@ -180,6 +193,8 @@ function RecommendationCard({
               ? rec.original.chemical
               : `Step ${rec.stepNumber}: ${rec.original.chemical} → ${rec.alternative.chemical}`}
             evidenceState={rec.evidenceTier ?? ((rec.evidence?.citations.length ?? 0) > 0 ? 'sourced' : 'inferred')}
+            onRecommendationDecided={onRecommendationDecided}
+            onProcedureProposalApply={onProcedureProposalApply}
           />
           <button
             onClick={onToggleAccept}
@@ -246,11 +261,15 @@ export default function AnalysisResults({
   originalProtocol,
   onUpdateAnalysis,
   analysisId,
+  onRecommendationDecided,
+  onProcedureProposalApply,
 }: {
   analysis: AnalysisResult;
   originalProtocol: string;
   onUpdateAnalysis?: (updated: AnalysisResult) => void;
   analysisId?: string;
+  onRecommendationDecided?: (receipt: RecommendationDecisionReceipt) => void;
+  onProcedureProposalApply?: (proposal: ProcedureProposal) => void | Promise<void>;
 }) {
   const [viewMode, setViewMode] = useState<'full' | 'quick'>('full')
 
@@ -437,6 +456,8 @@ export default function AnalysisResults({
                     onToggleAccept={() => toggleRecommendation(originalIndex)}
                     analysisId={analysisId}
                     recommendationIndex={originalIndex}
+                    onRecommendationDecided={onRecommendationDecided}
+                    onProcedureProposalApply={onProcedureProposalApply}
                   />
                 ))
               )}
@@ -521,7 +542,12 @@ export default function AnalysisResults({
                   Full citations and calculation trails. Chat is scoped to Principle 1 only.
                 </p>
               </div>
-              <EvidenceAtlasTalkControl analysisId={analysisId} analysis={analysis} />
+              <EvidenceAtlasTalkControl
+                analysisId={analysisId}
+                analysis={analysis}
+                onRecommendationDecided={onRecommendationDecided}
+                onProcedureProposalApply={onProcedureProposalApply}
+              />
               <a
                 href={`/analyze/${analysisId}/evidence`}
                 aria-label="View Evidence Atlas for this analysis"

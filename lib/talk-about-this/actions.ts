@@ -1,14 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { TalkActionError } from '@/lib/talk-about-this/action-errors'
+import type { RecommendationDecisionReceipt } from '@/lib/talk-about-this/decisions'
 
-export interface ScopedRecommendationApprovalReceipt {
-  actionId: string
-  recommendationId: string
-  label: string
-  alreadyAccepted: boolean
-  revisionNumber: number
-}
+export type RecommendationDecision = RecommendationDecisionReceipt['decision']
 
-interface ApprovalRpcReceipt {
+interface DecisionRpcReceipt {
   action_id: string
   recommendation_id: string
   label: string
@@ -16,36 +12,57 @@ interface ApprovalRpcReceipt {
   revision_number: number
 }
 
-const APPROVAL_REQUESTS: Record<string, true> = {
-  'approve this': true,
-  'accept this recommendation': true,
-  'accept this': true,
-  'approve this recommendation': true,
+/**
+ * Exact phrases only. The model is never consulted for these, so a decision can
+ * never be argued into (or out of) existence by conversation text.
+ */
+const DECISION_REQUESTS: Record<string, RecommendationDecision> = {
+  'approve this': 'approved',
+  'accept this recommendation': 'approved',
+  'accept this': 'approved',
+  'approve this recommendation': 'approved',
+  'reject this': 'rejected',
+  'reject this recommendation': 'rejected',
+  'dismiss this': 'rejected',
+}
+
+const DECISION_RPC: Record<RecommendationDecision, string> = {
+  approved: 'approve_scoped_recommendation',
+  rejected: 'reject_scoped_recommendation',
+}
+
+export function explicitRecommendationDecision(content: string): RecommendationDecision | null {
+  const normalized = content.trim().toLowerCase().replace(/[.!]+$/, '')
+  return Object.hasOwn(DECISION_REQUESTS, normalized) ? DECISION_REQUESTS[normalized] : null
 }
 
 export function isExplicitScopedApprovalRequest(content: string): boolean {
-  const normalized = content.trim().toLowerCase().replace(/[.!]+$/, '')
-  return APPROVAL_REQUESTS[normalized] === true
+  return explicitRecommendationDecision(content) === 'approved'
 }
 
-export async function approveScopedRecommendation(input: {
+export function isExplicitScopedRejectionRequest(content: string): boolean {
+  return explicitRecommendationDecision(content) === 'rejected'
+}
+
+export async function decideScopedRecommendation(input: {
   supabase: SupabaseClient
   conversationId: string
-}): Promise<ScopedRecommendationApprovalReceipt> {
-  const { data, error } = await input.supabase.rpc('approve_scoped_recommendation', {
+  decision: RecommendationDecision
+}): Promise<RecommendationDecisionReceipt> {
+  const { data, error } = await input.supabase.rpc(DECISION_RPC[input.decision], {
     p_conversation_id: input.conversationId,
   })
 
   if (error) {
-    throw new Error(error.message)
+    throw new TalkActionError(error.message, error.code)
   }
 
   const receipt = Array.isArray(data) ? data[0] : data
   if (!receipt || typeof receipt !== 'object') {
-    throw new Error('Approval did not return a receipt')
+    throw new TalkActionError('Decision did not return a receipt')
   }
 
-  const result = receipt as ApprovalRpcReceipt
+  const result = receipt as DecisionRpcReceipt
   if (
     typeof result.action_id !== 'string'
     || typeof result.recommendation_id !== 'string'
@@ -53,14 +70,22 @@ export async function approveScopedRecommendation(input: {
     || typeof result.already_accepted !== 'boolean'
     || typeof result.revision_number !== 'number'
   ) {
-    throw new Error('Approval returned an invalid receipt')
+    throw new TalkActionError('Decision returned an invalid receipt')
   }
 
   return {
     actionId: result.action_id,
     recommendationId: result.recommendation_id,
+    decision: input.decision,
     label: result.label,
-    alreadyAccepted: result.already_accepted,
+    alreadyDecided: result.already_accepted,
     revisionNumber: result.revision_number,
   }
+}
+
+export function decisionMessage(receipt: Pick<RecommendationDecisionReceipt, 'decision' | 'label' | 'alreadyDecided'>): string {
+  const verb = receipt.decision === 'approved' ? 'approved' : 'rejected'
+  return receipt.alreadyDecided
+    ? `${receipt.label} was already ${verb}. Nothing changed.`
+    : `${receipt.label} has been ${verb}.`
 }

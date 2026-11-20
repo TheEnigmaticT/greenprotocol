@@ -2,6 +2,9 @@ import type { ChatMessage, ChatProvider, ChatToolCall } from '@/lib/talk-about-t
 import { telemetryForActivity } from '@/lib/talk-about-this/latency'
 import type { TalkAboutContext } from '@/lib/talk-about-this/context'
 import { buildTalkAboutSystemPrompt } from '@/lib/talk-about-this/prompt'
+import { proposalFromResult, proposalResultForModel } from '@/lib/talk-about-this/proposals'
+import { MAX_EDIT_FIND_CHARS, MAX_EDIT_RATIONALE_CHARS, MAX_EDIT_REPLACE_CHARS, MAX_PROCEDURE_EDITS, MAX_PROPOSAL_SUMMARY_CHARS, type ProcedureEdit } from '@/lib/talk-about-this/procedure-edit'
+import { canProposeProcedureEdit } from '@/lib/talk-about-this/scope'
 import {
   buildChatTools,
   scopedChemicals,
@@ -38,7 +41,7 @@ export function integerTimeoutMs(ms: number): number {
   return Math.floor(ms)
 }
 
-export type ChatLifecycleEvent = 'activity' | 'delta' | 'tool-start' | 'tool-complete' | 'tool-failed'
+export type ChatLifecycleEvent = 'activity' | 'delta' | 'tool-start' | 'tool-complete' | 'tool-failed' | 'procedure-proposal'
 
 export interface ScopedToolChatRequest {
   provider: ChatProvider
@@ -52,6 +55,8 @@ export interface ScopedToolChatRequest {
   now?: () => number
   /** Test-only override for the whole-turn AbortSignal budget. */
   loopTimeoutMs?: number
+  /** Complete saved procedure, supplied only when the frozen snapshot holds a truncated copy. */
+  fullProcedureText?: string
 }
 
 export interface ChatRunResult {
@@ -81,6 +86,7 @@ function isToolName(name: string): name is ToolName {
     || name === 'lookup_solvent_hazard_profile'
     || name === 'screen_solvent_candidates'
     || name === 'search_scoped_literature_evidence'
+    || name === 'propose_procedure_edit'
 }
 
 function operationFor(name: string): ToolResult['operation'] {
@@ -92,6 +98,7 @@ function operationFor(name: string): ToolResult['operation'] {
     case 'lookup_solvent_hazard_profile': return 'solvent_hazard'
     case 'screen_solvent_candidates': return 'solvent_screening'
     case 'search_scoped_literature_evidence': return 'literature_evidence'
+    case 'propose_procedure_edit': return 'procedure_proposal'
     default: return 'rdkit'
   }
 }
@@ -129,6 +136,7 @@ function sourceForTool(tool: ToolName): string {
     case 'lookup_chem21_solvent': return 'CHEM21'
     case 'lookup_pubchem_profile': return 'PubChem GHS'
     case 'search_scoped_literature_evidence': return 'scoped literature evidence'
+    case 'propose_procedure_edit': return 'procedure editor'
     default: return 'local evidence'
   }
 }
@@ -185,6 +193,12 @@ function fingerprint(call: ScopedToolCall): string {
   }
   const { id: _id, ...normalizedArguments } = call
   return JSON.stringify(normalize({ name: call.name, normalizedArguments }))
+}
+
+/** Arguments persisted with a tool run. Proposal text stays out: it is stored once, in the proposal. */
+function diagnosticArguments(scoped: ScopedToolCall): Record<string, unknown> {
+  if (scoped.name === 'propose_procedure_edit') return { summary: scoped.summary, editCount: scoped.edits.length }
+  return Object.fromEntries(Object.entries(scoped).filter(([key]) => key !== 'id' && key !== 'name'))
 }
 
 function dependsOnCanonicalSmiles(call: ChatToolCall): string | null {
@@ -294,6 +308,32 @@ export function parseScopedToolCall(
       query,
       ...(signalGroups ? { signalGroups: signalGroups as EvidenceSignalGroup[] } : {}),
     }
+  }
+
+  if (call.name === 'propose_procedure_edit') {
+    if (!context.scope || !canProposeProcedureEdit(context.scope)) throw new Error('This discussion is read-only and cannot propose procedure edits')
+    requireOnlyArguments(value, ['summary', 'edits'])
+    const summary = requireString(value, 'summary')
+    if (summary.length > MAX_PROPOSAL_SUMMARY_CHARS) {
+      throw new Error(`Proposal summary must be ${MAX_PROPOSAL_SUMMARY_CHARS} characters or fewer`)
+    }
+    const rawEdits = value.edits
+    if (!Array.isArray(rawEdits) || rawEdits.length < 1 || rawEdits.length > MAX_PROCEDURE_EDITS) {
+      throw new Error(`Proposal needs 1–${MAX_PROCEDURE_EDITS} edits`)
+    }
+    const edits = rawEdits.map((item): ProcedureEdit => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('Each edit must be an object')
+      const edit = item as Record<string, unknown>
+      requireOnlyArguments(edit, ['find', 'replace', 'rationale'])
+      if (typeof edit.find !== 'string' || typeof edit.replace !== 'string' || typeof edit.rationale !== 'string') {
+        throw new Error('Each edit needs find, replace and rationale strings')
+      }
+      if (edit.find.length > MAX_EDIT_FIND_CHARS || edit.replace.length > MAX_EDIT_REPLACE_CHARS || edit.rationale.length > MAX_EDIT_RATIONALE_CHARS) {
+        throw new Error('An edit field is too long')
+      }
+      return { find: edit.find, replace: edit.replace, rationale: edit.rationale }
+    })
+    return { id: call.id, name: call.name, summary, edits }
   }
   switch (call.name) {
     case 'lookup_chem21_solvent':
@@ -450,6 +490,7 @@ export async function runScopedToolChat({
   onToolRun,
   now = performance.now.bind(performance),
   loopTimeoutMs = TOOL_LOOP_TIMEOUT_MS,
+  fullProcedureText,
 }: ScopedToolChatRequest): Promise<ChatRunResult> {
   const conversation = [...messages]
   const canonicalSmilesByChemical = new Map<string, string>()
@@ -512,6 +553,16 @@ export async function runScopedToolChat({
 
   const diagnosticForResult = (call: ChatToolCall, result: ToolResult): ToolDiagnostic => {
     if (result.status === 'ok') return completedDiagnostic
+    // The editor refusing an edit (no unique match, overlap, size) is a normal outcome the
+    // model can correct; it is reported, but is not an outage of the editor itself.
+    if (result.operation === 'procedure_proposal') {
+      return {
+        status: 'failed',
+        reasonCode: 'invalid_request',
+        reasonDetail: safeReasonDetails.invalid_request,
+        userNote: 'The proposed edit could not be matched to the saved procedure.',
+      }
+    }
     // A local-index miss is evidence of absence, not a tool failure. Surface it as
     // a completed not_found receipt so the UI does not flash a red "unavailable".
     if (result.status === 'not_found') {
@@ -529,6 +580,8 @@ export async function runScopedToolChat({
   }
 
   const appendToolComplete = (call: ChatToolCall, result: ToolResult) => {
+    const proposal = proposalFromResult(result)
+    if (proposal) onEvent('procedure-proposal', { ...proposal })
     if (result.operation === 'literature_evidence') {
       const evidence = Array.isArray(result.data.evidence)
         ? result.data.evidence.filter((item): item is LiteratureEvidenceMatch => item !== null && typeof item === 'object'
@@ -556,7 +609,7 @@ export async function runScopedToolChat({
     onEvent('activity', { state: 'thinking', round })
 
     for await (const event of provider.stream({
-      system: buildTalkAboutSystemPrompt(context, citationsById.keys()),
+      system: buildTalkAboutSystemPrompt(context, citationsById.keys(), { fullProcedureText }),
       messages: conversation,
       signal: requestSignal,
       tools: buildChatTools(context),
@@ -640,7 +693,7 @@ export async function runScopedToolChat({
         }
         const key = fingerprint(scoped)
         const primaryCallId = primaryByFingerprint.get(key)
-        const validatedArguments = Object.fromEntries(Object.entries(scoped).filter(([key]) => key !== 'id' && key !== 'name'))
+        const validatedArguments = diagnosticArguments(scoped)
         if (primaryCallId) {
           telemetry.scheduling!.deduplicatedCount += 1
           duplicateOf.set(id, primaryCallId)
@@ -697,7 +750,7 @@ export async function runScopedToolChat({
       if (!primaryResult) continue
       results.set(id, primaryResult)
       const scoped = prevalidated.get(id)!
-      const validatedArguments = Object.fromEntries(Object.entries(scoped).filter(([key]) => key !== 'id' && key !== 'name'))
+      const validatedArguments = diagnosticArguments(scoped)
       const diagnostic = diagnosticForResult(call, primaryResult)
       if (diagnostic.status === 'completed') appendToolComplete(call, primaryResult)
       emitDiagnostic(call, round, validatedArguments, diagnostic, {
@@ -706,7 +759,7 @@ export async function runScopedToolChat({
     }
     for (const call of toolCalls) {
       const result = results.get(call.id) ?? failureResult(call, 'The tool could not complete the request.')
-      conversation.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify(result) })
+      conversation.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify(proposalResultForModel(result)) })
     }
   }
 

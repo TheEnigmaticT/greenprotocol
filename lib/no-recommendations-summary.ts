@@ -7,13 +7,13 @@ export function buildNoRecommendationsBullets(status?: ChemistryDataStatus): str
   const unresolved = status?.unresolvedChemicals ?? []
 
   if (indefinite.length > 0) {
-    bullets.push(`Indefinite materials: ${indefinite.join(', ')}`)
+    bullets.push(`Mixtures or materials without a fixed composition, left out of scoring: ${indefinite.join(', ')}`)
   }
   if (unresolved.length > 0) {
-    bullets.push(`Unscored / unresolved names: ${unresolved.join(', ')}`)
+    bullets.push(`Materials we couldn't find reference data for, so they weren't fully scored: ${unresolved.join(', ')}`)
   }
   if (status && status.deterministicScoringAvailable === false) {
-    bullets.push('Deterministic scoring was unavailable for this run.')
+    bullets.push("We couldn't score this analysis against reference data this time.")
   }
   if (bullets.length === 0) {
     bullets.push('We had nothing evidenced enough to propose a change.')

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { PARSE_SYSTEM_PROMPT } from '@/lib/prompts/parse'
 import { PRINCIPLES, buildPrinciplePrompt } from '@/lib/prompts/principles'
-import { buildAssemblePrompt } from '@/lib/prompts/assemble'
+import { buildAssemblePrompt, buildAssembleSourceData } from '@/lib/prompts/assemble'
 import { buildReevaluatePrompt, REEVALUATE_SCHEMA } from '@/lib/prompts/reevaluate'
 import { citationFromEvidenceMatch } from '@/lib/literature-evidence'
 import type { AnalysisMetadata } from '@/lib/version'
@@ -190,7 +190,7 @@ export async function runBenchmarkStages(input: BenchmarkRunInput): Promise<Benc
     return 0
   })
   let assembled: AssembleContract
-  try { assembled = await callStage(input, 'assemble', buildAssemblePrompt(input.protocolText, parsed.steps as never, kept), 'Generate the revised protocol and overall assessment based on the recommendations above.', ASSEMBLE_SCHEMA, telemetry, validAssemble) } catch { throw new BenchmarkStageError('Benchmark assembly stage failed') }
+  try { assembled = await callStage(input, 'assemble', buildAssemblePrompt(), buildAssembleSourceData(input.protocolText, parsed.steps as never, kept), ASSEMBLE_SCHEMA, telemetry, validAssemble) } catch { throw new BenchmarkStageError('Benchmark assembly stage failed') }
   return { parsed, principleResults, recommendations: kept, reevaluations, assembled, telemetry }
 }
 export class BenchmarkStageRunner { constructor(private readonly input: BenchmarkRunInput) {} run(): Promise<BenchmarkRunResult> { return runBenchmarkStages(this.input) } }

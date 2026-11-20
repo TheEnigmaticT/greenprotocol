@@ -1,0 +1,53 @@
+{
+  "gcaiBaseUrl": {
+    "type": "string",
+    "title": "GreenChemistry.ai destination",
+    "description": "Destination for the reviewed manual handoff.",
+    "enum": ["https://staging.greenchemistry.ai", "https://greenchemistry.ai"],
+    "default": "https://staging.greenchemistry.ai"
+  },
+
+  "gcaiBridge": {
+    "type": "object",
+    "title": "GCai private review connection",
+    "description": "Disabled by default. Signed-in GCai account required. Private review and final choice remain in the popup. Create-new uses exact target/evidence readback; update-existing and SMTP guest recovery are unavailable. Source retention remains up to 90 days.",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "format": "checkbox",
+        "title": "Enable connection to GCai receiver",
+        "description": "Opens the secure popup. Leave off to use the reviewed clipboard handoff instead. Once enabled, every reviewed source submitted through this add-on triggers a GCai connection.",
+        "default": false
+      },
+      "origin": {
+        "type": "string",
+        "title": "Connection origin",
+        "enum": [
+          "https://staging.greenchemistry.ai",
+          "https://greenchemistry.ai"
+        ],
+        "default": "https://staging.greenchemistry.ai"
+      },
+      "path": {
+        "type": "string",
+        "title": "Proposed receiver path",
+        "enum": ["/integrations/scisure/connect"],
+        "default": "/integrations/scisure/connect"
+      },
+      "deadlineMs": {
+        "type": "integer",
+        "title": "Connection timeout (milliseconds)",
+        "minimum": 3900000,
+        "maximum": 3900000,
+        "default": 3900000,
+        "description": "Fixed 65-minute listener lifetime. Parent integration must provide at least 67-minute backend credentials (subject to verified guest expiry)."
+      }
+    },
+    "default": {
+      "enabled": false,
+      "origin": "https://staging.greenchemistry.ai",
+      "path": "/integrations/scisure/connect",
+      "deadlineMs": 3900000
+    }
+  }
+}

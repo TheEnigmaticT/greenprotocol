@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import OpenAI from 'openai'
 import {
   CompatibleModelConfigurationError,
@@ -183,6 +184,9 @@ export async function callQwen<T>(
   const request = {
     model: config.model,
     max_tokens: 8192,
+    // Sampling controls mitigate variation; validated inputs remain the contract.
+    temperature: 0,
+    seed: createHash('sha256').update(JSON.stringify([config.model, system, userContent, schema])).digest().readUInt32BE(0) & 0x7fffffff,
     messages: [
       { role: 'system' as const, content: system },
       { role: 'user' as const, content: userContent },
