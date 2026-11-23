@@ -24,9 +24,17 @@ const COLS = `
   .dropcap { float:left; font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:clamp(4.5rem, 10vw, 7rem); line-height:0.78; margin:0.08em 0.16em 0 0; text-transform:uppercase; }
   .dropcap-gold { color:#ECB815; }
   .dropcap-forest { color:#1C3822; }
-  .stack-facts-col { width:100%; }
+  .stack-facts-col { width:100%; grid-column:9 / span 4; }
   .stack-energy-chip { width:100%; box-sizing:border-box; }
-  .stack-energy-row { display:grid; grid-template-columns:auto minmax(0, 1fr); align-items:end; column-gap:0.75rem; row-gap:0.5rem; }
+  .stack-energy-row { display:grid; grid-template-columns:1fr; row-gap:0.75rem; }
+  .landing-nav-links { display:flex; align-items:center; gap:1rem; }
+  @media(max-width:1100px){
+    .stack-facts-col { grid-column:1 / -1; max-width:36rem; }
+  }
+  @media(max-width:480px){
+    .landing-nav { flex-wrap:wrap; gap:0.75rem; }
+    .landing-nav-links { width:100%; justify-content:space-between; }
+  }
   .contact-cta-col { width:100%; }
   .contact-cta-link { display:block; width:100%; box-sizing:border-box; }
   @media(max-width:900px){
@@ -149,7 +157,7 @@ export default function LandingPage() {
         background:'#1C3822', borderBottom:`1px solid ${C.mid}`,
       }}>
         <div className="g" style={{maxWidth:'none', padding:'0 24px'}}>
-          <div className="c12" style={{
+          <div className="c12 landing-nav" style={{
             display:'flex', alignItems:'center', justifyContent:'space-between',
             paddingTop:'0.75rem', paddingBottom:'0.75rem',
           }}>
@@ -163,7 +171,7 @@ export default function LandingPage() {
                 style={{height:'18px', width:'auto'}}
               />
             </div>
-            <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
+            <div className="landing-nav-links">
               <Link href="/blog" style={{
                 color:C.cream, fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,
                 letterSpacing:'0.06em', textDecoration:'none', display:'block',
@@ -171,7 +179,7 @@ export default function LandingPage() {
               <Link href="/careers" style={{
                 color:C.cream, fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,
                 letterSpacing:'0.06em', textDecoration:'none', display:'block',
-              }}>CAREERS</Link>
+              }}>WORK WITH US</Link>
               <Link href={NEW_ANALYSIS_HREF} style={{
                 background:C.gold, color:C.black,
                 fontFamily:MONO, fontSize:'0.65rem', fontWeight:700,
@@ -222,8 +230,8 @@ export default function LandingPage() {
               fontFamily:SERIF, fontSize:'1.05rem', lineHeight:1.75,
               color:C.sage, maxWidth:'38ch', margin:'0 0 3rem',
             }}>
-              <span className="dropcap dropcap-gold" aria-hidden="true">P</span>{'aste any lab protocol. Scored against all 12 Principles'}
-              of Green Chemistry. Specific, chemically-validated swaps
+              <span className="dropcap dropcap-gold" aria-hidden="true">P</span>{'aste any lab protocol. Scored against 11 of 12 Principles of Green Chemistry. '}
+              Specific, chemically-validated swaps
               — in seconds.
             </p>
             <Link href={NEW_ANALYSIS_HREF} style={{
@@ -257,7 +265,7 @@ export default function LandingPage() {
             display:'grid', gridTemplateColumns:'1fr 1fr',
             gap:'0', borderTop:`1px solid ${C.mid}`, paddingTop:'1.5rem',
           }}>
-            {[['12','Green Chemistry Principles'],['<0.01¢','Per analysis run']].map(([n,l])=>(
+            {[['11 of 12','Green Chemistry Principles'],['<0.01¢','Per analysis run']].map(([n,l])=>(
               <div key={n} style={{paddingRight:'1.5rem'}}>
                 <div style={{fontFamily:MONO, fontSize:'1.75rem', fontWeight:700,
                   color:C.gold, letterSpacing:'-0.02em'}}>{n}</div>
@@ -294,8 +302,8 @@ export default function LandingPage() {
           {[
             {n:'01', head:'Paste Your Protocol',
              body:'Drop in any lab protocol — synthesis steps, reagents, solvents, conditions. Plain text, PDF-extracted, or directly from ELN.'},
-            {n:'02', head:'Scored Against 12 Principles',
-             body:'Each step is evaluated across all 12 Green Chemistry principles. Hazard data from PubChem. Solvent data from CHEM21. Atom economy from structure.'},
+            {n:'02', head:'Scored Against 11 of 12 Principles',
+             body:'Each step is evaluated across 11 of 12 Principles of Green Chemistry. Hazard data from PubChem. Solvent data from CHEM21. Atom economy from structure.'},
             {n:'03', head:'Accept or Reject Swaps',
              body:'Specific, chemically-validated substitution proposals — not generic advice. One click to accept; your modified protocol is ready to export.'},
           ].map(({n,head,body},i) => (
@@ -341,7 +349,7 @@ export default function LandingPage() {
               <h2 style={{fontFamily:MONO, fontWeight:700,
                 fontSize:'clamp(1.8rem,3.5vw,3rem)', lineHeight:0.92,
                 letterSpacing:'-0.02em', color:C.forest, margin:0}}>
-                The 12 Principles<br/>of Green Chemistry
+                We use 11 of 12 Principles<br/>of Green Chemistry
               </h2>
             </div>
             <Link href={NEW_ANALYSIS_HREF} style={{fontFamily:MONO, fontSize:'0.7rem',
@@ -357,7 +365,7 @@ export default function LandingPage() {
               {n:1,l:'Prevention',s:'Waste prevention over treatment'},
               {n:2,l:'Atom Economy',s:'Maximize atom incorporation'},
               {n:3,l:'Less Hazardous',s:'Design safer syntheses'},
-              {n:4,l:'Safer Chemicals',s:'Reduce toxicity by design'},
+
               {n:5,l:'Safer Solvents',s:'Avoid auxiliary substances'},
               {n:6,l:'Energy Efficiency',s:'Minimize energy input'},
               {n:7,l:'Renewable Feedstocks',s:'Use renewable raw materials'},
@@ -412,7 +420,7 @@ export default function LandingPage() {
             <p style={{fontFamily:SERIF, fontSize:'0.9rem', lineHeight:1.75,
               color:C.sage, margin:0}}>
               Triazolo-peptidomimetic synthesis — 38 recommendations,
-              12 principles scored, full revised protocol. Actual output.
+              11 of 12 principles scored, full revised protocol. Actual output.
             </p>
           </div>
 
@@ -525,7 +533,7 @@ export default function LandingPage() {
                       {n:1,  name:'Waste Prevention',       score:6.99, conf:'benchmark'},
                       {n:2,  name:'Atom Economy',           score:4.56, conf:'calculated'},
                       {n:3,  name:'Less Hazardous',         score:5.17, conf:'calculated'},
-                      {n:4,  name:'Safer Chemicals',        score:0.00, conf:'partial'},
+
                       {n:5,  name:'Safer Solvents',         score:6.42, conf:'calculated'},
                       {n:6,  name:'Energy Efficiency',      score:3.78, conf:'calculated'},
                       {n:7,  name:'Renewable Feedstocks',   score:9.51, conf:'calculated'},
@@ -567,7 +575,7 @@ export default function LandingPage() {
                     borderTop:'1px solid #D6D0C4',
                     fontFamily:MONO, fontSize:'0.65rem', color:'#78716C',
                   }}>
-                    <span>11 of 12 principles scored deterministically · 1 needs additional data</span>
+                    <span>11 of 12 principles scored · Designing safer chemicals is outside our scope</span>
                   </div>
                 </div>
               )}
@@ -897,19 +905,17 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
             {/* Energy stat chip */}
             <div className="stack-energy-chip" style={{background:C.black, padding:'1.5rem', marginBottom:'0.1rem'}}>
               <div style={{fontFamily:MONO, fontSize:'0.6rem', letterSpacing:'0.12em',
-                textTransform:'uppercase', color:C.goldDark, marginBottom:'1rem'}}>
+                textTransform:'uppercase', color:C.gold, marginBottom:'1rem'}}>
                 Actually Green AI
               </div>
               <div className="stack-energy-row" style={{marginBottom:'0.75rem'}}>
                 <span style={{fontFamily:MONO, fontWeight:700, fontSize:'2.6rem',
                   color:C.gold, lineHeight:1}}>&lt;0.1%</span>
                 <div style={{fontFamily:SERIF, fontSize:'0.8rem', color:C.cream,
-                  lineHeight:1.3, paddingBottom:'0.2rem'}}>the energy cost<br/>of a SOTA model</div>
+                  lineHeight:1.5}}>the energy cost of a SOTA model</div>
               </div>
               <div style={{fontFamily:MONO, fontSize:'0.65rem', color:C.sage, lineHeight:1.6}}>
-                Typical LLM inference: ~10,000W.<br/>
-                Ours: one local, high-memory,<br/>
-                low-power machine.
+                Typical LLM inference: ~10,000W. Ours: one local, high-memory, low-power machine.
               </div>
             </div>
 

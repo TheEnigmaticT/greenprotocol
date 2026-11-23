@@ -23,7 +23,7 @@ const libreBaskerville = Libre_Baskerville({
 
 export const metadata: Metadata = {
   title: "GreenChemistry.ai — AI-Powered Green Chemistry Protocol Optimizer",
-  description: "Paste your chemistry protocol and get AI-powered green chemistry recommendations with an Impact Scoreboard. Built on the 12 Principles of Green Chemistry.",
+  description: "Paste your chemistry protocol and get AI-powered green chemistry recommendations with an Impact Scoreboard. Applies 11 of 12 Principles of Green Chemistry.",
   openGraph: {
     title: "GreenChemistry.ai — AI-Powered Green Chemistry Protocol Optimizer",
     description: "Paste your chemistry protocol and get AI-powered green chemistry recommendations with an Impact Scoreboard.",
