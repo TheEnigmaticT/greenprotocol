@@ -3,7 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'Careers — GreenChemistry.ai',
+  title: 'Work with us — GreenChemistry.ai',
   description:
     'Help build the evidence-first tools that make greener chemistry easier to practice.',
 }
@@ -146,7 +146,7 @@ export default function CareersPage() {
             </p>
           </div>
           <aside className="career-side" style={{ borderTop: `1px solid ${C.mid}`, paddingTop: '1.25rem' }}>
-            <div style={{ fontFamily: MONO, color: C.gold, fontSize: '2.25rem', fontWeight: 700, lineHeight: 1 }}>12</div>
+            <div style={{ fontFamily: MONO, color: C.gold, fontSize: '2.25rem', fontWeight: 700, lineHeight: 1 }}>11 of 12</div>
             <p style={{ fontFamily: MONO, color: C.sage, fontSize: '0.65rem', letterSpacing: '0.1em', lineHeight: 1.5, margin: '0.5rem 0 0', textTransform: 'uppercase' }}>Principles, made usable</p>
           </aside>
         </div>
