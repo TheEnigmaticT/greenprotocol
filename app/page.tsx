@@ -885,7 +885,7 @@ Centrifuge. Decant. Dry under N₂.`}</pre>
               fontFamily:SERIF, fontSize:'clamp(1.2rem,2.2vw,1.7rem)',
               lineHeight:1.55, color:C.cream, margin:0,
             }}>
-              <span className="dropcap dropcap-gold" aria-hidden="true">P</span>{'ubChem and RDKit power every recommendation.'}
+              <span className="dropcap dropcap-gold" aria-hidden="true">P</span>{'ubChem and RDKit power every recommendation. '}
               GreenChemistry.ai is AI as interface — making decades of
               deterministic cheminformatics accessible in a conversation.
             </p>
