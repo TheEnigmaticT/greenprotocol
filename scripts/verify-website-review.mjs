@@ -38,7 +38,8 @@ try {
     await page.close()
   }
   const page = await browser.newPage()
-  await page.goto(`${base}/careers`)
+  await page.goto(base)
+  await page.goto(new URL('/careers', base).href)
   assert((await page.title()).includes('Work with us'))
   await fs.writeFile(`${output}/results.json`, JSON.stringify(results, null, 2))
   console.log(JSON.stringify({ passed: results.length, results, output }, null, 2))
